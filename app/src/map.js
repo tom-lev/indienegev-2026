@@ -2,7 +2,7 @@
 
 const MAP_W = ASSETS.mapW, MAP_H = ASSETS.mapH;
 const map = { s: 0, x: 0, y: 0, vw: 0, vh: 0, min: 0.1, max: 2.2 };
-let mapFocus = null;      // { ev } כשנכנסים דרך "ניווט"
+let mapFocus = null;      // { ev } מניווט להופעה, או { dest } מניווט שהתחיל בטאב המפה
 let mapFocusLayer = null;
 let mapPrevTab = 'mine';
 let leavingMap = false;
@@ -14,126 +14,201 @@ const PLACES = [
 ];
 const PLACE = Object.fromEntries(PLACES.map(p => [p.id, p]));
 let routeFrom = null; // מזהה נקודת המוצא בניווט הנוכחי
-let picking = false;  // מצב בחירת "איפה אני"
+let picking = false;  // false | 'from' (בחירת "איפה אני") | 'dest' (בחירת יעד)
 const placeXY = p => ({ x: p.mapX / 100 * MAP_W, y: p.mapY / 100 * MAP_H });
 
-/* ───────── רשת שבילים ─────────
-   מתחם ההופעות (הצהוב) מוקף גדר, ונכנסים אליו רק דרך הכניסות. מחוץ לגדר יש
-   שבילים בקמפינג. המסלול = הדרך הקצרה ביותר ברשת (דייקסטרה), כך שלעולם לא חוצים גדר. */
-const ROUTE_NODES = { // באחוזים מהמפה
-  'in-w': [29.5, 44.0], 'in-s': [43.5, 59.5], 'in-e': [64.0, 56.0], // צד פנימי של הכניסות
-  // נקודות מעבר בתוך מתחם ההופעות (בפתחים של הגדר הוורודה הפנימית)
-  kofside: [45.0, 47.5],     // אזור במת הקוף, ליד קפה אינדי
-  pass: [49.3, 51.9],        // המעבר בין אזור במת הקוף לאזור במת הפיל (ליד המדפאה)
-  cafegap: [47.5, 45.8],     // פתח ליד קפה אינדי אל המעבר הצפוני
-  corr: [48.0, 33.0],        // צפונית לבמת הפיל, מערב
-  north: [59.5, 32.5],       // צפונית לבמת הפיל, מזרח
-  ne2: [63.4, 37.0],         // בין העצים, מזרחית לאזור במת הפיל
-  strip1: [64.6, 45.5], strip2: [64.8, 51.0], // הרצועה שמובילה מהכניסה הראשית צפונה
-  shab: [21.0, 31.5], w: [24.5, 44.5], sw: [26.0, 58.0],            // שביל הקמפינג המערבי
-  s1: [33.0, 67.0], s2: [44.0, 65.5], s3: [53.0, 67.5],             // שביל הקמפינג הדרומי
-  e1: [61.5, 64.0], ge: [66.0, 58.5],                               // הירידה מהכניסה הראשית
-  se: [58.5, 76.0], cp: [62.0, 81.0],                               // שני צדי הכניסה לקמפינג+
-  chk: [71.6, 43.5], park: [84.0, 40.0],                            // צימוד וקליטה, חניה
-};
-// [מ, אל, מזהה כניסה אם הקטע עובר בשער]
-const ROUTE_EDGES = [
-  ['shab', 'w'], ['w', 'sw'], ['sw', 's1'], ['s1', 's2'], ['s2', 's3'], ['s3', 'e1'], ['e1', 'ge'],
-  ['ge', 'chk'], ['chk', 'park'], ['s3', 'se'], ['e1', 'se'],
-  ['se', 'cp', 'gate-se'],
-  ['w', 'in-w', 'gate-w'], ['s2', 'in-s', 'gate-s'], ['ge', 'in-e', 'gate-e'],
-];
-const INNER_NODES = ['in-w', 'in-s', 'in-e', 'kofside', 'pass', 'cafegap', 'corr', 'north', 'ne2', 'strip1', 'strip2'];
-/* הגדר הוורודה הפנימית (קווים שבורים, באחוזים). בתוך המתחם מותר ללכת רק בקטעים שלא חוצים אותה */
-const FENCES = [
-  // קו מלמעלה עד קפה אינדי – מפריד בין אזור במת הקוף לצפון
-  [[42.0, 21.9], [45.3, 24.4], [46.0, 30.0], [46.0, 36.0], [45.6, 40.7], [47.3, 41.2], [47.3, 42.8]],
-  // אזור במת הפיל (נכנסים אליו רק דרך המעבר בדרום-מערב): קטע תחתון של המעבר הצפוני + צד מערבי + צד עליון
-  [[47.7, 48.9], [48.1, 50.6], [49.6, 49.7], [48.9, 46.0], [48.8, 42.0], [49.3, 36.0], [49.5, 34.6],
-    [52.2, 34.2], [54.5, 34.0], [57.2, 34.0], [59.0, 35.4], [61.0, 37.6]],
-  // צד מזרחי (מול הכניסה הראשית) – סגור; ממשיך את הצד העליון
-  [[61.0, 37.6], [61.4, 37.9], [62.4, 41.0], [63.4, 44.4], [63.6, 47.0], [64.0, 49.8], [63.3, 53.2], [62.4, 57.4], [61.6, 60.2], [60.0, 61.6]],
-  // צד דרום-מערבי ודרומי
-  [[49.1, 57.6], [48.6, 54.3], [50.4, 53.6], [52.1, 57.9], [53.6, 60.0], [56.5, 61.6], [60.0, 62.3]],
-];
-const FENCE_SEGS = FENCES.flatMap(line => line.slice(1).map((pt, i) => [line[i], pt]));
-function crosses(a, b) {
-  const cr = (o, p, q) => (p[0] - o[0]) * (q[1] - o[1]) - (p[1] - o[1]) * (q[0] - o[0]);
-  return FENCE_SEGS.some(([c, d]) => {
-    const d1 = cr(c, d, a), d2 = cr(c, d, b), d3 = cr(a, b, c), d4 = cr(a, b, d);
-    return ((d1 > 0) !== (d2 > 0)) && ((d3 > 0) !== (d4 > 0));
-  });
+/* ───────── מסלול הליכה על רשת מתוך המפה ─────────
+   ASSETS.walk היא מפת ביטים (walkW×walkH תאים) שנבנתה מתמונת המפה ב-walkgrid.py:
+   צהוב/ירוק = הליכה, איורים/גדרות/נהר = חסום, והגדר נחצית רק בכניסות האמיתיות.
+   המסלול = A* עם "קנס" על קרבה למכשולים, כך שהוא עובר באמצע מעברים ופתחים ולא צמוד לגדר. */
+const WALK = (() => {
+  const GW = ASSETS.walkW, GH = ASSETS.walkH, N = GW * GH;
+  const bytes = Uint8Array.from(atob(ASSETS.walk), c => c.charCodeAt(0));
+  const ok = new Uint8Array(N);
+  for (let i = 0; i < N; i++) ok[i] = (bytes[i >> 3] >> (7 - (i & 7))) & 1;
+
+  // משאירים רק את השטח הרציף הגדול (איים קטנים בין אותיות של שלטים לא שימושיים)
+  const comp = new Int32Array(N).fill(-1);
+  let best = -1, bestSize = 0, id = 0;
+  const q = new Int32Array(N);
+  for (let s = 0; s < N; s++) {
+    if (!ok[s] || comp[s] >= 0) continue;
+    let h = 0, t = 0;
+    q[t++] = s; comp[s] = id;
+    while (h < t) {
+      const c = q[h++], x = c % GW, y = (c / GW) | 0;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= GW || ny >= GH) continue;
+        const n = ny * GW + nx;
+        if (ok[n] && comp[n] < 0) { comp[n] = id; q[t++] = n; }
+      }
+    }
+    if (t > bestSize) { bestSize = t; best = id; }
+    id++;
+  }
+  const main = new Uint8Array(N);
+  for (let i = 0; i < N; i++) main[i] = comp[i] === best ? 1 : 0;
+
+  // מרחק (בתאים) מהמכשול הקרוב – BFS מכל התאים החסומים
+  const dist = new Float32Array(N).fill(1e9);
+  let h = 0, t = 0;
+  for (let i = 0; i < N; i++) if (!main[i]) { dist[i] = 0; q[t++] = i; }
+  while (h < t) {
+    const c = q[h++], x = c % GW, y = (c / GW) | 0;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const nx = x + dx, ny = y + dy;
+      if ((!dx && !dy) || nx < 0 || ny < 0 || nx >= GW || ny >= GH) continue;
+      const n = ny * GW + nx, nd = dist[c] + (dx && dy ? 1.414 : 1);
+      if (nd < dist[n]) { dist[n] = nd; q[t++] = n; }
+    }
+  }
+  return { GW, GH, main, dist, cell: ASSETS.walkCell * MAP_W / ASSETS.walkBase };
+})();
+
+const PREFERRED_CLEARANCE = 5; // תאים: מתחת למרחק הזה מהמכשול יש קנס, כדי ללכת באמצע
+
+function cellOf(p) {
+  return [Math.min(WALK.GW - 1, Math.max(0, Math.floor(p.x / WALK.cell))),
+    Math.min(WALK.GH - 1, Math.max(0, Math.floor(p.y / WALK.cell)))];
 }
-// נקודות בתוך מתחם ההופעות: מתחברות ישירות זו לזו ולצד הפנימי של הכניסות
-const INSIDE = new Set(['kof', 'pil', 'indie', 'racket', 'sound', 'food', 'bar-w', 'bar-s', 'bar-e', 'info', 'cafe', 'medic']);
-// נקודות מחוץ לגדר (וכניסות): לאילו צמתים ברשת הן מחוברות
-const PLACE_LINKS = {
-  adama: ['w', 'shab'], shabbat: ['shab'], camp: ['s1', 'sw'], campbar: ['s1', 's2'],
-  kids: ['s2', 's3'], 'camp-acc': ['s3', 'se', 'e1'], 'camp-fam': ['ge', 'e1'], 'camp-plus': ['cp'],
-  checkin: ['chk'], parking: ['park'],
-  'gate-w': ['w', 'in-w'], 'gate-s': ['s2', 'in-s'], 'gate-e': ['ge', 'in-e'], 'gate-se': ['se', 'cp'],
-};
+/* התא הקרוב ביותר בשטח ההליכה (נקודות שיושבות על איור/שלט) */
+function snapCell(p) {
+  const [cx, cy] = cellOf(p);
+  let bestI = -1, bestD = 1e9;
+  for (let r = 0; r < 40 && bestI < 0; r++) {
+    for (let y = cy - r; y <= cy + r; y++) for (let x = cx - r; x <= cx + r; x++) {
+      if (x < 0 || y < 0 || x >= WALK.GW || y >= WALK.GH) continue;
+      const i = y * WALK.GW + x;
+      if (!WALK.main[i]) continue;
+      const d = (x - cx) ** 2 + (y - cy) ** 2;
+      if (d < bestD) { bestD = d; bestI = i; }
+    }
+  }
+  return bestI;
+}
+
+function astar(s, g) {
+  const { GW, GH, main, dist } = WALK, N = GW * GH;
+  const cost = new Float32Array(N).fill(Infinity), prev = new Int32Array(N).fill(-1), closed = new Uint8Array(N);
+  const gx = g % GW, gy = (g / GW) | 0;
+  const heur = i => Math.hypot(i % GW - gx, ((i / GW) | 0) - gy);
+  // ערימה בינארית פשוטה
+  const heap = [], pri = [];
+  const push = (i, p) => {
+    heap.push(i); pri.push(p);
+    let k = heap.length - 1;
+    while (k > 0) {
+      const u = (k - 1) >> 1;
+      if (pri[u] <= pri[k]) break;
+      [heap[u], heap[k]] = [heap[k], heap[u]]; [pri[u], pri[k]] = [pri[k], pri[u]]; k = u;
+    }
+  };
+  const pop = () => {
+    const top = heap[0], lastI = heap.pop(), lastP = pri.pop();
+    if (heap.length) {
+      heap[0] = lastI; pri[0] = lastP;
+      let k = 0;
+      for (;;) {
+        const l = 2 * k + 1, r = l + 1;
+        let m = k;
+        if (l < heap.length && pri[l] < pri[m]) m = l;
+        if (r < heap.length && pri[r] < pri[m]) m = r;
+        if (m === k) break;
+        [heap[m], heap[k]] = [heap[k], heap[m]]; [pri[m], pri[k]] = [pri[k], pri[m]]; k = m;
+      }
+    }
+    return top;
+  };
+  cost[s] = 0;
+  push(s, heur(s));
+  while (heap.length) {
+    const c = pop();
+    if (c === g) break;
+    if (closed[c]) continue;
+    closed[c] = 1;
+    const x = c % GW, y = (c / GW) | 0;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      if (!dx && !dy) continue;
+      const nx = x + dx, ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= GW || ny >= GH) continue;
+      const n = ny * GW + nx;
+      if (!main[n] || closed[n]) continue;
+      const pen = Math.max(0, PREFERRED_CLEARANCE - dist[n]);
+      const nc = cost[c] + (dx && dy ? 1.414 : 1) * (1 + 0.3 * pen * pen / PREFERRED_CLEARANCE);
+      if (nc < cost[n]) { cost[n] = nc; prev[n] = c; push(n, nc + heur(n)); }
+    }
+  }
+  if (prev[g] < 0 && s !== g) return null;
+  const path = [];
+  for (let c = g; c >= 0; c = prev[c]) { path.push(c); if (c === s) break; }
+  return path.reverse();
+}
+
+/* קיצור המסלול לקווים ישרים, בלי להתקרב למכשולים יותר ממה שהמסלול המקורי התקרב */
+function simplify(path) {
+  const { GW, main, dist } = WALK;
+  const xy = i => [i % GW + 0.5, ((i / GW) | 0) + 0.5];
+  const lineOk = (a, b, minD) => {
+    const [ax, ay] = xy(a), [bx, by] = xy(b);
+    const n = Math.ceil(Math.hypot(bx - ax, by - ay) * 2);
+    for (let k = 0; k <= n; k++) {
+      const x = Math.floor(ax + (bx - ax) * k / n), y = Math.floor(ay + (by - ay) * k / n);
+      const i = y * GW + x;
+      if (!main[i] || dist[i] < minD) return false;
+    }
+    return true;
+  };
+  const out = [path[0]];
+  let i = 0;
+  while (i < path.length - 1) {
+    let j = path.length - 1;
+    for (; j > i + 1; j--) {
+      let minOrig = Infinity;
+      for (let k = i; k <= j; k++) minOrig = Math.min(minOrig, dist[path[k]]);
+      if (lineOk(path[i], path[j], Math.min(minOrig, PREFERRED_CLEARANCE) - 0.01)) break;
+    }
+    out.push(path[j]);
+    i = j;
+  }
+  return out.map(c => ({ x: (c % GW + 0.5) * WALK.cell, y: (((c / GW) | 0) + 0.5) * WALK.cell }));
+}
+
+// צד פנימי של כל כניסה: מסלול שעובר כאן באמת נכנס דרכה (ולא רק עובר לידה)
+const GATE_POINTS = { 'gate-w': [27.5, 45.2], 'gate-s': [44.0, 62.0], 'gate-e': [65.5, 55.6], 'gate-se': [59.7, 78.4] };
+const PASS_POINT = [49.3, 52.0];
 
 function findRoute(fromId, toId) {
-  const px = ([x, y]) => ({ x: x / 100 * MAP_W, y: y / 100 * MAP_H });
-  const pos = {};
-  const adj = {};
-  const link = (a, b, gate) => {
-    const d = Math.hypot(pos[a].x - pos[b].x, pos[a].y - pos[b].y);
-    (adj[a] = adj[a] || []).push({ to: b, d, gate });
-    (adj[b] = adj[b] || []).push({ to: a, d, gate });
-  };
-  for (const [k, v] of Object.entries(ROUTE_NODES)) pos[k] = px(v);
-  for (const [a, b, g] of ROUTE_EDGES) link(a, b, g);
-  const pct = {}; // מיקום באחוזים, לבדיקת חציית גדר
-  for (const [k, v] of Object.entries(ROUTE_NODES)) pct[k] = v;
-  const inner = [...INNER_NODES];
-  for (const id of [fromId, toId]) {
-    const key = 'P:' + id;
-    pos[key] = placeXY(PLACE[id]);
-    pct[key] = [PLACE[id].mapX, PLACE[id].mapY];
-    if (INSIDE.has(id)) inner.push(key);
-    else (PLACE_LINKS[id] || []).forEach(n => link(key, n));
+  const a = placeXY(PLACE[fromId]), b = placeXY(PLACE[toId]);
+  const s = snapCell(a), g = snapCell(b);
+  if (s < 0 || g < 0) return null;
+  const path = astar(s, g);
+  if (!path) return null;
+  const pts = [a, ...simplify(path), b];
+  // אילו כניסות/מעבר המסלול עובר (לפי קרבה לתאים במסלול)
+  const near = ([px, py], r) => path.some(c => {
+    const x = (c % WALK.GW + 0.5) * WALK.cell, y = (((c / WALK.GW) | 0) + 0.5) * WALK.cell;
+    return Math.hypot(x - px / 100 * MAP_W, y - py / 100 * MAP_H) < r;
+  });
+  const gates = [];
+  const seen = path.map(c => c); // לשמירת הסדר: לפי המיקום הראשון במסלול
+  for (const [gid, gp] of Object.entries(GATE_POINTS)) {
+    const gx = gp[0] / 100 * MAP_W, gy = gp[1] / 100 * MAP_H;
+    const idx = seen.findIndex(c => Math.hypot((c % WALK.GW + 0.5) * WALK.cell - gx, (((c / WALK.GW) | 0) + 0.5) * WALK.cell - gy) < 40);
+    if (idx >= 0 && gid !== fromId && gid !== toId) gates.push([idx, gid]);
   }
-  // בתוך המתחם: מחברים כל זוג נקודות שהקו ביניהן לא חוצה את הגדר הפנימית
-  for (let i = 0; i < inner.length; i++) {
-    for (let j = i + 1; j < inner.length; j++) {
-      if (!crosses(pct[inner[i]], pct[inner[j]])) link(inner[i], inner[j]);
-    }
-  }
-
-  // דייקסטרה (הרשת קטנה, אין צורך בתור עדיפויות)
-  const start = 'P:' + fromId, goal = 'P:' + toId;
-  const dist = { [start]: 0 }, prev = {}, done = new Set();
-  while (true) {
-    let u = null;
-    for (const k in dist) if (!done.has(k) && (u === null || dist[k] < dist[u])) u = k;
-    if (u === null || u === goal) break;
-    done.add(u);
-    for (const e of adj[u] || []) {
-      const nd = dist[u] + e.d;
-      if (dist[e.to] === undefined || nd < dist[e.to]) { dist[e.to] = nd; prev[e.to] = { from: u, gate: e.gate }; }
-    }
-  }
-  if (dist[goal] === undefined) return null;
-  const pts = [], gates = [], keys = [];
-  for (let k = goal; k; k = prev[k] && prev[k].from) {
-    pts.unshift(pos[k]);
-    keys.unshift(k);
-    if (prev[k] && prev[k].gate) gates.unshift(prev[k].gate);
-    if (k === start) break;
-  }
-  return { pts, gates, viaPass: keys.includes('pass') };
+  gates.sort((x, y) => x[0] - y[0]);
+  return { pts, gates: gates.map(x => x[1]), viaPass: near(PASS_POINT, 45) };
 }
 
 /* קו שבור עם פינות מעוגלות */
-function roundedPath(pts, r = 70) {
+function roundedPath(pts, r = 45) {
   const f = n => n.toFixed(1);
   let d = `M${f(pts[0].x)},${f(pts[0].y)}`;
   for (let i = 1; i < pts.length - 1; i++) {
     const p = pts[i], a = pts[i - 1], b = pts[i + 1];
     const la = Math.hypot(p.x - a.x, p.y - a.y), lb = Math.hypot(b.x - p.x, b.y - p.y);
-    const ra = Math.min(r, la / 2) / la, rb = Math.min(r, lb / 2) / lb;
+    const ra = Math.min(r, la * 0.35) / la, rb = Math.min(r, lb * 0.35) / lb;
     const p1 = { x: p.x + (a.x - p.x) * ra, y: p.y + (a.y - p.y) * ra };
     const p2 = { x: p.x + (b.x - p.x) * rb, y: p.y + (b.y - p.y) * rb };
     d += ` L${f(p1.x)},${f(p1.y)} Q${f(p.x)},${f(p.y)} ${f(p2.x)},${f(p2.y)}`;
@@ -142,15 +217,17 @@ function roundedPath(pts, r = 70) {
   return d + ` L${f(z.x)},${f(z.y)}`;
 }
 
-function navigateTo(ev) {
+/* target: הופעה (מתוך הלוז), או { dest: מזהה נקודה } (ניווט מטאב המפה) */
+function navigateTo(target, opts = {}) {
   const fromTab = tab === 'map' && mapFocusLayer ? mapPrevTab : tab;
+  const keepFrom = opts.keepFrom ? routeFrom : null;
   leavingMap = true; // סגירת שכבת ניווט קודמת לא צריכה להחזיר לטאב הקודם
   closeAllLayers().then(() => {
     leavingMap = false;
     mapPrevTab = fromTab;
-    mapFocus = { ev };
-    routeFrom = null;
-    picking = false;
+    mapFocus = target.stage ? { ev: target } : { dest: target.dest };
+    routeFrom = keepFrom;
+    picking = opts.pick || false;
     setTab('map');
     mapFocusLayer = pushLayer(() => {
       mapFocusLayer = null;
@@ -168,22 +245,27 @@ function dropMapFocus() {
   popLayer();
 }
 
+const destPlace = () => !mapFocus ? null : mapFocus.ev ? PLACE[mapFocus.ev.stage] : PLACE[mapFocus.dest];
+
 function renderMap(view) {
-  const f = mapFocus && mapFocus.ev;
-  const fs = f ? STAGE[f.stage] : null;
-  const marks = STAGES.map(st => `<div class="m-mark" style="left:${st.mapX}%;top:${st.mapY}%;--c:${st.color}">
-      <div class="inv">
-        ${fs === st ? `<div class="pulse"><i></i><i></i><i></i><b></b></div>
-          <div class="m-label">${esc(f.name)}<small>${esc(st.name)} · ${DAY[f.day].label} ${timeRange(f)}</small></div>` : ''}
-        <button class="m-hit" data-stage="${st.id}" aria-label="${esc(st.name)}"></button>
-      </div>
+  const f = !!mapFocus;
+  const ev = mapFocus && mapFocus.ev;
+  const fs = destPlace();
+  const marks = STAGES.map(st => `<div class="m-mark" style="left:${st.mapX}%;top:${st.mapY}%">
+      <div class="inv"><button class="m-hit" data-stage="${st.id}" aria-label="${esc(st.name)}"></button></div>
     </div>`).join('');
+  // סימון היעד: טבעת פועמת + תווית (הופעה, או שם הנקודה)
+  const destMark = fs ? `<div class="m-mark" style="left:${fs.mapX}%;top:${fs.mapY}%;--c:${fs.color || 'var(--coral)'}">
+      <div class="inv"><div class="pulse"><i></i><i></i><i></i><b></b></div>
+        <div class="m-label">${ev ? `${esc(ev.name)}<small>${esc(fs.name)} · ${DAY[ev.day].label} ${timeRange(ev)}</small>`
+          : `${esc(fs.name)}<small>היעד</small>`}</div></div></div>` : '';
 
   view.innerHTML = `<div class="mapwrap" id="mapwrap">
     <div class="mapstage" id="mapstage" style="width:${MAP_W}px;height:${MAP_H}px">
       <img src="${ASSETS.map}" width="${MAP_W}" height="${MAP_H}" alt="מפת הפסטיבל אינדינגב 2026">
-      ${f ? `<svg class="route" id="route" viewBox="0 0 ${MAP_W} ${MAP_H}" width="${MAP_W}" height="${MAP_H}" aria-hidden="true"></svg>` : ''}
+      <svg class="route" id="route" viewBox="0 0 ${MAP_W} ${MAP_H}" width="${MAP_W}" height="${MAP_H}" aria-hidden="true"></svg>
       ${marks}
+      ${destMark}
       <div id="places"></div>
     </div>
     <div class="map-ui zoom">
@@ -191,8 +273,8 @@ function renderMap(view) {
       <button data-z="out" aria-label="הקטנה">${ICON.minus}</button>
       <button data-z="fit" aria-label="${f ? 'חזרה לבמה' : 'כל המפה'}">${ICON.target}</button>
     </div>
-    ${f ? `<div class="map-ui back"><button data-mapback>${ICON.back} חזרה</button></div>
-      <div class="map-ui routebar" id="routebar"></div>` : ''}
+    ${f ? `<div class="map-ui back"><button data-mapback>${ICON.back} חזרה</button></div>` : ''}
+    <div class="map-ui routebar" id="routebar"></div>
   </div>`;
 
   const wrap = $('#mapwrap');
@@ -204,13 +286,15 @@ function renderMap(view) {
     applyMap(stage);
     updateRoute(fs);
     requestAnimationFrame(() => requestAnimationFrame(() => {
-      if (routeFrom) fitRoute(stage, fs);
+      if (picking) pickView(stage, fs);
+      else if (routeFrom) fitRoute(stage, fs);
       else focusStage(stage, fs, true);
     }));
   } else {
     if (!map.s) fitHeight();
     clampMap();
     applyMap(stage);
+    updateRoute(null);
   }
   bindMapGestures(wrap, stage);
   // מסגרת המפה לא נגללת לעולם (פוקוס על כפתור מחוץ למסך יכול לגלול אותה)
@@ -233,21 +317,15 @@ function renderMap(view) {
     const r = e.target.closest('[data-route]');
     if (r) {
       const a = r.dataset.route;
-      if (a === 'pick') {
-        picking = true;
+      if (a === 'pick' || a === 'dest') {
+        picking = a === 'pick' ? 'from' : 'dest';
         updateRoute(fs);
-        // מתחילים מהאזור של היעד, בגובה מסך מלא; גוללים הצידה כדי למצוא את המיקום
-        animate(stage, () => {
-          const c = placeXY(fs);
-          map.s = Math.max(map.vh / MAP_H, map.vw / MAP_W) * 0.8;
-          map.x = map.vw / 2 - c.x * map.s;
-          map.y = map.vh / 2 - c.y * map.s;
-          clampMap();
-        });
+        pickView(stage, fs);
       } else if (a === 'cancel') {
         picking = false;
         updateRoute(fs);
-        if (routeFrom) fitRoute(stage, fs);
+        if (!fs) animate(stage, () => { fitHeight(); });
+        else if (routeFrom) fitRoute(stage, fs);
         else focusStage(stage, fs, true);
       } else if (a === 'clear') {
         routeFrom = null;
@@ -259,9 +337,30 @@ function renderMap(view) {
       return;
     }
     const pl = e.target.closest('[data-place]');
-    if (pl && !mapGesture.moved) { chooseOrigin(stage, fs, pl.dataset.place); return; }
+    if (pl && !mapGesture.moved) {
+      const id = pl.dataset.place;
+      if (picking === 'dest') {
+        // יעד חדש: אם כבר ידוע מאיפה יוצאים – שומרים, אחרת עוברים ישר ל"איפה אני"
+        if (routeFrom === id) routeFrom = null;
+        navigateTo({ dest: id }, { keepFrom: true, pick: routeFrom ? false : 'from' });
+      } else {
+        chooseOrigin(stage, fs, id);
+      }
+      return;
+    }
     const hit = e.target.closest('[data-stage]');
     if (hit && !mapGesture.moved) openStage(hit.dataset.stage);
+  });
+}
+
+/* מבט לבחירת נקודה: בגובה מסך (כמעט) מלא, סביב היעד או מרכז המתחם; גוללים הצידה */
+function pickView(stage, around) {
+  animate(stage, () => {
+    const c = around ? placeXY(around) : { x: 0.45 * MAP_W, y: 0.52 * MAP_H };
+    map.s = Math.max(map.vh / MAP_H, map.vw / MAP_W) * 0.8;
+    map.x = map.vw / 2 - c.x * map.s;
+    map.y = map.vh / 2 - c.y * map.s;
+    clampMap();
   });
 }
 
@@ -278,15 +377,25 @@ function chooseOrigin(stage, dest, id) {
 /* שכבות הניווט: נקודות לבחירה, קו מקווקו, סיכת "אני כאן", ופס הפעולות */
 function updateRoute(dest) {
   const wrap = $('#mapwrap');
-  if (!wrap || !dest) return;
-  wrap.classList.toggle('picking', picking);
-  wrap.classList.toggle('has-route', !!routeFrom && !picking);
+  if (!wrap) return;
+  wrap.classList.toggle('picking', !!picking);
+  wrap.classList.toggle('has-route', !!routeFrom && !picking && !!dest);
+  const bar = $('#routebar');
+
+  if (!dest) {
+    // טאב המפה בלי ניווט פעיל: כפתור "ניווט", או בחירת יעד
+    $('#route').innerHTML = '';
+    $('#places').innerHTML = picking === 'dest' ? placeButtons(null) : '';
+    bar.innerHTML = picking === 'dest'
+      ? `<div class="rb"><div class="rb-t"><b>לאן הולכים?</b><small>הקישו על היעד במפה – במה או כל נקודה אחרת</small></div>
+          <button class="rb-btn alt" data-route="cancel">ביטול</button></div>`
+      : `<div class="rb"><button class="rb-btn" data-route="dest">${ICON.pin} ניווט במפה</button></div>`;
+    return;
+  }
 
   let placesHtml = '';
   if (picking) {
-    placesHtml = PLACES.filter(p => p.id !== dest.id).map(p => `<div class="m-mark" style="left:${p.mapX}%;top:${p.mapY}%">
-        <div class="inv"><button class="m-place" data-place="${p.id}" ${p.color ? `style="--c:${p.color}"` : ''}>
-          <span class="ic">${p.icon}</span><small>${esc(p.name)}</small></button></div></div>`).join('');
+    placesHtml = placeButtons(picking === 'dest' ? null : dest.id);
   } else if (routeFrom) {
     const p = PLACE[routeFrom];
     placesHtml = `<div class="m-mark" style="left:${p.mapX}%;top:${p.mapY}%"><div class="inv"><div class="here-pin">
@@ -308,19 +417,35 @@ function updateRoute(dest) {
   if (route && route.viaPass) viaParts.push('המעבר בין הבמות');
   const via = viaParts.length ? 'דרך ' + viaParts.join(' ואז ') : 'הולכים לאורך הקו המקווקו';
 
-  const bar = $('#routebar');
   const last = S.prefs.here && PLACE[S.prefs.here.id] && S.prefs.here.id !== dest.id ? PLACE[S.prefs.here.id] : null;
-  if (picking) {
+  const canChangeDest = mapFocus && mapFocus.dest; // ניווט שהתחיל מטאב המפה
+  if (picking === 'dest') {
+    bar.innerHTML = `<div class="rb"><div class="rb-t"><b>לאן הולכים?</b><small>הקישו על היעד החדש במפה</small></div>
+      <button class="rb-btn alt" data-route="cancel">ביטול</button></div>`;
+  } else if (picking) {
     bar.innerHTML = `<div class="rb"><div class="rb-t"><b>איפה אתם עכשיו?</b><small>הקישו על הנקודה הקרובה אליכם במפה</small></div>
+      ${last ? `<button class="rb-btn alt" data-route="last">מ${esc(last.name)}</button>` : ''}
       <button class="rb-btn alt" data-route="cancel">ביטול</button></div>`;
   } else if (routeFrom) {
-    bar.innerHTML = `<div class="rb"><div class="rb-t"><b>${esc(PLACE[routeFrom].name)} ← ${esc(dest.name)}</b><small>${esc(via)}</small></div>
-      <button class="rb-btn alt" data-route="pick">שינוי</button>
+    // כל חלק בכותרת לחיץ: "מ..." משנה מיקום, "אל..." משנה יעד (בניווט מטאב המפה)
+    bar.innerHTML = `<div class="rb"><div class="rb-t">
+        <b><button class="rb-link" data-route="pick">מ${esc(PLACE[routeFrom].name)}</button>
+        <span aria-hidden="true">←</span>
+        ${canChangeDest ? `<button class="rb-link" data-route="dest">${esc(dest.name)}</button>` : esc(dest.name)}</b>
+        <small>${esc(via)}</small></div>
       <button class="rb-x" data-route="clear" aria-label="הסרת המסלול">${ICON.close}</button></div>`;
   } else {
     bar.innerHTML = `<div class="rb"><button class="rb-btn" data-route="pick">${ICON.pin} איפה אני עכשיו?</button>
-      ${last ? `<button class="rb-btn alt" data-route="last">מ${esc(last.name)}</button>` : ''}</div>`;
+      ${last ? `<button class="rb-btn alt" data-route="last">מ${esc(last.name)}</button>` : ''}
+      ${canChangeDest ? `<button class="rb-btn alt" data-route="dest">יעד אחר</button>` : ''}</div>`;
   }
+}
+
+/* כפתורי נקודות לבחירה על המפה (בלי נקודה אחת – היעד הנוכחי) */
+function placeButtons(exceptId) {
+  return PLACES.filter(p => p.id !== exceptId).map(p => `<div class="m-mark" style="left:${p.mapX}%;top:${p.mapY}%">
+      <div class="inv"><button class="m-place" data-place="${p.id}" ${p.color ? `style="--c:${p.color}"` : ''}>
+        <span class="ic">${p.icon}</span><small>${esc(p.name)}</small></button></div></div>`).join('');
 }
 
 function fitRoute(stage, dest) {

@@ -695,3 +695,10 @@ textarea.text-in { min-height: 84px; resize: vertical; direction: ltr; font-fami
 }
 .picking .m-label { display: none; }
 .has-route .m-label { display: none; }
+.map-ui .rb .rb-link {
+  border: 0; background: none; box-shadow: none; border-radius: 0;
+  font: inherit; font-weight: 800; color: var(--ink);
+  text-decoration: underline dotted 2px; text-underline-offset: 4px;
+  padding: 2px 0;
+}
+.rb-t b span { margin: 0 4px; color: var(--ink-2); }

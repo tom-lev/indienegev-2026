@@ -7,7 +7,10 @@ import io
 import json
 from pathlib import Path
 
+import sys
 from PIL import Image
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 ROOT = Path(__file__).resolve().parent
 PROJECT = ROOT.parent
@@ -99,6 +102,12 @@ def build_assets():
     cached('icon.png', make_icon, 'image/png')
     with Image.open(CACHE / 'map.webp') as m:
         out['mapW'], out['mapH'] = m.size
+    # רשת הליכה לחישוב מסלולים (נבנית מתמונת המפה)
+    from walkgrid import build as build_walk, encode, CELL
+    grid, (base_w, _) = build_walk(PROJECT / 'festival-map-2026-web-large.jpg')
+    out['walk'] = encode(grid)
+    out['walkH'], out['walkW'] = grid.shape
+    out['walkCell'], out['walkBase'] = CELL, base_w
     return out
 
 
