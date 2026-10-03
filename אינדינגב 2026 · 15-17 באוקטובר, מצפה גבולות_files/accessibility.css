@@ -1,0 +1,1818 @@
+@import url(https://fonts.googleapis.com/earlyaccess/alefhebrew.css);
+
+/*accessibility toolbar*/
+/******************************tooltip*************************************/
+/*new*/
+body :focus{
+    outline: 1px solid midnightblue !important;
+}
+a.VAaccess {
+  position: absolute;
+  border: 0;
+  clip-path: inset(50%);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  width: 1px;
+  word-wrap: normal !important;
+}
+a.VAaccess:focus {
+  background-color: #eee;
+  clip-path: none;
+  color: #444;
+  display: block;
+  font-size: 1em;
+  height: auto;
+  left: 5px;
+  line-height: normal;
+  padding: 15px 23px 14px;
+  text-decoration: none;
+  top: 5px;
+  width: auto;
+  z-index: 100000;
+}
+/*body:not(.lang_he_IL , .eventer-site) a.VAaccess{
+    position: absolute;
+    top: -100px ;
+    left: 50px;
+    color: #ffffff !important;
+    background-color: black;
+    z-index: 99999999;
+    border-radius: 5px;
+    padding: 5px;
+}
+.lang_he_IL a.VAaccess , .eventer-site a.VAaccess{
+    position: absolute;
+    top: -100px ;
+    right: 50px !important;
+    color: #ffffff !important;
+    background-color: black;
+    z-index: 99999999;
+    border-radius: 5px;
+    padding: 5px;
+}*/
+ 
+body:not(.lang_en_EN) div#menuAccessibility {
+    /*left: 0px;*/
+    top: 90px;
+    border-radius: 30px 30px 30px 30px;
+    border: 2px solid #ddd;
+    z-index: 99999999999999;
+    position: fixed;
+    width: 340px !important;
+    height: 520px !important;
+    background: #eee;
+    left: -300px;
+}
+body.lang_en_EN div#menuAccessibility {
+    /*right: 0px;*/
+    top: 90px;
+    border-radius: 30px 30px 30px 30px;
+    border: 2px solid #ddd;
+    z-index: 99999999999999;
+    position: fixed;
+    width: 340px !important;
+    height: 520px !important;
+    background: #eee;
+    right: -300px;
+}
+body:not(.lang_en_EN) div#menuAccessibility {
+    border-radius: 30px 30px 30px 30px;
+    left: -300px;
+    top: 21px;
+}
+body.lang_en_EN div#menuAccessibility {
+    border-radius: 30px 30px 30px 30px;
+    right: -300px;
+    top: 21px;
+}
+div#menuAccessibility *,
+div#menuAccessibility {
+    display: block;
+    top: 21px;
+}
+
+#menuAceessible {
+    display: block;
+    border-radius: 30px 30px;
+    border: 1px solid #ddd;
+    background: linear-gradient(to bottom, #fff 0, #fff 0, #ddd 100%);
+    width: 335px;
+    height: 440px;
+}
+
+/*new
+#menuAceessible{
+    width: 300px !important;
+    max-width: 100% !important;
+    height: 85% !important;
+}Endnew*/
+#VAcloseMenu {
+    background: no-repeat 50% !important;
+    /* background-image: url(../images/acces_x.png) !important; */
+    position: absolute !important;
+    border: 0px !important;
+    z-index: 1001 !important;
+    width: 29px !important;
+    height: 30px !important;
+    margin-top: 10px !important;
+    right: 9px !important;
+    cursor: pointer;
+    top: 0px !important;
+}
+
+h3#H3Acce {
+    text-align: center;
+    font-size: inherit;
+    font-weight: bold;
+}
+
+img#imgAcc {
+    /* display: contents; */
+    width: 160px;
+    margin: 15px 95px;
+    background-size: 35px 30px;
+}
+
+#iconTop {
+    height: 9em !important;
+}
+
+body:not(.lang_en_EN) #iconTop2 {
+    height: 5em !important;
+     margin: -12px 3px 3px 30px ;
+}
+body.lang_en_EN #iconTop2 {
+    height: 5em !important;
+    margin: -12px 0px 3px 47px !important;
+}
+/*.lang_en_EN #iconTop2 {
+    margin: -11px 10px 3px 45px !important
+}*/
+.VAhalfBtn {
+    display: flex !important;
+    flex-direction: column;
+     height: 7em;
+}
+.VA-readable-btn , .VA-links-btn {
+    display: flex !important;
+    flex-direction: column;
+}
+#iconTop3 {
+    height: 7em !important;
+}
+
+#iconTop4 {
+    height: 2.5em !important;
+   /* margin: -5px 16px 5px 5px !important;*/
+}
+
+#menuAceessible,
+#menuAceessible * {
+    /*-webkit-box-sizing: content-box!important;*/
+    display: block;
+    top: 21px;
+}
+
+.hrAcc {
+    margin: 10px;
+    border-top: 2px solid black;
+    opacity: 1;
+    position: relative;
+    height: 2em;
+}
+
+.ProfilAcc {
+    display: inline-block;
+    /*padding: 1%;*/
+    float: left;
+    width: 100px;
+    color: black !important;
+    cursor: pointer;
+}
+
+.ProfilAcc:hover,
+.ProfilAcc:focus {
+    background-color: gainsboro;
+    border-radius: 25px;
+}
+/*
+#iconTop .ProfilAcc:hover,
+#iconTop .ProfilAcc:focus{
+    height: 85%;
+}*/
+/*
+#iconTop3 .VAthirdBtn.ProfilAcc:hover,
+#iconTop3 .VAthirdBtn.ProfilAcc:focus {
+    height: 97%;
+}*/
+.VAhalfBtn.ProfilAcc:hover,
+.VAhalfBtn.ProfilAcc:focus {
+    height: 135% !important;
+}
+.ProfilAcc img {
+    display: block;
+    margin: auto;
+    border-style: none;
+    height: 45px;
+    width: 45px;
+}
+
+.pAcc {
+    text-align: center;
+    font-size: 11px;
+}
+
+.pAcc1 {
+    text-align: center;
+    font-size: 10px;
+}
+
+h3#H3Acce {
+    height: 1.2em !important;
+    padding-top: 10px !important;
+    font-weight: bold !important;
+    font-size: large !important;
+}
+
+.lang_en_EN h3#H3Acce {
+    height: 1em !important;
+}
+
+div#VAcloseMenu {
+    float: left !important;
+    left: 300px !important;
+}
+
+#iconTop {
+    height: 10em;
+}
+.lang_en_EN #iconTop {
+    height: 9em !important;
+}
+
+.VA-links-btn img {
+    height: auto !important;
+}
+
+img.imgBac {
+    background-color: #3378f5;
+    border-radius: 9px;
+    width: 30px !important;
+    height: 30px !important;
+}
+
+img.imgSize {
+    width: 30px !important;
+    height: 30px !important;
+}
+
+.VA-dark #menuAceessible {
+    background: black !important;
+}
+
+.VA-dark #menuAceessible span,
+.VA-dark #menuAceessible h3 {
+    color: white !important;
+    background: black !important;
+}
+
+.VA-dark #VAcloseMenu {
+    filter: invert(1) !important;
+}
+
+.VA-brigt #menuAceessible span {
+    color: black !important;
+}
+
+.VAapp-body,
+.VAapp-bottom
+{
+    margin-right: 24px;
+
+}
+/*Endnew*********************/
+
+.VA-fontsizer {
+    display: none !important;
+}
+
+.VAinnerBtn-f:hover,
+.VAthirdBtn-2:focus .VAinnerBtn-f {
+    background: #e0e1e2;
+    color: #656565;
+    WIDTH: 133PX;
+    FLOAT: right;
+}
+
+.VAinnerBtn:hover span,
+.VAhalfBtn:focus .VAinnerBtn span,
+.VAinnerBtn-h:hover span,
+.VAthirdBtn:focus .VAinnerBtn-h span,
+.VAinnerBtn-f:hover span,
+.VAthirdBtn-2:focus .VAinnerBtn-f span {
+    color: #000 !important;
+}
+
+.VAhalfBtn img {
+    float: right;
+    /*margin-top: 2px;*/
+}
+
+.logoAcc {
+    height: 25px;
+    display: initial !important;
+}
+
+.VA-dark .accesToolbar .grayLine {
+    background: #000 !important;
+}
+body.VA-dark .VA-bright-btn img ,body.VA-dark .VA-grayscale-btn img ,body.VA-dark .VA-dark-btn img{
+    background-color: white !important;
+}
+body.VA-dark .slider.round {
+    border: 1px solid;
+}
+body:not(.lang_en_EN , .lang_ru_RU , .lang_fr_FR) #VAopenMenu {
+  background: url(../images/icon-01.png) no-repeat;
+    background-color: white !important;
+    position: fixed;
+    /* outline: 2px solid #fff; */
+    z-index: 100000000;
+    width: 60px;
+    height: 50px;
+    left: 0px;
+    border-radius: 25px;
+    bottom: 15% !important;
+    background-size: 57px 46px;
+    cursor: pointer;
+    background-position-y: 2px;
+}
+body.lang_en_EN #VAopenMenu , body.lang_ru_RU #VAopenMenu ,body.lang_fr_FR #VAopenMenu {
+    background: url(../images/iconEnAcc.png) no-repeat !important;
+    /* background-color: white !important; */
+    position: fixed;
+    z-index: 1000000000;
+    width: 5%;
+    height: 8%;
+    right: 20px !important;
+    border-radius: 25px;
+    bottom: 23% !important;
+    background-size: 57px 46px !important;
+    cursor: pointer; 
+    background-position-y: 2px !important;
+}
+  
+#VAopenMenu:focus {
+    outline: 3px dashed midnightblue !important;
+}
+.VA-links-btn a{
+    border:1px solid midnightblue !important;
+}
+.VA-bright #VAopenMenu {
+    filter: none;
+    -webkit-filter: none;
+    -moz-filter: none;
+    -o-filter: none;
+    -ms-filter: none;
+}
+
+#VAcloseMenu {
+  /* background: url(../images/acces_x.png); */
+    position: absolute;
+    z-index: 1001;
+    width: 29px;
+    height: 30px;
+    left: 400px !important;
+    cursor: pointer;
+}
+
+.VA-links-btn img {
+    height: 34px;
+    filter: contrast(1.5);
+    -webkit-filter: contrast(1.5);
+    -moz-filter: contrast(1.5);
+    -o-filter: contrast(1.5);
+    -ms-filter: contrast(1.5);
+}
+
+.VAthirdBtn-2 .acces_disable {
+    background-image: url(../accessibility/images/acces_disable.png);
+}
+
+.VAthirdBtn-2:hover .acces_disable,
+.VAthirdBtn-2:focus .acces_disable {
+    background-image: url(../accessibility/images/dark_acces_disable.png);
+}
+
+.VAthirdBtn-2 .acces_statement {
+    background-image: url(../accessibility/images/acces_statement.png);
+}
+
+.VAthirdBtn-2:hover .acces_statement,
+.VAthirdBtn-2:focus .acces_statement {
+    background-image: url(../accessibility/images/dark_acces_statement.png);
+}
+
+.VAthirdBtn-2 .acces_send_feedback {
+    background-image: url(../accessibility/images/acces_send_feedback.png);
+}
+
+.VAthirdBtn-2:hover .acces_send_feedback {
+    background-image: url(../accessibility/images/dark_acces_send_feedback.png);
+}
+.VA-hide {
+    display: none !important;
+}
+
+body.VA_FlashBlocker {
+    transition: none !important;
+    animation: none !important;
+}
+
+body.VA-dark,
+body.VA-dark *:not(.VA):not(#VAopenMenu):not(.VAaccess):not(img):not(#SITE_CONTAINER):not(#SITE_CONTAINER *):not(.slide-a-tag *):not(section.xLargeSlide * ,
+ section.xLargeSlide):not(.svgIcon1em * , .svgIcon1em ):not(.svgIcon15em , .svgIcon15em * ):not(check-box * ,check-box):not(.newZoomButton * , 
+ .newZoomButton ):not(.arenaInfoContainer , .arenaInfoContainer *):not(.center:has(.mainPhotoFrontPage.backgroundImage) , 
+ .center:has(.mainPhotoFrontPage.backgroundImage) *):not(.eventContainerBackgroundImage *) {
+    background-color: #000 !important;
+    color: #fff !important;
+}
+
+html:not(#VAaccessibility) body.VA-dark:not(#VAaccessibility) a:not(.VA):hover,
+html:not(#VAaccessibility) body.VA-bright:not(#VAaccessibility) a:not(.VA):hover {
+    background-color: lemonchiffon !important;
+    color: #000 !important;
+}
+
+body.VA-dark a {
+    color: #ffee00 !important;
+}
+
+body.VA-bright a {
+    color: midnightblue !important;
+}
+
+.VA-bright a.VAaccess {
+    color: #fff !important;
+}
+
+body.VA-bright #menuAccessibility a {
+    outline: none;
+    background: none !important;
+}
+.purchaseBody.VA-bright{
+	background-color:white !important;
+}
+/*body.VA-grayscale main,body.VA-grayscale #fb-root,body.VA-grayscale .evNavBar,*/
+body.VA-grayscale #menuAccessibility ,
+body.VA-grayscale #VAopenMenu , .VA-grayscale img  /*,.VA-grayscale div*/{
+    filter: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg'><filter id='grayscale'><feColorMatrix type='matrix' values='0.3333 0.3333 0.3333 0 0 0.3333 0.3333 0.3333 0 0 0.3333 0.3333 0.3333 0 0 0 0 0 1 0'/></filter></svg>#grayscale");
+    filter: gray;
+    -webkit-filter: grayscale(100%);
+}
+/*body.VA-grayscale{
+	background-color:gray !important;
+}*/
+.VA-grayscale ng-include , .VA-grayscale nav * ,.VA-grayscale #eventerSiteFooter{
+      background-color: rgb(204, 202, 202);
+}
+body.VA-grayscale #VA_toolbar li button.VA-grayscale {
+    background-color: #3d3d3d;
+}
+
+body.VA-readable-font * {
+    font-family: "Arial", sans-serif !important;
+}
+
+.AccssesibleSubMenu {
+    display: block !important;
+}
+
+.AccssesibleSubMenu>div>div {
+    margin-left: 0px !important;
+}
+
+#skipLinksNavigation ul {
+    list-style: none;
+    margin: 0px;
+}
+
+#skipLinksNavigation ul li {
+    list-style: none;
+}
+
+.VA-SReader a.VAaccess:focus,
+.VA_keyboardNav a.VAaccess:focus,
+a.skipLink.VAaccess:focus {
+    top: 20px !important;
+    outline: none !important;
+}
+
+:focus {
+    outline: none !important;
+}
+
+.VA_keyboardNav :focus,
+.VA-SReader :focus {
+    outline: 3px dashed midnightblue !important;
+}
+.VA-SReader .footerContainer .linkWhite:focus ,.VA_keyboardNav .footerContainer .linkWhite:focus{
+    outline: 3px dashed transparent !important;
+}
+.VA_keyboardNav.VA-dark :focus, .VA-SReader.VA-dark :focus {
+    outline: 3px dashed white !important;
+}
+.VAtooltip {
+    display: none;
+    position: absolute;
+    top: 2px;
+    margin: 0;
+    padding: 7px 21px;
+    min-width: 136px;
+    box-sizing: content-box;
+    float: left;
+    text-align: center;
+    direction: rtl;
+    color: White;
+    background: Black;
+    border: none;
+    border-radius: 8px;
+    -webkit-filter: drop-shadow(0 0 2px white);
+    -moz-filter: drop-shadow(0 0 2px white);
+    -ms-filter: drop-shadow(0 0 2px white);
+    filter: drop-shadow(0 0 2px white);
+    opacity: 0.87;
+    font-size: 15px;
+}
+
+/********** dark mode ***********/
+.VA-dark h1,
+.VA-dark h2,
+.VA-dark h3,
+.VA-dark h4 {
+    color: gold;
+    text-decoration: underline;
+    background-color: black;
+}
+
+.VA-dark ::placeholder {
+    color: white !important;
+}
+
+.VA-dark ::-webkit-input-placeholder {
+    /* Edge */
+    color: white !important;
+}
+
+.VA-dark :-ms-input-placeholder {
+    /* Internet Explorer 10-11 */
+    color: white !important;
+}
+
+.VA-bright ::placeholder {
+    color: black !important;
+}
+
+.VA-bright ::-webkit-input-placeholder {
+    /* Edge */
+    color: black !important;
+}
+
+.VA-bright :-ms-input-placeholder {
+    /* Internet Explorer 10-11 */
+    color: black !important;
+}
+
+.VA-bright .pAcc1 {
+    color: black !important;
+}
+
+.VA-dark #VAopenMenu {
+    background-color: white !important;
+}
+
+.VA-dark.VA_keyboardNav :focus {
+    outline: 3px dashed gold !important;
+    background-color: lemonchiffon !important;
+    color: #000 !important;
+}
+
+.VA-dark img:not([src="https://images.eventer.co.il/thumbnail/06ba45b4-1ebc-4e4f-88f9-a364e5889219.png"],
+[src="/images/new-footer-logo.png"],
+[src="https://images.eventer.co.il/events/test_1e82417e-d47c-481f-b894-e1dfd9ac74a6.png"],
+[src="/images/newSite/eventerLogo.png"]){
+    -webkit-filter: invert(1);
+    -moz-filter: invert(1);
+    -o-filter: invert(1);
+    filter: invert(1);
+}
+.VA-dark .contactUsIcon{
+    -webkit-filter: invert(1);
+    -moz-filter: invert(1);
+    -o-filter: invert(1);
+    filter: invert(1) !important;
+}
+body.VA-dark .fl-row-content-wrap {
+    background-image: none !important;
+}
+.VA-dark .accesToolbar .VAhalfBtn,
+.VA-dark .accesToolbar {
+    background: black;
+}
+.VA-dark .powerFirst{
+    fill: white !important;
+}
+/********* grayscale mode ************/
+body.bg.VA-grayscale {
+    background: none;
+    background-color: white !important;
+}
+
+/********** bright mode **********/
+.VA-bright.VA-bright h1,
+.VA-bright h2,
+.VA-bright h3,
+.VA-bright h4,
+.VA-bright h5 {
+    color: midnightblue !important;
+    text-decoration: underline;
+}
+
+.VA-bright p {
+    color: black;
+}
+
+.VA-bright.VA_keyboardNav :focus {
+    outline: 3px dashed white !important;
+}
+
+.VA-bright img{
+    -webkit-filter: contrast(1.5);
+    -moz-filter: contrast(1.5);
+    -o-filter: contrast(1.5);
+    -ms-filter: contrast(1.5);
+    filter: contrast(1.5);
+}
+
+
+
+.VA-dark #menuAccessibility,
+.VA-dark #menuAccessibility a,
+body.VA-dark #menuAccessibility .grayLine a {
+    color: #fff !important;
+    outline: none !important;
+}
+
+.VA-dark input,
+.VA-dark textarea {
+    background-color: #000 !important;
+    color: #fff !important;
+}
+
+/*.VA-dark span.StylableButton1872886392__label {
+    color: black !important;
+}*/
+.VA-bright ::-webkit-input-placeholder {
+    color: black;
+}
+
+.VA-bright :-moz-input-placeholder {
+    color: black;
+}
+
+.VA-bright ::-moz-input-placeholder {
+    color: black;
+}
+
+.VA-bright :-ms-input-placeholder {
+    color: black;
+}
+
+.VA-dark ::-webkit-input-placeholder {
+    color: #fff;
+}
+
+.VA-dark :-moz-input-placeholder {
+    color: #fff;
+}
+
+.VA-dark ::-moz-input-placeholder {
+    color: #fff;
+}
+
+.VA-dark :-ms-input-placeholder {
+    color: #fff;
+}
+
+.VA-dark .VAinnerBtn:hover,
+.VA-dark .VAinnerBtn-h:hover,
+.VA-dark .VAhalfBtn:focus .VAinnerBtn,
+.VA-dark .VAthirdBtn:focus .VAinnerBtn-h {
+    color: black !important;
+    background-color: lemonchiffon !important;
+}
+
+.VA-dark .VAinnerBtn-h:hover img,
+.VA-dark .VAthirdBtn:focus img,
+.VA-dark .VAinnerBtn:hover img,
+.VA-dark .VAhalfBtn:focus img {
+    -webkit-filter: invert(0);
+    -moz-filter: invert(0);
+    -o-filter: invert(0);
+    -ms-filter: invert(0);
+    filter: invert(0);
+}
+
+.VA-dark a:hover,
+.VA-dark a:focus,
+.VA-bright a:hover,
+.VA-bright a:focus,
+.VA-dark a:hover span,
+.VA-dark a:focus span,
+.VA-bright a:hover span,
+.VA-bright a:focus span {
+    background: lemonchiffon !important;
+    color: black !important;
+}
+
+.VA-dark a font[color] {
+    color: #ffee00 !important;
+}
+
+.VA-dark a:hover font[color] {
+    color: #000;
+}
+
+.VA-dark :focus span {
+    color: #000 !important;
+}
+
+div#menuAccessibility,
+div#menuAccessibility * {
+   /* box-sizing: content-box !important;
+    -moz-box-sizing: content-box !important;
+    -webkit-box-sizing: content-box !important;*/
+    display: block;
+    /*left: 0px;*/
+    top: 21px;
+}
+.VA-links a{
+    border: 1px solid midnightblue !important;
+}
+#menuAccessibility .switch {
+    position: relative  !important;
+    display: inline-block !important;
+    width: 28px;
+    height: 16px;
+    top: 26px !important;
+    margin: -12px 35px 20px 37px;
+  }
+  
+ #menuAccessibility .switch input { 
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+  
+ #menuAccessibility .slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: -8px;
+    right: -8px;
+    bottom: 0;
+    background-color: #ccc;
+    -webkit-transition: .4s;
+    transition: .4s;
+  }
+  
+ #menuAccessibility .slider:before {
+    position: absolute;
+    content: "";
+    height: 17px;
+    width: 17px;
+    left: 2px;
+    bottom: 1px;
+    background-color: white;
+    -webkit-transition: .4s;
+    transition: .4s;
+  }
+  
+ #menuAccessibility input:checked + .slider {
+    background-color: #2C96D0;
+  }
+  
+ #menuAccessibility input:focus + .slider {
+    box-shadow: 0 0 1px #2C96D0;
+  }
+  
+ #menuAccessibility  input:checked + .slider:before {
+    -webkit-transform: translateX(26px);
+    -ms-transform: translateX(26px);
+    transform: translateX(26px);
+  }
+  
+  /* Rounded sliders */
+ #menuAccessibility .slider.round {
+    border-radius: 34px;
+  }
+  
+ #menuAccessibility .slider.round:before {
+    border-radius: 50%;
+    border: 5px solid #808080;
+  }
+ #menuAccessibility input:checked + .slider:before{
+    border: 5px solid #08ACDE;
+  }
+
+  #iconTop, div#iconTop3 {
+    display: flex !important;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-content: space-around;
+    justify-content: center;
+ }  
+ #iconTop2 .VAhalfBtn.VAhalfBtnFirst{
+    margin: 0px 50px 5px 5px;
+ }
+ #iconTop2 .VAhalfBtn.VAhalfBtnsec{
+    margin: 0px 53px 5px -46px;
+ }
+.VA-bright input {
+    color: #000 !important;
+}
+
+.VA-bright select,
+.VA-dark select,
+.VA-bright input,
+.VA-dark input,
+.VA-bright textarea,
+.VA-dark textarea {
+    border: 1px solid !important;
+}
+
+.VA-biggerFont input,
+.VA-biggerFont select,
+.VA-biggerFont textarea {
+    width: auto !important;
+    height: auto !important
+}
+
+.VA-biggerFont input[type=checkbox] {
+    zoom: 2 !important;
+}
+
+div#AcessibleSite {
+    background: url(../accessibility/images/nagish.png) no-repeat;
+    width: 50px;
+    height: 35px;
+    margin-left: 10px;
+    background-size: 35px;
+    float: none;
+    display: inline-block;
+}
+
+#AcessibleSite a {
+    opacity: 0;
+    float: right;
+}
+
+.VA-dark .accesToolbar .grayLine {
+    background: #000 !important;
+}
+
+#menuAccessibility .grayLine a,
+body.VA-bright #menuAccessibility .grayLine a {
+    direction: ltr;
+    color: #000 !important;
+    font-size: 20px;
+}
+
+
+/************ .VA-bright ************/
+.VA-SReader [type='checkbox'],.VA_keyboardNav [type='checkbox']{
+    position: absolute;
+    opacity: 1 !important;
+    height: 10px !important;
+    width: 15px !important;
+    border:1px solid black !important;
+    right: 0px !important;
+    margin-right: -9px;
+}
+.VA-SReader form[name="loginForm"]  input[type='checkbox'],.VA_keyboardNav form[name="loginForm"] input[type='checkbox']{
+    position: relative !important;
+    height: 13px !important;
+    width: 20px !important;
+ }
+
+.VA-SReader .switch [type='checkbox'],.VA_keyboardNav .switch [type='checkbox']{
+    opacity: 0 !important;
+}
+.VA-SReader.events-filter [type='checkbox'], .VA_keyboardNav.events-filter [type='checkbox']{
+    right: 14px !important;
+}
+/*tooltip*/
+.tooltipSpan{
+    visibility: hidden;
+    width: 300px;
+    top: -30px;
+    right: 0px;
+    background-color: black;
+    color: #fff;
+    text-align: center;
+    border-radius: 6px;
+    padding: 5px 0;
+    /* Position the tooltip */
+    position: absolute;
+    z-index: 1;
+}
+span[data-popover]:focus .tooltipSpan{
+    visibility: visible;
+}
+
+.tooltiptext {
+    visibility: hidden;
+    width: 300px;
+    top: 630px;
+    right: 350px;
+    background-color: black;
+    color: #fff;
+    text-align: center;
+    border-radius: 6px;
+    padding: 5px 0;
+    /* Position the tooltip */
+    position: absolute;
+    z-index: 1;
+}
+
+.nav-tabs:focus + .tooltipSpan {
+    visibility: visible;
+}
+.VAhidden {
+    
+    visibility: hidden;
+    width: auto;
+  /*  top: -10px;
+    right: 0px;*/
+    background-color: black;
+    color: #fff;
+    text-align: center;
+    border-radius: 6px;
+    /* Position the tooltip */
+    position: absolute;
+    z-index: 1;
+   /* overflow: hidden;
+    clip: rect(1px, 1px, 1px, 1px);*/
+}
+[tooltip-html-unsafe]:focus .VAhidden{
+    visibility: visible;
+}
+
+[role="tabpanel"]:has(.active):focus + .tooltiptext1 {
+    visibility: visible;
+}
+.tooltiptext1 {
+    visibility: hidden;
+    width: 350px;
+    top: 450px;
+    right: 900px;
+    background-color: black;
+    color: #fff;
+    text-align: center;
+    border-radius: 6px;
+    padding: 5px 0;
+    /* Position the tooltip */
+    position: absolute;
+    z-index: 1;
+}
+
+
+.tooltipDate {
+    visibility: hidden;
+    width: 300px;
+    margin-top: -85px;
+    right: 100px;
+    background-color: black;
+    color: #fff;
+    text-align: center;
+    border-radius: 6px;
+    padding: 5px 0;
+    /* Position the tooltip */
+    position: absolute;
+    z-index: 1;
+}
+input[datepicker-popup="dd-MM-yyyy"]:focus  + .tooltipDate {
+    visibility: visible;
+}
+.VA-SReader .datePickerBs12 , .VA_keyboardNav .datePickerBs12{
+    display: none !important;
+}
+/**end tooltip**/
+/*.VA-SReader .slide-a-tag:focus .slideTextContainer.outer , .VA_keyboardNav .slide-a-tag:focus .slideTextContainer.outer{
+    outline: 3px dashed midnightblue !important;
+}*/
+.VA-SReader .slide-a-tag:focus figure , .VA_keyboardNav .slide-a-tag:focus figure{
+    outline: 3px dashed midnightblue !important;
+}
+.VA-SReader .swiper-button-white , .VA_keyboardNav .swiper-button-white{
+    background-color: black !important;
+}
+.H1#skipMainContent{
+    padding-top: 50px;
+    height:  min-content !important;
+   }
+#purchaseView .H1#skipMainContent{
+    padding-top: 0px !important;
+    height:  min-content !important;
+    position: absolute;
+    right: 500px !important;
+}
+.VA-SReader #purchaseView .btn-language , 
+.VA_keyboardNav #purchaseView .btn-language {
+    margin: 5px 10px 80px 10px !important;
+}
+.eventer-site .H1#skipMainContent{
+    padding-top: 50px;
+    height:  min-content !important;
+    position: absolute;
+}
+.VA-SReader .info .H1#skipMainContent:focus , .VA_keyboardNav .info .H1#skipMainContent:focus {
+    outline: 3px dashed white !important;
+}
+#purchaseView .H1#skipMainContent:focus{
+    outline: 3px dashed midnightblue !important;
+}
+.VA-SReader .powerByBox + div , .VA_keyboardNav .powerByBox  + div{
+    padding-top: 50px !important;
+}
+
+.VA-SReader .powerByBox .H1#skipMainContent , .VA_keyboardNav .powerByBox  .H1#skipMainContent{
+    padding-top: 35px !important;
+}
+.VA-SReader #purchaseView:not(.in-frame) .paddTop2em , .VA_keyboardNav  #purchaseView:not(.in-frame) .paddTop2em {
+    padding-top: 6em;
+}
+.VA-SReader #eventerSiteMainPage ,.VA_keyboardNav #eventerSiteMainPage  {
+    padding-top: 60px;
+}
+.VA-SReader #eventerSiteShowAllPage ,.VA_keyboardNav #eventerSiteShowAllPage{
+    padding-top: 50px;
+}
+.VA-SReader .btn.active,.VA_keyboardNav .btn.active{
+    color: white !important;
+    background-color: black !important;
+}
+.VA-SReader #facebook ellipse , .VA_keyboardNav #facebook ellipse{
+    stroke: black !important;
+}
+.VA-SReader #facebook path ,.VA_keyboardNav #facebook path{
+    fill:black !important;
+}
+.VA-SReader .socialButton g , .VA_keyboardNav .socialButton g{
+    stroke: black !important;
+}
+.VA-SReader .eventerFullIconMedium g[fill="grey"] ,.VA_keyboardNav .eventerFullIconMedium g[fill="grey"]{
+    fill:black !important;
+}
+.VA-SReader .eventerFullIcon g[fill="grey"] ,.VA_keyboardNav .eventerFullIcon g[fill="grey"]{
+    fill:black !important;
+}
+.VA-SReader #eventerSiteMainPage .whole-stretch h2 , .VA_keyboardNav  #eventerSiteMainPage .whole-stretch h2 {
+    background: black !important;
+}
+/*.VA-SReader .slideItem .slideTextContainer.inner ,.VA_keyboardNav .slideItem .slideTextContainer.inner  {
+    background-color: black !important;
+    color: #fff;
+}*/
+.VA-SReader .slideTextContainer .slideTitle  ,.VA-SReader .slideTextContainer .slideSubTitle {
+    background-color: black !important;
+    color: #fff;
+}
+.VA_keyboardNav .slideTextContainer .slideTitle  ,.VA_keyboardNav .slideTextContainer .slideSubTitle {
+    background-color: black !important;
+    color: #fff;
+}
+.VA-SReader #eventer-site-container-view .site-welcome-text a ,.VA_keyboardNav #eventer-site-container-view .site-welcome-text a{
+    color: midnightblue;
+    font-weight: bold;
+}
+/*.VA-SReader .OnlyShadow  ,.VA_keyboardNav .OnlyShadow{
+    padding-top: 100px !important;
+}*/
+.VA-SReader footer :focus ,.VA_keyboardNav footer :focus{
+    outline: 3px dashed white !important;
+}
+.VA-SReader .accordion-toggle:focus div ,.VA_keyboardNav .accordion-toggle:focus a{
+    outline: 3px dashed midnightblue ;
+}
+.VA-SReader footer .col-md-2 ,.VA_keyboardNav footer .col-md-2{
+ float: right !important;
+}
+
+.VA-dark .slideItem {
+    background-color: black !important;
+}
+.VA-dark .eventerFullIconMedium g[fill="grey"] , .VA-dark .eventerFullIcon g[fill="grey"]{
+    fill:white !important;
+}
+.VA-dark #facebook-messenger path{
+    fill:white !important;
+}
+.VA-dark #twitter circle{
+    stroke:white !important;
+}
+.VA-dark #instagram g{
+    stroke: white !important;
+}
+.VA-dark #instagram path{
+    fill:white !important;
+}
+.VA-dark #facebook ellipse{
+    stroke:white !important;
+}
+.VA-dark #facebook path{
+    fill:white !important;
+}
+.VA-bright .btn-login{
+    background-color: white !important;
+    border-color: black;
+}
+
+.VA-bright .eventerFullIconMedium g[fill="grey"] , .VA-bright .eventerFullIcon g[fill="grey"]{
+    fill:black !important;
+}
+.VA-bright #facebook-messenger path{
+    fill:black !important;
+}
+.VA-bright #twitter circle{
+    stroke:black !important;
+}
+.VA-bright #instagram g{
+    stroke: black !important;
+}
+.VA-bright #instagram path{
+    fill:black !important;
+}
+.VA-bright #facebook ellipse{
+    stroke:black !important;
+}
+.VA-bright #facebook path{
+    fill:black !important;
+}
+.VA-bright .swiper-button-white {
+    background-color:black !important;
+}
+.VA-bright .slideTitle ,.VA-bright .slideSubTitle {
+    background-color: white !important;
+    color:black !important;
+}
+.VA-bright .grayBg {
+    background-color: white;
+}
+.VA-bright footer {
+    background: white !important;
+    color: black !important;
+}
+.VA-bright footer  a.clickable,.VA-bright footer span.clickable.underline-hover{
+    color:black !important;
+}
+.VA-bright .descriptionHeader{
+    background-color: white !important;
+}
+.VA-bright .btn-PurchaseBlue{
+    background-color: black !important;
+}
+.VA-bright .ticketAmountSelect {
+    background-color: white !important;
+}
+.VA-bright .btn-language {
+    background-color: white !important;
+}
+.VA-SReader #client-cancellation-request,.VA_keyboardNav #client-cancellation-request {
+    padding-top: 100px;
+}
+.VA-SReader [type='checkbox'] + label , .VA_keyboardNav [type='checkbox'] + label {
+    margin-right: 22px !important;
+}
+.VA-SReader #purchaseView .H1 , .VA_keyboardNav #purchaseView .H1{
+    background-color: white !important;
+}
+.VA-SReader [name="filterForm"] .col-sm-4 , .VA_keyboardNav [name="filterForm"] .col-sm-4 {
+    float: right !important;
+}
+[va-pathname="/"].VA-SReader .evNavBar .menuSearchContainer .input-search , [va-pathname="/"].VA_keyboardNav .evNavBar .menuSearchContainer .input-search{
+    display: none !important;
+}
+.VA-SReader .languageBar>.btn-group ,.VA_keyboardNav .languageBar>.btn-group{
+    top: 74px !important;
+}
+.VA-bright .validationTextRed ,.VA-bright .highlight .md-checkbox-box.md-icon,.VA-bright .highlight .md-label-container{
+    color:midnightblue !important;
+}
+.VA-bright .ticketCheckBox .highlight{
+    border-bottom: 1px solid midnightblue !important;
+    color: midnightblue !important;
+}
+.VA-bright .highlight .md-checkbox-box.md-icon,.VA-bright .highlight .md-label-container{
+    border-color: midnightblue !important;
+}
+.VA-bright .checked .md-checkbox .md-icon,.VA-bright .md-checkbox.checked .md-icon{
+    background-color: black !important;
+}
+.VA-bright .whiteBg ,.VA-bright .box , .VA-SReader .whiteBg , .VA-SReader .box ,  .VA_keyboardNav .whiteBg , .VA_keyboardNav .box {
+    opacity: 1 !important;
+}
+.VA-bright .opacity-box {
+    background-color: rgba(255,255,255,1) !important;
+}
+.VA-bright .opacity-box ,.VA-SReader .opacity-box  ,.VA_keyboardNav .opacity-box {
+    background-color: rgba(255,255,255,1) !important;
+}
+.VA-bright .svgIconHeight2em svg {
+    background: white !important; 
+}
+.VA-bright img[src="/images/new-footer-logo.png"]{
+    background-color: black;
+}
+.VA-dark [type="submit"]{
+    border:1px solid !important;
+}
+.VA-SReader .continue , .VA_keyboardNav .continue {
+  color:black !important;
+  background-color: white !important;
+  border:1px solid black !important;
+}
+.VA-SReader .grayBg , .VA_keyboardNav .grayBg {
+    background-color: white !important;
+}
+.VA-SReader h1.descriptionHeader:focus ,.VA_keyboardNav h1.descriptionHeader:focus {
+    outline: 3px dashed white !important;
+}
+.VA-SReader .errorMessage ,.VA_keyboardNav .errorMessage , .VA-SReader .validationTextRed, .VA_keyboardNav .validationTextRed{
+    color: brown !important;
+}
+.VA-SReader .highlight .md-checkbox-box.md-icon,.VA_keyboardNav .highlight .md-label-container{
+    color:brown !important;
+}
+.VA-SReader .ticketCheckBox .highlight,.VA_keyboardNav .ticketCheckBox .highlight{
+    border-bottom: 1px solid brown !important;
+    color: brown !important;
+}
+.VA-SReader #purchaseView .requiredQuestionNotation ,.VA_keyboardNav #purchaseView .requiredQuestionNotation {
+    color: brown !important;
+}
+body:not(.mobile).VA-dark .sliderContainer{
+     filter: brightness(1.5) !important;
+}
+.VA-dark .svgIcon1em{
+    background: white !important;
+}
+.VA-dark .slideItem .slideTextContainer.inner .slideTitle  ,
+ .VA-dark .slideItem .slideTextContainer.inner .slideSubTitle {
+    background-color: black !important;
+}
+.VA-dark .swiper-button-white{
+    background-color: black !important;
+}
+.VA-dark .svgIcon1em.whiteSvg svg path {
+    fill: black !important;
+    stroke: black !important;
+}
+.VA-dark .phoneSalesBanner {
+    fill:white !important;
+}
+.VA-dark .btn-PurchaseBlue{
+    border: 1px solid !important;
+}
+.VA-bright .btn-PurchaseBlue{
+    color: white !important;
+}
+.VA-bright .actionsFooter {
+    background-color: white !important;
+}
+.VA-dark .modal-dialog{
+    border:1px solid !important;
+}
+.VA-dark .svgIcon15em svg{
+    background-color: white !important;
+}
+.VA-dark .md-checkbox .md-icon{
+    border: 1px solid white !important; 
+}
+.VA-bright ng-messages.error-text-red {
+    color: midnightblue !important;
+}
+.VA-dark #eventContainerPage .about.desc a.breadcrumb.breadcrumb-previous ,.VA-bright #eventContainerPage .about.desc a.breadcrumb.breadcrumb-previous {
+    opacity: 1 !important;
+}
+.VA-SReader #eventContainerPage .about.desc a.breadcrumb.breadcrumb-previous ,.VA_keyboardNav #eventContainerPage .about.desc a.breadcrumb.breadcrumb-previous {
+    opacity: 1 !important;
+}
+.VA-SReader .experience .button-primary , .VA_keyboardNav .experience .button-primary{
+    color: white !important;
+    background-color: black !important;
+}
+.VA-SReader .experience .color-primary-on-selection.selected ,.VA_keyboardNav .experience .color-primary-on-selection.selected{
+    color: black;
+}
+.VA-SReader .experience .bg-primary-on-selection.selected ,.VA_keyboardNav .experience .bg-primary-on-selection.selected{
+    background-color: black !important;
+}
+.VA-SReader .experience .color-primary ,.VA_keyboardNav .experience .color-primary {
+    color: black;
+}
+.VA-dark .experience .border-primary-on-selection.selected {
+    border-color: white !important;
+}
+.VA-dark .experience .svg-primary {
+    fill: white !important;
+}
+.VA-SReader #eventContainerPage , .VA_keyboardNav #eventContainerPage{
+    padding-top: 80px;
+}
+.VA-bright .experience .border-primary-on-selection.selected{
+    border-color: white !important;
+}
+.VA-bright .experience .button-outline-primary {
+    color: black !important;
+    border-color: black !important;
+}
+.VA-bright .experience .svg-primary {
+    fill: black !important;
+}
+.VA-SReader .experience .button-outline-primary , .VA_keyboardNav .experience .button-outline-primary {
+    color: black !important;
+    background-color: white !important;
+}
+.VA-SReader .experience .svg-primary , .VA_keyboardNav .experience .svg-primary {
+    fill: black !important;
+}
+.VA-SReader .swiper-button-white:focus ,.VA_keyboardNav .swiper-button-white:focus{
+    outline: 3px dashed white !important;
+}
+.VA-SReader .nsm7Bb-HzV7m-LgbsSe:focus , .VA_keyboardNav .nsm7Bb-HzV7m-LgbsSe:focus{
+    outline: 3px dashed midnightblue !important;
+}
+.VA-dark .btn-default.btn-order{
+    border:1px solid !important
+}
+.VA-dark .btn-primary{
+    border-color: white !important;
+}
+.VA-dark .tHeadColorGray {
+    border: 1px solid !important;
+}
+.VA-dark .checked .md-checkbox .md-icon,.VA-dark .md-checkbox.checked .md-icon{
+    background-color: transparent !important;
+}
+.VA-bright .btn-default.btn-order {
+    background-color: white;
+    color: midnightblue;
+    border: 1px solid midnightblue !important;
+}
+.VA-SReader .form-control.redText , .VA_keyboardNav .form-control.redText {
+    color: black !important;
+}
+.VA-SReader .btn-PurchaseBlue , .VA_keyboardNav .btn-PurchaseBlue {
+    background-color: black !important;
+    color: white !important;
+    border:1px solid ;
+}
+.VA-SReader .btn-default.btn-order ,.VA_keyboardNav .btn-default.btn-order  {
+    background-color: black !important;
+    color: #fff !important;
+}
+.VA-SReader .alertMark , .VA_keyboardNav .alertMark {
+    color: black !important;
+}
+.VA-SReader .checked .md-checkbox .md-icon , .VA_keyboardNav .checked .md-checkbox .md-icon {
+    background-color: black !important;
+}
+.VA-SReader .btn-danger , .VA_keyboardNav .btn-danger {
+    color: white !important;
+    background-color: black !important;
+    border-color: black !important;
+}
+.VA-SReader .btn-primary , .VA_keyboardNav .btn-primary{
+    color: white !important;
+    background-color: black !important;
+    border-color: black !important;
+}
+.VA-SReader .form-control ,.VA_keyboardNav .form-control{
+    color: black !important;
+    border: 1px solid black !important;
+}
+.VA-SReader input[type=radio]:checked:focus,
+.VA_keyboardNav input[type=radio]:checked:focus{
+  outline: 3px dashed midnightblue !important;
+}
+.VA-dark .errorMessage {
+    color: white !important;
+}
+.VA-bright .errorMessage {
+    color: black !important;
+}
+.VA-bright #purchaseView .requiredQuestionNotation {
+    color: midnightblue;
+}
+.VA-dark .svgIcon15em.whiteSvg svg path {
+    fill: black !important;  
+    stroke: black !important;
+}
+.VA-dark .highlight .md-checkbox-box.md-icon,.VA-dark .highlight .md-label-container{
+    color: white !important;
+    border-color: white !important;
+}
+.VA-bright .guestQuestionError {
+    color: midnightblue !important;
+}
+.VA-SReader .details h1:focus , .VA_keyboardNav .details h1:focus{
+    outline: 3px dashed midnightblue !important;
+}
+.VA-bright .arenaBackButton{
+    background-color: black !important;
+    color: white !important;
+}
+.VA-bright .svgSeat:not(.selected) {
+   fill: #11517c !important;
+   stroke:#11517C !important;
+}
+.VA-bright .squareInfo{
+    background-color: #11517c !important;
+}
+.VA-bright .svgSeat.selected{
+    fill: #006060 !important;
+}
+.VA-bright .selectedColor {
+    background-color: #006060 !important;
+}
+.VA-bright .squareInfo[style="background-color: rgb(0, 0, 0); border-radius: 10px;"]{
+    background-color: black !important;
+}
+.VA-bright .squareInfo[style="background-color: #143B3C !important;border-radius: 10px;"]{
+    background-color: #143B3C !important;
+}
+.VA-bright .closedColor {
+    background-color: #424242 !important;
+}
+.VA-bright .arenaInfoContainer {
+    background: #303030 !important;
+}
+.VA-bright .arenaInfoContainer * {
+    color:white !important;
+}
+.VA-bright .btn-success{
+    background-color: black !important;
+    border-color: black !important;
+}
+.VA-bright .squareInfo[style="background-color: rgb(62, 183, 186); border-radius: 10px;"]{
+    background-color: rgb(62, 183, 186) !important;
+}
+.VA-bright .squareInfo[style="background-color: rgb(25, 127, 194); border-radius: 10px;"]{
+    background-color: rgb(25, 127, 194) !important;
+}
+.VA-dark .squareInfo[style="background-color: rgb(246, 201, 48); border-radius: 10px;"]{
+    background-color: rgb(246, 201, 48) !important;
+}
+.VA-dark .arenaInfoContainer *{
+    color:white !important;
+}
+.VA-dark .arenaInfoContainer{
+    background-color: black !important;
+}
+.VA-SReader .btn-success , .VA_keyboardNav .btn-success{
+    background-color: black;
+    border-color:  black;
+}
+.VA-bright.profilePage h1{
+    background-color: white !important;
+}
+.VA-dark.profilePage .eventerLogo{
+    background-color: black !important;
+}
+.VA-dark .btn-success,.VA-dark .ta-daterangepicker .ranges li.active,.VA-dark .ta-daterangepicker .ranges li:hover ,.VA-dark .btn-warning ,.VA-dark .btn-categoryBlock{
+    border-color: white !important;
+    border: 1px solid white !important;
+}
+.VA-bright .btn-success,.VA-bright .ta-daterangepicker .ranges li.active,.VA-bright .ta-daterangepicker .ranges li:hover ,.VA-bright .btn-warning ,.VA-bright .btn-categoryBlock{
+    border-color: black !important;
+    border: 1px solid black !important;
+    color:white !important;
+    background-color: black;
+}
+
+.VA-bright .ta-daterangepicker .ranges li{
+    color:black !important;
+    background-color: white !important;
+    border:1px solid ;
+}
+.VA-bright .multiSelect .clearButton:focus,.VA-bright  .multiSelect .helperButton:focus,.VA-bright  .multiSelect .inputFilter:focus {
+    border: 1px solid black !important;
+}
+.VA-SReader .btn-warning , .VA_keyboardNav .btn-warning{
+    background-color: black;
+    border-color: black;
+}
+.VA-bright#userCalendarByHourPage #eventerDatePickerDay .date-picker-button-row.margin05,
+.VA-bright#userCalendarByHourPage #eventerDatePickerMonth .date-picker-button-row.margin05,
+.VA-bright#userCalendarByHourPage #eventerDatePickerYear .date-picker-button-row.margin05{
+    background-color: black !important;
+}
+.VA-bright .user-calendar-container #eventerDatePickerDay .btn .text-info, 
+.VA-bright .user-calendar-container #eventerDatePickerMonth .btn .text-info, 
+.VA-bright .user-calendar-container #eventerDatePickerYear .btn .text-info{
+   color:black !important;
+   border:1px solid black !important;
+}
+.VA-bright#userCalendarByHourPage #eventerDatePickerDay .btn.btn-default.btn-sm.active:not([disabled]), 
+.VA-bright#userCalendarByHourPage #eventerDatePickerDay .btn:not([disabled]).btn:not(.active).btn-sm{
+    color:black !important;
+    border:1px solid black !important;
+}
+.VA-dark#userCalendarByHourPage #eventerDatePickerDay .btn.btn-default.btn-sm.btn-info.active:not([disabled]) {
+    border: solid 2px white !important;
+}
+.VA-dark #eventerDatePickerDay .btn.active,
+.VA-dark #eventerDatePickerMonth .btn.active, 
+.VA-dark #eventerDatePickerYear .btn.active{
+    border-color: white !important;
+}
+.VA-dark#userCalendarByHourPage #eventerDatePickerDay .date-picker-button-row.margin05,
+.VA-dark#userCalendarByHourPage #eventerDatePickerMonth .date-picker-button-row.margin05,
+.VA-dark#userCalendarByHourPage #eventerDatePickerYear .date-picker-button-row.margin05{
+    border:1px solid white !important
+ }
+.VA-bright .sectionHeader {
+    color:black !important;
+    background-color: white !important;
+ }
+ .VA-bright div:has(>img[src="https://images.eventer.co.il/events/test_1e82417e-d47c-481f-b894-e1dfd9ac74a6.png"]){
+    background:white !important;
+ }
+ .VA-bright img[src="https://images.eventer.co.il/events/test_1e82417e-d47c-481f-b894-e1dfd9ac74a6.png"]{
+    filter: invert(1) !important;
+ }
+ .VA-bright .text-info {
+    color: black !important;
+}
+.VA-bright .sectionHeader{
+    border:1px solid midnightblue !important;
+}
+.VA-bright table.table thead {
+   background-color: white !important;
+   color:black !important;
+   border:1px solid !important;
+}
+.VA-bright#userCalendarByHourPage #eventerDatePickerDay .btn.active[disabled],
+.VA-bright#userCalendarByHourPage #eventerDatePickerMonth .btn.active[disabled], 
+.VA-bright#userCalendarByHourPage #eventerDatePickerYear .btn.active[disabled]{
+    background: #fff !important;
+}
+.VA-dark .sectionHeader{
+    border:1px solid white !important;
+}
+.VA-SReader .btn-default.btn-order, .VA_keyboardNav .btn-default.btn-order {
+    outline-offset: 2px;
+}
+.VA-SReader a.logoContainer.black , .VA_keyboardNav a.logoContainer.black {
+    outline-offset: 8px;
+}
+.VA-SReader#userCalendarByHourPage #eventerDatePickerDay .date-picker-button-row.margin05,
+.VA-SReader#userCalendarByHourPage #eventerDatePickerMonth .date-picker-button-row.margin05,
+.VA-SReader#userCalendarByHourPage #eventerDatePickerYear .date-picker-button-row.margin05 {
+    background-color: black !important;
+}
+.VA_keyboardNav#userCalendarByHourPage #eventerDatePickerDay .date-picker-button-row.margin05,
+.VA_keyboardNav#userCalendarByHourPage #eventerDatePickerMonth .date-picker-button-row.margin05,
+.VA_keyboardNav#userCalendarByHourPage #eventerDatePickerYear .date-picker-button-row.margin05 {
+    background-color: black !important;
+}
+.VA-SReader .user-calendar-container #eventerDatePickerDay .btn .text-info, 
+.VA-SReader .user-calendar-container #eventerDatePickerMonth .btn .text-info,
+.VA-SReader .user-calendar-container #eventerDatePickerYear .btn .text-info {
+    color: black !important;
+    background-color: white !important;
+}
+.VA_keyboardNav .user-calendar-container #eventerDatePickerDay .btn .text-info, 
+.VA_keyboardNav .user-calendar-container #eventerDatePickerMonth .btn .text-info,
+.VA_keyboardNav .user-calendar-container #eventerDatePickerYear .btn .text-info {
+    color: black !important;
+    background-color: white !important;
+}
+.VA-SReader .btn.btn-default.btn-sm.active ,.VA_keyboardNav button.btn.btn-default.btn-sm.active {
+    background-color: white !important;
+    border: 1px solid black !important;
+}
+
+.VA-SReader .date-picker-button-row button:focus ,.VA_keyboardNav .date-picker-button-row button:focus{
+    outline: 3px dashed white !important
+}
+.VA-SReader .uib-day .btn.active span ,.VA_keyboardNav .uib-day .btn.active span{
+  color: black !important;
+}
+.VA-SReader#userCalendarByHourPage #eventerDatePickerDay .btn:not([disabled]).btn:not(.active).btn-sm  ,
+.VA_keyboardNav#userCalendarByHourPage #eventerDatePickerDay .btn:not([disabled]).btn:not(.active).btn-sm{
+    color: black !important;
+    background-color: white !important;
+}
+.VA-SReader .sectionHeader , .VA_keyboardNav .sectionHeader{
+    color:black !important;
+    background-color: white !important;
+    border:1px solid black !important;
+}
+.VA-SReader .text-info ,.VA_keyboardNav .text-info {
+    color: midnightblue !important;
+}
+.VA-SReader .active .text-info ,.VA_keyboardNav .active .text-info {
+    color: white !important;
+}
+.VA-SReader .footerContainer a:focus ,.VA_keyboardNav .footerContainer a:focus {
+    outline: 3px dashed white !important;
+}
+.VA-SReader #navigationBar .nav.navbar-nav.navbarSpace.headerItem ,.VA_keyboardNav #navigationBar .nav.navbar-nav.navbarSpace.headerItem{
+    display: flex !important;
+}
+.VA-SReader #navigationBar .navbarSpace , .VA_keyboardNav #navigationBar .navbarSpace {
+    margin: 1px -2em !important;
+}
+/*.VA-SReader #navigationBar .nav>li>a:focus ,.VA_keyboardNav #navigationBar .nav>li>a:focus{
+    color:white !important
+}*/
+.VA-SReader .eventerFooterImg.col-md-push-9 , .VA_keyboardNav .eventerFooterImg.col-md-push-9 {
+    left: 78% !important;
+}
+.VA-SReader .footerContainer .col-sm-push-3 ,.VA_keyboardNav .footerContainer .col-sm-push-3{
+    left: 25% !important;
+}
+/*.VA-SReader .footerContainer .col-sm-push-3 ,.VA_keyboardNav .footerContainer .col-sm-push-3{
+    left: 70% !important;
+}*/
+.VA-SReader .footerContainer a:focus , .VA_keyboardNav .footerContainer a:focus{
+    color:white !important;
+}
+
+.VA-SReader .footerContainer .linkWhite:focus span,.VA_keyboardNav .footerContainer .linkWhite:focus span{
+    outline: 3px dashed white !important;
+}
+/*.VA-SReader #FrontPageNavbarDropdown a:focus ,.VA_keyboardNav #FrontPageNavbarDropdown a:focus{
+    outline: 3px dashed white !important;
+}*/
+.VA-SReader #FrontPageNavbarDropdown div:focus ,.VA_keyboardNav #FrontPageNavbarDropdown div:focus{
+    outline: 3px dashed midnightblue !important;
+}
+/*.VA-SReader #FrontPageNavbarDropdown div:focus , .VA_keyboardNav #FrontPageNavbarDropdown div:focus {
+    color:white !important;
+}*/
+/*.VA-SReader #FrontPageNavbarDropdown a:focus , .VA_keyboardNav #FrontPageNavbarDropdown a:focus {
+    color:white !important;
+}*/
+.VA-SReader .nav .open>a ,.VA_keyboardNav .nav .open>a {
+    color:black !important;
+    background-color: white !important;
+} 
+/*.VA-SReader #navBarBtn a:focus ,.VA_keyboardNav #navBarBtn a:focus{
+    outline: 3px dashed white !important;
+}*/
+.VA-SReader .langNav a:focus ,.VA_keyboardNav .langNav a:focus{
+    outline:  3px dashed white !important;
+}
+.VA-bright h1{
+    background-color: white !important;
+    color:midnightblue !important;
+}
+.VA-bright .eventsBar.navbarMobile {
+    background-color: white !important;
+}
+.VA-bright .footerContainer {
+    background-color: white;
+}
+.VA-bright .footerContainer *{
+   color:midnightblue !important;
+}
+.VA-bright .eventerFooterLogo{
+    background-color: midnightblue !important;
+}
+.VA-bright ul#FrontPageNavbarDropdown{
+    color: midnightblue !important;
+    background-color: white !important;
+}
+.VA-bright .btn.btn-login.btnInMobileList {
+    color: midnightblue !important;
+}
+.VA-bright .btn-accent{
+  border-color: white !important;
+  background-color: white !important;
+  border: 1px solid midnightblue !important;
+  color:midnightblue !important
+}
+.VA-bright .navbar-brand.navbar-brandFloat{
+    background-color: midnightblue !important;
+}
+.VA-bright .ticketPrice , .VA-bright .eventContainerNumOfEvents {
+    color:midnightblue !important;
+    background-color: white !important;
+}
+.VA-bright .frontpage-button-accent{
+    background-color: midnightblue !important;
+} 
+.VA-dark .eventContainerBackgroundImage .inImageContainer ,.VA-dark .articleImgCredentials figcaption{
+  background-color: black !important;
+}
+.VA-dark .opacity-50p , .VA-bright .opacity-50p {
+    opacity: 1 !important;
+}
+.VA-SReader .eventContainerBackgroundImage .inImageContainer , .VA_keyboardNav .eventContainerBackgroundImage .inImageContainer{
+    color:black !important;
+}
+.VA-SReader .eventContainerBackgroundImage .articleImgCredentials , .VA_keyboardNav .eventContainerBackgroundImage .articleImgCredentials{
+    color:black !important;
+}
+.VA-SReader .ticketPrice ,.VA_keyboardNav .ticketPrice {
+    color:black !important;
+}
+.VA-SReader .eventsBar.navbarMobile * ,.VA_keyboardNav .eventsBar.navbarMobile *  {
+    color:black !important;
+    background-color: white !important;
+}
+.VA-SReader .btn-login.btnInMobileList , .VA_keyboardNav .btn-login.btnInMobileList{
+    background-color:white !important;
+}
+.VA-SReader .headerItemH.serviceDropdown.open .dropdown-menu , .VA_keyboardNav .headerItemH.serviceDropdown.open  .dropdown-menu{
+    background-color: white !important;
+}
+.VA-SReader .eventsBar.navbarMobile, .VA_keyboardNav .eventsBar.navbarMobile {
+    background-color: #CEBDCB !important;
+}
+.VA-SReader .navbar-brand .navbarLogo.visible-xs , .VA_keyboardNav .navbar-brand .navbarLogo.visible-xs{
+    display: block !important;
+    margin-top: -15px !important;
+}
+.VA-SReader .eventsBar input:focus , .VA_keyboardNav .eventsBar input:focus,
+.VA-SReader .eventsBar a:focus , .VA_keyboardNav .eventsBar a:focus{
+    outline: 3px dashed midnightblue !important;
+}
+.VA-SReader .footerList .bolderText.linkWhite:focus , .VA_keyboardNav  .footerList .bolderText.linkWhite:focus {
+   outline: 3px dashed white !important;
+}
+.VA-SReader.profilePage a:focus > img.eventerLogo ,.VA_keyboardNav.profilePage a:focus > img.eventerLogo{
+    outline: 3px dashed white !important;
+}
+.VA-SReader.profilePage a:has(img.eventerLogo):focus ,.VA_keyboardNav.profilePage a:has(img.eventerLogo):focus{
+    outline: 3px dashed transparent !important;
+}
+.VA-SReader .footerContainer a[href="/accessibility-statement"]:focus, .VA_keyboardNav .footerContainer a[href="/accessibility-statement"]:focus{
+    outline: 3px dashed white !important;
+}
+.VA-SReader .btn:focus,.VA_keyboardNav .btn:focus
+.VA-SReader .btn:hover ,.VA_keyboardNav .btn:hover {
+    color: lemonchiffon  !important;
+    background-color:  black !important;
+}
+.VA-SReader #eventerSiteMainPage , .VA_keyboardNav #eventerSiteMainPage{
+	margin-top: 7.8em !important;
+}
+.VA_keyboardNav.VA-bright .slideTextContainer .slideTitle, .VA_keyboardNav .VA-bright .slideTextContainer .slideSubTitle,
+.VA_keyboardNav.VA-bright .slideTextContainer .slideTitle, .VA_keyboardNav .VA-bright .slideTextContainer .slideSubTitle{
+	color:white !important;
+}
+.VA_keyboardNav.VA-bright .slideTextContainer .slideTitle, .VA_keyboardNav.VA-bright .slideTextContainer .slideSubTitle{
+	color:white !important;
+}
+#SliderAcc{
+	display: flex;
+    flex-wrap: wrap;
+    justify-content: space-around;
+}
+ @media (min-width:1024px){
+
+}
+@media screen and (max-width: 992px) {
+body.lang_en_EN #VAopenMenu , body.lang_ru_RU #VAopenMenu ,body.lang_fr_FR #VAopenMenu {
+         width: 15% !important;
+        height: 6% !important;
+        right: 0px !important;
+        bottom: 20% !important;
+ 
+       
+    }
+}
+@media only screen and (max-width: 767.98px) {
+   
+body.lang_en_EN #VAopenMenu , body.lang_ru_RU #VAopenMenu ,body.lang_fr_FR #VAopenMenu {
+    background: url(../images/iconEnAcc.png) no-repeat !important;
+    /* background-color: white !important; */
+    position: fixed;
+    z-index: 1000000000;
+    width: 5%;
+    height: 8%;
+    right: 0px !important;
+    border-radius: 25px;
+    bottom: 23% !important;
+    background-size: 57px 46px !important;
+    cursor: pointer; 
+    background-position-y: 2px !important;
+}
+}
