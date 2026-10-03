@@ -20,6 +20,30 @@ const STAGES = [
   { id: 'adama', name: 'מתחם אדמה', short: 'אדמה', color: '#96a96a', tint: '#e8e2c4', icon: '●', mapX: 17.3, mapY: 41.8 },
 ];
 
+/* נקודות ציון על המפה (לבחירת "איפה אני" בניווט). הבמות מתווספות אוטומטית. */
+const LANDMARKS = [
+  { id: 'gate-w', name: 'כניסה מערבית', icon: '🚪', mapX: 25.0, mapY: 44.5 },
+  { id: 'gate-s', name: 'כניסה דרומית', icon: '🚪', mapX: 44.0, mapY: 62.3 },
+  { id: 'gate-e', name: 'כניסה ראשית', icon: '🚪', mapX: 67.6, mapY: 55.5 },
+  { id: 'gate-se', name: 'כניסה מהקמפינג', icon: '🚪', mapX: 59.75, mapY: 78.4 },
+  { id: 'checkin', name: 'צימוד וקליטה', icon: '🎟️', mapX: 71.6, mapY: 41.3 },
+  { id: 'parking', name: 'חניה', icon: '🚗', mapX: 86.5, mapY: 37.4 },
+  { id: 'food', name: 'דוכני מזון', icon: '🍔', mapX: 35.5, mapY: 28.6 },
+  { id: 'bar-w', name: 'בר מערבי', icon: '🍺', mapX: 36.25, mapY: 41.9 },
+  { id: 'bar-s', name: 'בר דרומי', icon: '🍺', mapX: 32.5, mapY: 54.4 },
+  { id: 'bar-e', name: 'בר מזרחי', icon: '🍺', mapX: 58.25, mapY: 45.1 },
+  { id: 'info', name: 'מודיעין', icon: 'ℹ️', mapX: 41.5, mapY: 45.6 },
+  { id: 'cafe', name: 'קפה אינדי', icon: '☕', mapX: 45.9, mapY: 46.4 },
+  { id: 'medic', name: 'מדפאה', icon: '⛑️', mapX: 47.9, mapY: 60.0 },
+  { id: 'kids', name: 'מתחם ילדים', icon: '🧸', mapX: 50.5, mapY: 64.9 },
+  { id: 'camp', name: 'קמפינג', icon: '⛺', mapX: 29.5, mapY: 68.0 },
+  { id: 'campbar', name: 'בר+קפה קמפינג', icon: '☕', mapX: 40.6, mapY: 79.1 },
+  { id: 'camp-acc', name: 'קמפינג נגיש', icon: '⛺', mapX: 56.0, mapY: 71.8 },
+  { id: 'camp-fam', name: 'קמפינג משפחות', icon: '⛺', mapX: 72.25, mapY: 67.0 },
+  { id: 'camp-plus', name: 'קמפינג+', icon: '⛺', mapX: 63.25, mapY: 83.5 },
+  { id: 'shabbat', name: 'מתחם שבת', icon: '🕯️', mapX: 17.5, mapY: 30.6 },
+];
+
 const TYPES = {
   show: 'הופעה',
   talk: 'שיחה',

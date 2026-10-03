@@ -137,6 +137,11 @@ def main():
     DIST.mkdir(exist_ok=True)
     out = DIST / 'indienegev.html'
     out.write_text(html, encoding='utf-8')
+    # עותק ל-GitHub Pages
+    docs = PROJECT / 'docs'
+    docs.mkdir(exist_ok=True)
+    (docs / 'index.html').write_text(html, encoding='utf-8')
+    (docs / '.nojekyll').write_text('', encoding='utf-8')
     print(f'{out}  ({out.stat().st_size / 1024:.0f} KB)')
 
 
