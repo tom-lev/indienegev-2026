@@ -175,7 +175,7 @@ function simplify(path) {
 }
 
 // צד פנימי של כל כניסה: מסלול שעובר כאן באמת נכנס דרכה (ולא רק עובר לידה)
-const GATE_POINTS = { 'gate-w': [27.5, 45.2], 'gate-s': [44.0, 62.0], 'gate-e': [65.5, 55.6], 'gate-se': [59.7, 78.4] };
+const GATE_POINTS = { 'gate-w': [26.5, 44.8], 'gate-s': [44.0, 62.0], 'gate-e': [65.5, 55.6], 'gate-se': [59.7, 78.4] };
 const PASS_POINT = [49.3, 52.0];
 
 function findRoute(fromId, toId) {
