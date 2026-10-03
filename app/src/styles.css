@@ -621,3 +621,77 @@ textarea.text-in { min-height: 84px; resize: vertical; direction: ltr; font-fami
 
 /* כשהמקלדת פתוחה – מסתירים את שורת הטאבים כדי לפנות מקום לתוצאות */
 #app.typing .tabs { display: none; }
+
+/* ───────── ניווט: "איפה אני" + קו מקווקו ───────── */
+.route { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; }
+.route .casing { fill: none; stroke: var(--paper); stroke-width: calc(12px * var(--inv)); stroke-linecap: round; opacity: .85; }
+.route .dash {
+  fill: none; stroke: var(--ink); stroke-width: calc(6px * var(--inv)); stroke-linecap: round;
+  stroke-dasharray: calc(14px * var(--inv)) calc(11px * var(--inv));
+  animation: march .8s linear infinite;
+}
+.route .start { r: calc(9px * var(--inv)); fill: var(--coral); stroke: var(--ink); stroke-width: calc(3px * var(--inv)); }
+@keyframes march { to { stroke-dashoffset: calc(-25px * var(--inv)); } }
+.here-pin {
+  position: absolute; left: 0; top: 0;
+  transform: translate(-50%, -100%);
+  display: flex; flex-direction: column; align-items: center;
+  pointer-events: none;
+  animation: drop .4s cubic-bezier(.3,1.5,.5,1) both;
+}
+.here-pin svg { width: 34px; height: 45px; order: 2; filter: drop-shadow(0 2px 0 rgba(21,63,76,.5)); }
+.here-pin svg path { fill: var(--coral); stroke: var(--ink); stroke-width: 2; }
+.here-pin svg circle { fill: var(--paper); stroke: var(--ink); stroke-width: 1.5; }
+.here-pin span {
+  order: 1; margin-bottom: 2px;
+  background: var(--ink); color: var(--paper); border-radius: 999px;
+  padding: 2px 9px; font-size: 13px; font-weight: 800; white-space: nowrap; direction: rtl;
+}
+@keyframes drop { from { transform: translate(-50%, -160%); opacity: 0; } }
+.m-place {
+  position: absolute; left: 0; top: 0;
+  transform: translate(-50%, -22px);
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  min-width: 44px;
+  animation: pop-in .3s cubic-bezier(.3,1.5,.5,1) both;
+}
+.m-place .ic {
+  width: 40px; height: 40px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--paper); border: 3px solid var(--c, var(--ink));
+  box-shadow: 0 0 0 2px var(--ink), 0 3px 0 2px var(--ink);
+  font-size: 21px; line-height: 1; color: var(--ink); font-weight: 900;
+}
+.m-place small {
+  background: var(--ink); color: var(--paper); border-radius: 999px;
+  padding: 1px 7px; font-size: 11.5px; font-weight: 700; white-space: nowrap; direction: rtl;
+}
+@keyframes pop-in { from { transform: translate(-50%, -22px) scale(.3); opacity: 0; } }
+.picking .m-hit, .picking .map-ui.back { display: none; }
+.map-ui.routebar { left: 68px; right: 12px; bottom: 16px; direction: rtl; }
+.rb {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--paper); border: 2.5px solid var(--ink); border-radius: 18px;
+  box-shadow: 0 3px 0 var(--ink);
+  padding: 8px;
+}
+.map-ui .rb button { box-shadow: none; }
+.rb-t { flex: 1; min-width: 0; padding-inline-start: 4px; }
+.rb-t b { display: block; font-size: 14.5px; font-weight: 800; line-height: 1.2; }
+.rb-t small { display: block; font-size: 12px; color: var(--ink-2); font-weight: 600; }
+.map-ui .rb-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--ink); color: var(--paper); border: 2px solid var(--ink);
+  border-radius: 999px; padding: 9px 14px; font-weight: 800; font-size: 14px; white-space: nowrap;
+}
+.map-ui .rb-btn svg { width: 18px; height: 18px; }
+.map-ui .rb-btn.alt { background: transparent; color: var(--ink); }
+.map-ui .rb > .rb-btn:first-child:not(.alt) { flex: 1; justify-content: center; }
+.map-ui .rb-x { width: 38px; height: 38px; border-radius: 50%; border: 2px solid var(--ink); display: grid; place-items: center; flex: none; }
+.map-ui .rb-x svg { width: 16px; height: 16px; }
+@media (prefers-reduced-motion: reduce) {
+  .route .dash { animation: none; }
+  .here-pin, .m-place { animation: none; }
+}
+.picking .m-label { display: none; }
+.has-route .m-label { display: none; }
