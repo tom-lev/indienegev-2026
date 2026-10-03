@@ -717,6 +717,14 @@ textarea.text-in { min-height: 84px; resize: vertical; direction: ltr; font-fami
   padding: 2px 0;
 }
 .rb-t b span { margin: 0 4px; color: var(--ink-2); }
+.rb.rb-col { flex-direction: column; align-items: stretch; gap: 6px; }
+.rb-col .rb-t { padding: 2px 4px 0; }
+.rb-col .rb-t b { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.rb-col .rb-hint { display: inline; font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.rb-row { display: flex; gap: 8px; }
+.map-ui .rb-row .rb-btn { flex: 1; justify-content: center; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.map-ui .rb-row .rb-btn.alt { flex: 0 1 auto; }
+.map-ui .rb .rb-link.sm { font-weight: 700; font-size: inherit; color: var(--ink); }
 
 </style>
 </head>
@@ -2236,9 +2244,11 @@ function updateRoute(dest) {
     bar.innerHTML = `<div class="rb"><div class="rb-t"><b>לאן הולכים?</b><small>הקישו על היעד החדש במפה</small></div>
       <button class="rb-btn alt" data-route="cancel">ביטול</button></div>`;
   } else if (picking) {
-    bar.innerHTML = `<div class="rb"><div class="rb-t"><b>איפה אתם עכשיו?</b><small>הקישו על הנקודה הקרובה אליכם במפה</small></div>
-      ${last ? `<button class="rb-btn alt" data-route="last">מ${esc(last.name)}</button>` : ''}
-      <button class="rb-btn alt" data-route="cancel">ביטול</button></div>`;
+    bar.innerHTML = `<div class="rb rb-col">
+      <div class="rb-t"><b>איפה אתם עכשיו?</b><small>הקישו על הנקודה הקרובה אליכם · היעד: ${canChangeDest
+        ? `<button class="rb-link sm" data-route="dest">${esc(dest.name)}</button>` : esc(dest.name)}</small></div>
+      <div class="rb-row">${last ? `<button class="rb-btn" data-route="last">מ${esc(last.name)}</button>` : ''}
+      <button class="rb-btn alt" data-route="cancel">ביטול</button></div></div>`;
   } else if (routeFrom) {
     // כל חלק בכותרת לחיץ: "מ..." משנה מיקום, "אל..." משנה יעד (בניווט מטאב המפה)
     bar.innerHTML = `<div class="rb"><div class="rb-t">
@@ -2248,9 +2258,12 @@ function updateRoute(dest) {
         <small>${esc(via)}</small></div>
       <button class="rb-x" data-route="clear" aria-label="הסרת המסלול">${ICON.close}</button></div>`;
   } else {
-    bar.innerHTML = `<div class="rb"><button class="rb-btn" data-route="pick">${ICON.pin} איפה אני עכשיו?</button>
-      ${last ? `<button class="rb-btn alt" data-route="last">מ${esc(last.name)}</button>` : ''}
-      ${canChangeDest ? `<button class="rb-btn alt" data-route="dest">יעד אחר</button>` : ''}</div>`;
+    // שורה עליונה: היעד (לחיץ להחלפה בניווט מטאב המפה); שורה תחתונה: בחירת מיקום
+    bar.innerHTML = `<div class="rb rb-col">
+      <div class="rb-t"><b>אל ${canChangeDest ? `<button class="rb-link" data-route="dest">${esc(dest.name)}</button>
+        <small class="rb-hint">(הקישו להחלפה)</small>` : esc(dest.name)}</b></div>
+      <div class="rb-row"><button class="rb-btn" data-route="pick">${ICON.pin} איפה אני עכשיו?</button>
+      ${last ? `<button class="rb-btn alt" data-route="last">מ${esc(last.name)}</button>` : ''}</div></div>`;
   }
 }
 

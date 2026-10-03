@@ -702,3 +702,11 @@ textarea.text-in { min-height: 84px; resize: vertical; direction: ltr; font-fami
   padding: 2px 0;
 }
 .rb-t b span { margin: 0 4px; color: var(--ink-2); }
+.rb.rb-col { flex-direction: column; align-items: stretch; gap: 6px; }
+.rb-col .rb-t { padding: 2px 4px 0; }
+.rb-col .rb-t b { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.rb-col .rb-hint { display: inline; font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.rb-row { display: flex; gap: 8px; }
+.map-ui .rb-row .rb-btn { flex: 1; justify-content: center; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.map-ui .rb-row .rb-btn.alt { flex: 0 1 auto; }
+.map-ui .rb .rb-link.sm { font-weight: 700; font-size: inherit; color: var(--ink); }

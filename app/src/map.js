@@ -423,9 +423,11 @@ function updateRoute(dest) {
     bar.innerHTML = `<div class="rb"><div class="rb-t"><b>לאן הולכים?</b><small>הקישו על היעד החדש במפה</small></div>
       <button class="rb-btn alt" data-route="cancel">ביטול</button></div>`;
   } else if (picking) {
-    bar.innerHTML = `<div class="rb"><div class="rb-t"><b>איפה אתם עכשיו?</b><small>הקישו על הנקודה הקרובה אליכם במפה</small></div>
-      ${last ? `<button class="rb-btn alt" data-route="last">מ${esc(last.name)}</button>` : ''}
-      <button class="rb-btn alt" data-route="cancel">ביטול</button></div>`;
+    bar.innerHTML = `<div class="rb rb-col">
+      <div class="rb-t"><b>איפה אתם עכשיו?</b><small>הקישו על הנקודה הקרובה אליכם · היעד: ${canChangeDest
+        ? `<button class="rb-link sm" data-route="dest">${esc(dest.name)}</button>` : esc(dest.name)}</small></div>
+      <div class="rb-row">${last ? `<button class="rb-btn" data-route="last">מ${esc(last.name)}</button>` : ''}
+      <button class="rb-btn alt" data-route="cancel">ביטול</button></div></div>`;
   } else if (routeFrom) {
     // כל חלק בכותרת לחיץ: "מ..." משנה מיקום, "אל..." משנה יעד (בניווט מטאב המפה)
     bar.innerHTML = `<div class="rb"><div class="rb-t">
@@ -435,9 +437,12 @@ function updateRoute(dest) {
         <small>${esc(via)}</small></div>
       <button class="rb-x" data-route="clear" aria-label="הסרת המסלול">${ICON.close}</button></div>`;
   } else {
-    bar.innerHTML = `<div class="rb"><button class="rb-btn" data-route="pick">${ICON.pin} איפה אני עכשיו?</button>
-      ${last ? `<button class="rb-btn alt" data-route="last">מ${esc(last.name)}</button>` : ''}
-      ${canChangeDest ? `<button class="rb-btn alt" data-route="dest">יעד אחר</button>` : ''}</div>`;
+    // שורה עליונה: היעד (לחיץ להחלפה בניווט מטאב המפה); שורה תחתונה: בחירת מיקום
+    bar.innerHTML = `<div class="rb rb-col">
+      <div class="rb-t"><b>אל ${canChangeDest ? `<button class="rb-link" data-route="dest">${esc(dest.name)}</button>
+        <small class="rb-hint">(הקישו להחלפה)</small>` : esc(dest.name)}</b></div>
+      <div class="rb-row"><button class="rb-btn" data-route="pick">${ICON.pin} איפה אני עכשיו?</button>
+      ${last ? `<button class="rb-btn alt" data-route="last">מ${esc(last.name)}</button>` : ''}</div></div>`;
   }
 }
 
