@@ -54,7 +54,8 @@ function renderHeader() {
       <button class="day-pill" data-day="${x.id}" style="--day:${x.color}" aria-pressed="${x.id === d}">
         ${x.label}<small>${x.date}</small>${tab === 'mine' && counts[x.id] ? `<span class="count">${counts[x.id]}</span>` : ''}
       </button>`).join('')}</div>` : ''}
-    ${tools}`;
+    ${tools}
+    ${cloudStatus()}`;
   $('#top').classList.toggle('hidden', tab === 'map' && !!mapFocus);
 }
 
@@ -106,6 +107,7 @@ $('#top').addEventListener('click', e => {
   if (f) { S.prefs.filter = f.dataset.filter; save(); render(); return; }
   const v = e.target.closest('[data-view]');
   if (v) { S.prefs.view = v.dataset.view; save(); render(); return; }
+  if (e.target.closest('[data-cloudpanel]')) { openBackupPanel(); return; }
   const a = e.target.closest('[data-act]');
   if (!a) return;
   if (a.dataset.act === 'share') openShare();

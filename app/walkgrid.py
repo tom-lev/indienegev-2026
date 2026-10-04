@@ -42,18 +42,36 @@ def build(map_path, out_w=3200, with_gates=True):
     xs = np.arange(W)[None, :] / W * 100
     ys = np.arange(H)[:, None] / H * 100
     big_pink = pink & (xs > 66)           # החץ של צימוד וקליטה
-    walk = yellow | green | big_pink
+    # אזור הקמפינג המחולק (מערב ודרום): ירוק בהיר = שבילים, ירוק כהה יותר = חלקות לאוהלים – הולכים רק בשבילים.
+    # קמפינג משפחות (מזרח) וקמפינג+ (ירוק כהה מאוד) הם שטח פתוח – נשארים עבירים.
+    r_, g_ = a[..., 0].astype(int), a[..., 1].astype(int)
+    light_path = green & (g_ >= 212) & (r_ >= 125)
+    # סגירה מורפולוגית: ממלאת פערים קטנים בשבילים (אייקונים של אוהלים/טיפות שמצוירים עליהם)
+    from PIL import ImageFilter
+    lp = Image.fromarray((light_path * 255).astype(np.uint8))
+    lp = lp.filter(ImageFilter.MaxFilter(25)).filter(ImageFilter.MinFilter(25))
+    light_path = np.asarray(lp) > 127
+    # קמפינג+: מתחת לשביל האלכסוני שיורד מ-(64,70) ל-(50,95)
+    plus_zone = (xs > 49) & (ys > 70 + (64 - xs) * 1.786)
+    shabbat_zone = (xs < 20) & (ys < 44)  # מתחם שבת, מקלחות, בישול ואדמה – שטח פתוח בלי חלקות
+    open_field = green & ((xs > 63) | plus_zone | shabbat_zone)
+    camp_ok = light_path | open_field
+    walk = yellow | camp_ok | big_pink
 
     img = Image.fromarray((walk * 255).astype(np.uint8))
     d = ImageDraw.Draw(img)
     P = lambda x, y: (x / 100 * W, y / 100 * H)
 
+    cor = Image.new('L', img.size, 0)  # מסכת הפרוזדורים בלבד – רק שם מותר לחצות את הנהר
+    dc = ImageDraw.Draw(cor)
+
     def corridor(pts, width_pct=1.4):
         w = width_pct / 100 * W
-        d.line([P(*p) for p in pts], fill=255, width=int(w))
-        for p in pts:
-            x, y = P(*p)
-            d.ellipse([x - w / 2, y - w / 2, x + w / 2, y + w / 2], fill=255)
+        for dd in (d, dc):
+            dd.line([P(*p) for p in pts], fill=255, width=int(w))
+            for p in pts:
+                x, y = P(*p)
+                dd.ellipse([x - w / 2, y - w / 2, x + w / 2, y + w / 2], fill=255)
 
     # הגדר הוורודה הפנימית (מקווים שסומנו ידנית, כי בחלקים היא דהויה מאוד בציור)
     for line in INNER_FENCES:
@@ -63,7 +81,7 @@ def build(map_path, out_w=3200, with_gates=True):
         GH, GW = H // CELL, W // CELL
         return img_ng[:GH * CELL, :GW * CELL].reshape(GH, CELL, GW, CELL).mean(axis=(1, 3)) > 0.8, (W, H)
     # הכניסות האמיתיות: פרוזדור דרך הגדר הכחולה (ודרך שלט הכניסה)
-    corridor([(21.5, 44.8), (24.5, 44.8), (28.3, 44.8), (30.2, 44.2)], 1.8)  # כניסה מערבית – דרך מרכז השלט
+    corridor([(24.5, 44.8), (28.3, 44.8), (30.2, 44.2)], 1.8)  # כניסה מערבית – דרך מרכז השלט (מהשביל שלפניו)
     corridor([(44.0, 66.0), (44.0, 61.0), (43.6, 58.8)])            # כניסה דרומית
     corridor([(70.0, 50.0), (67.0, 55.0), (63.9, 55.9)], 1.6)       # כניסה ראשית (מהחץ הוורוד)
     corridor([(67.0, 55.3), (66.7, 58.0), (64.8, 61.0), (62.8, 64.8)], 0.9)       # ירידה מהכניסה הראשית לקמפינג (מחוץ לגדר)
@@ -74,7 +92,14 @@ def build(map_path, out_w=3200, with_gates=True):
     # הקטנה לתאים: תא הליך רק אם רובו הליך (קווים דקים של גדר נשמרים כחסימה)
     GH, GW = H // CELL, W // CELL
     blocks = walk[:GH * CELL, :GW * CELL].reshape(GH, CELL, GW, CELL).mean(axis=(1, 3))
-    grid = blocks > 0.8
+    # הנהר/הגדר הכחולה: תא שיש בו כחול נחסם (גם אם רובו עביר), חוץ מבפרוזדורי הכניסה
+    r0, g0, b0 = (a[..., i].astype(int) for i in range(3))
+    river = (b0 > 150) & (r0 < 120) & (b0 > g0)
+    corm = np.asarray(cor) > 127
+    river &= ~corm
+    rfrac = river[:GH * CELL, :GW * CELL].reshape(GH, CELL, GW, CELL).mean(axis=(1, 3))
+    cfrac = corm[:GH * CELL, :GW * CELL].reshape(GH, CELL, GW, CELL).mean(axis=(1, 3))
+    grid = ((blocks > 0.6) & (rfrac < 0.1)) | (cfrac > 0.5)
     return grid, (W, H)
 
 

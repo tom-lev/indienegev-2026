@@ -39,7 +39,7 @@ function syncTent() {
   delete PLACE.tent;
   const t = S.prefs.tent;
   if (t) {
-    PLACE.tent = { id: 'tent', name: 'האוהל שלי', icon: '⛺', mapX: t.x, mapY: t.y, color: '#f46f6a' };
+    PLACE.tent = { id: 'tent', name: 'האוהל שלי', icon: '🏠', mapX: t.x, mapY: t.y, color: '#f46f6a' };
     PLACES.push(PLACE.tent);
   }
 }
@@ -297,7 +297,7 @@ function nearestOf(type, fromId) {
 
 function openTentSheet() {
   openSheet(body => {
-    body.innerHTML = `<div class="ev-tags"><span class="stage" style="--c:var(--coral)">⛺ האוהל שלי</span></div>
+    body.innerHTML = `<div class="ev-tags"><span class="stage" style="--c:var(--coral)">🏠 האוהל שלי</span></div>
       <h2 class="ev-name">האוהל שלי</h2>
       <p class="ev-meta">המיקום נשמר רק בטלפון הזה</p>
       <button class="btn block" data-t="go" style="margin-top:14px">${ICON.pin} ניווט לאוהל</button>
@@ -336,7 +336,7 @@ function renderMap(view) {
       <div class="inv"><button class="m-hit poi" data-goto="${w.id}" aria-label="ניווט ל${esc(w.name)}"></button></div>
     </div>`).join('')
     + (PLACE.tent ? `<div class="m-mark" style="left:${PLACE.tent.mapX}%;top:${PLACE.tent.mapY}%">
-      <div class="inv"><button class="tent-pin" data-tent aria-label="האוהל שלי"><span>⛺</span></button></div>
+      <div class="inv"><button class="tent-pin" data-tent aria-label="האוהל שלי"><span>🏠</span></button></div>
     </div>` : '');
   // סימון היעד: טבעת פועמת + תווית (הופעה, או שם הנקודה)
   const destMark = fs ? `<div class="m-mark" style="left:${fs.mapX}%;top:${fs.mapY}%;--c:${fs.color || 'var(--coral)'}">
@@ -453,7 +453,7 @@ function renderMap(view) {
       syncTent();
       picking = false;
       renderMap(view);
-      toast('האוהל נשמר ⛺');
+      toast('האוהל נשמר 🏠');
       if (navigator.vibrate) navigator.vibrate(15);
       return;
     }
@@ -532,7 +532,7 @@ function updateRoute(dest) {
       bar.innerHTML = `<div class="rb"><div class="rb-t"><b>לאן הולכים?</b><small>הקישו על היעד במפה – במה או כל נקודה אחרת</small></div>
           <button class="rb-btn alt" data-route="cancel">ביטול</button></div>`;
     } else if (picking === 'tent') {
-      bar.innerHTML = `<div class="rb"><div class="rb-t"><b>⛺ איפה האוהל שלכם?</b><small>הקישו על המקום המדויק במפה (אפשר להגדיל קודם)</small></div>
+      bar.innerHTML = `<div class="rb"><div class="rb-t"><b>🏠 איפה האוהל שלכם?</b><small>הקישו על המקום המדויק במפה (אפשר להגדיל קודם)</small></div>
           <button class="rb-btn alt" data-route="cancel">ביטול</button></div>`;
     } else if (legendType) {
       const c = CAT[legendType], n = PLACES.filter(pl => catOf(pl) === legendType).length;
@@ -544,7 +544,7 @@ function updateRoute(dest) {
       bar.innerHTML = `<div class="rb rb-row rb-row3">
         <button class="rb-btn" data-route="dest">${ICON.pin} ניווט</button>
         <button class="rb-btn alt" data-route="wc">🚻 שירותים</button>
-        <button class="rb-btn alt" data-route="tent">⛺ ${PLACE.tent ? 'לאוהל' : 'האוהל שלי'}</button></div>`;
+        <button class="rb-btn alt" data-route="tent">🏠 ${PLACE.tent ? 'לאוהל' : 'האוהל שלי'}</button></div>`;
     }
     return;
   }

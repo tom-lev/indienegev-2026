@@ -47,7 +47,6 @@ function renderMine(view) {
     ${warn}
     ${migrateBanner()}
     ${backupNudge()}
-    ${hasData() ? cloudStatus() : ''}
     ${all.length ? `<div class="mine-head">
       <div class="stats">${must} חייב · ${maybe} אולי${S.friends.length ? ` · ${S.friends.length} חברים` : ''}</div>
       <label class="switch"><input type="checkbox" id="showMaybe" ${S.prefs.showMaybe ? 'checked' : ''}> הצג אולי</label>

@@ -31,9 +31,13 @@ const CC = (() => {
   const del = k => run('readwrite', s => s.delete(k));
 
   /* טביעת אצבע של הנתונים החשובים (בלי העדפות תצוגה) – כדי לא להעלות סתם */
+  /* JSON קנוני (מפתחות ממוינים) – כדי שאותו תוכן ייתן אותה טביעת אצבע בכל מכשיר, בלי תלות בסדר */
+  const canon = v => Array.isArray(v) ? '[' + v.map(canon).join(',') + ']'
+    : v && typeof v === 'object' ? '{' + Object.keys(v).sort().filter(k => v[k] !== undefined).map(k => JSON.stringify(k) + ':' + canon(v[k])).join(',') + '}'
+    : JSON.stringify(v === undefined ? null : v);
   function fp(st) {
-    const s = JSON.stringify([st.picks, st.notes, st.ratings, (st.friends || []).map(f => [f.name, f.picks]),
-      (st.prefs && st.prefs.tent) || null, st.name]);
+    const s = canon([st.picks || {}, [...(st.notes || [])].sort((a, b) => (a.id > b.id ? 1 : -1)), st.ratings || {},
+      (st.friends || []).map(f => [f.name, f.picks]).sort(), (st.prefs && st.prefs.tent) || null, st.name || '']);
     let h = 0;
     for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
     return h;
@@ -79,62 +83,131 @@ const CC = (() => {
     const j = await r.json();
     const a = { uid: j.localId, email: j.email, name: j.displayName || j.firstName || '', idToken: j.idToken, refreshToken: j.refreshToken, exp: Date.now() + (+j.expiresIn) * 1000 };
     await set('auth', a);
-    await del('cloud'); // משתמש חדש – מצב הגיבוי מתאפס
     return a;
   }
 
   const docUrl = uid => `${ep.fs}/backups/${uid}`;
+  const errText = e => e.name === 'AbortError' ? 'הקליטה חלשה מדי' : e.message || 'אין חיבור';
 
-  /* בקשת ההעלאה עצמה (משותפת להעלאה רגילה ולשליחה ברגע היציאה מהאפליקציה) */
-  function buildUpload(st, a) {
+  /* ───────── מיזוג תלת-כיווני (בסיס = המצב שסונכרן לאחרונה) ─────────
+     לכל פריט: מי ששינה אותו מאז הבסיס – גובר. שניהם שינו → הגרסה החדשה יותר (או המקומית).
+     מחיקה מכובדת רק אם הצד השני לא שינה את הפריט בינתיים – כך לא מאבדים נתונים. */
+  const eq = (x, y) => JSON.stringify(x) === JSON.stringify(y);
+  const stamp = v => (v && (v.edited || v.at || v.importedAt)) || 0;
+  function m3map(b = {}, l = {}, r = {}) {
+    const out = {};
+    for (const k of new Set([...Object.keys(b), ...Object.keys(l), ...Object.keys(r)])) {
+      const bv = b[k], lv = l[k], rv = r[k];
+      let v;
+      if (eq(lv, bv)) v = rv;
+      else if (eq(rv, bv)) v = lv;
+      else if (lv === undefined) v = rv;              // נמחק כאן, שונה שם → שומרים
+      else if (rv === undefined) v = lv;
+      else v = stamp(rv) > stamp(lv) ? rv : lv;        // שניהם שינו
+      if (v !== undefined) out[k] = v;
+    }
+    return out;
+  }
+  const m3val = (b, l, r) => eq(l, b) ? r : l;
+  const byKey = (arr, key) => Object.fromEntries((arr || []).map(x => [x[key], x]));
+  function merge3(base, local, remote) {
+    base = base || {};
+    const lp = local.prefs || {}, rp = remote.prefs || {}, bp = base.prefs || {};
+    const notes = Object.values(m3map(byKey(base.notes, 'id'), byKey(local.notes, 'id'), byKey(remote.notes, 'id'))).sort((a, b) => a.at - b.at);
+    const friends = Object.values(m3map(byKey(base.friends, 'name'), byKey(local.friends, 'name'), byKey(remote.friends, 'name')));
+    const tent = m3val(bp.tent, lp.tent, rp.tent);
+    const prefs = { ...lp };
+    if (tent) prefs.tent = tent; else delete prefs.tent;
+    return {
+      ...local,
+      name: m3val(base.name, local.name, remote.name) || local.name || remote.name || '',
+      picks: m3map(base.picks, local.picks, remote.picks),
+      ratings: m3map(base.ratings, local.ratings, remote.ratings),
+      notes, friends, prefs,
+    };
+  }
+  const clean = st => { const c = JSON.parse(JSON.stringify(st)); delete c.backup; return c; };
+
+  /* מצב הענן: { state, fp, updateTime } או null */
+  async function getRemote(a) {
+    const r = await req(docUrl(a.uid), { headers: { Authorization: `Bearer ${a.idToken}` } });
+    if (r.status === 404) return null;
+    if (!r.ok) throw new Error(r.status === 403 ? 'אין הרשאה' : `שגיאה ${r.status}`);
+    const j = await r.json();
+    return { state: JSON.parse(j.fields.data.stringValue).state, fp: +j.fields.fp.integerValue, updateTime: j.updateTime,
+      updatedAt: Date.parse(j.fields.updatedAt && j.fields.updatedAt.timestampValue) || 0 };
+  }
+
+  /* בקשת כתיבה. precondition: כותבים רק אם הענן לא השתנה מאז שקראנו אותו (אחרת מכשיר אחר כתב בינתיים) */
+  function buildUpload(st, a, updateTime) {
     const f = fp(st);
     const body = JSON.stringify({ fields: {
       data: { stringValue: backupFrom(st) },
       fp: { integerValue: String(f) },
       updatedAt: { timestampValue: new Date().toISOString() },
     } });
-    return { url: docUrl(a.uid), fp: f, size: body.length * 2,
+    const pre = updateTime ? `?currentDocument.updateTime=${encodeURIComponent(updateTime)}` : '?currentDocument.exists=false';
+    return { url: docUrl(a.uid) + pre, fp: f, size: body.length * 2,
       init: { method: 'PATCH', headers: { Authorization: `Bearer ${a.idToken}`, 'Content-Type': 'application/json' }, body } };
   }
 
-  /* העלאת המצב האחרון (מהעותק ב-IndexedDB). מחזיר 'ok' / 'same' / 'empty' */
-  async function upload() {
-    const raw = await get('state');
-    if (!raw) return 'empty';
-    const st = JSON.parse(raw);
-    const f = fp(st);
+  /* סנכרון מלא: קריאה מהענן ← מיזוג ← כתיבה (אם צריך) ← עדכון המכשיר (אם צריך).
+     מחזיר { result: 'same'|'pushed'|'pulled'|'merged', state? } – state = המצב המעודכן למכשיר אם השתנה */
+  async function sync(attempt = 0) {
     const status = (await get('cloud')) || {};
-    if (status.fp === f) return 'same';
-    const a = await auth();
-    const u = buildUpload(st, a);
     try {
-      const r = await req(u.url, u.init);
-      if (!r.ok) throw new Error(r.status === 403 ? 'אין הרשאה (חוקי האבטחה ב-Firebase)' : `שגיאה ${r.status}`);
-      await set('cloud', { fp: f, at: Date.now(), error: null });
-      return 'ok';
+      const raw = await get('state');
+      if (!raw) return { result: 'same' };
+      const local = JSON.parse(raw);
+      const a = await auth();
+      const remote = await getRemote(a);
+      let base = await get('base');
+      let merged = local;
+      if (remote && remote.fp !== fp(local)) {
+        // הענן לא השתנה מאז הסנכרון האחרון → המקומי פשוט חדש יותר. אחרת – ממזגים.
+        merged = (base && remote.fp === status.fp) ? local : merge3(base, local, remote.state);
+      }
+      const mfp = fp(merged);
+      let result = 'same', updateTime = remote && remote.updateTime;
+      if (!remote || remote.fp !== mfp) {
+        const u = buildUpload(merged, a, remote && remote.updateTime);
+        const r = await req(u.url, u.init);
+        if ((r.status === 400 || r.status === 409 || r.status === 412) && attempt < 2) return sync(attempt + 1); // מכשיר אחר כתב בדיוק עכשיו
+        if (!r.ok) throw new Error(r.status === 403 ? 'אין הרשאה' : `שגיאה ${r.status}`);
+        updateTime = (await r.json()).updateTime;
+        result = 'pushed';
+      }
+      await set('base', clean(merged));
+      await set('cloud', { fp: mfp, at: Date.now(), error: null, updateTime });
+      await set('owner', a.uid);
+      if (mfp !== fp(local)) {
+        merged.savedAt = Date.now();
+        await set('state', JSON.stringify(merged)); // כדי שגם פתיחה הבאה (או ה-SW) יראו את המצב הממוזג
+        return { result: result === 'pushed' ? 'merged' : 'pulled', state: merged };
+      }
+      return { result };
     } catch (e) {
-      await set('cloud', { ...status, error: e.name === 'AbortError' ? 'הקליטה חלשה מדי' : e.message, tried: Date.now() });
+      await set('cloud', { ...status, error: errText(e), tried: Date.now() });
       throw e;
     }
   }
+  const upload = () => sync();
 
   /* הורדת הגיבוי מהענן: { text, updatedAt } או null אם אין */
   async function download() {
     const a = await auth();
-    const r = await req(docUrl(a.uid), { headers: { Authorization: `Bearer ${a.idToken}` } });
-    if (r.status === 404) return null;
-    if (!r.ok) throw new Error(`שגיאה ${r.status}`);
-    const j = await r.json();
-    return { text: j.fields.data.stringValue, updatedAt: Date.parse(j.fields.updatedAt && j.fields.updatedAt.timestampValue) || 0 };
+    const remote = await getRemote(a);
+    if (!remote) return null;
+    return { text: JSON.stringify({ app: 'indienegev-2026', kind: 'backup', v: 1, createdAt: remote.updatedAt, state: remote.state }), updatedAt: remote.updatedAt };
   }
 
-  return { on, cfg, get, set, del, fp, upload, download, signInWithGoogleToken, auth, buildUpload };
+  return { on, cfg, get, set, del, fp, sync, upload, download, signInWithGoogleToken, auth, buildUpload, merge3, clean };
 })();
 
 /* Service Worker – האפליקציה נפתחת מהעותק השמור בטלפון, גם בלי קליטה.
    אסטרטגיה: מטמון קודם (פתיחה מיידית גם בקליטה חלשה). עדכון גרסה מגיע כ-SW חדש
    (הקובץ הזה משתנה בכל בנייה בגלל VERSION), שמחכה עד שהמשתמש מאשר רענון. */
-const VERSION = '1c995d579e70';
+const VERSION = '0e44fc062da4';
 const CACHE = 'indn26-' + VERSION;
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 

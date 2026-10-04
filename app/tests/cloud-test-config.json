@@ -1,0 +1,2 @@
+{ "apiKey": "k", "projectId": "p", "googleClientId": "c",
+  "endpoints": { "token": "http://localhost:8766/token", "idp": "http://localhost:8766/idp", "fs": "http://localhost:8766/fs" } }

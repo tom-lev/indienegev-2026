@@ -35,7 +35,7 @@ async function makeTentImage() {
   const k = W / cw;
   ctx.drawImage(img, cx0 * sx, cy0 * sx, cw * sx, ch * sx, 0, TOP, W, MH);
 
-  // סימון האוהל: טבעות + עיגול עם ⛺ + חץ
+  // סימון האוהל: טבעות + עיגול עם 🏠 + חץ
   const px = (tx - cx0) * k, py = TOP + (ty - cy0) * k;
   for (const [r, a] of [[150, 0.18], [105, 0.3]]) {
     ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2);
@@ -52,7 +52,7 @@ async function makeTentImage() {
   ctx.lineWidth = 4; ctx.strokeStyle = INK;
   ctx.beginPath(); ctx.arc(px, pinY, 57, 0, Math.PI * 2); ctx.stroke();
   ctx.font = '56px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText('⛺', px, pinY + 3);
+  ctx.fillText('🏠', px, pinY + 3);
   ctx.textBaseline = 'alphabetic';
 
   // תווית מעל הסיכה
@@ -87,7 +87,7 @@ async function makeTentImage() {
   ctx.drawImage(wm, 40, (TOP - wmH) / 2, wmW, wmH);
   ctx.textAlign = 'right'; ctx.fillStyle = INK;
   ctx.font = F(900, 64);
-  ctx.fillText(fitText(ctx, 'איפה האוהל שלי ⛺', W - 360), W - 40, 100);
+  ctx.fillText(fitText(ctx, 'איפה האוהל שלי 🏠', W - 360), W - 40, 100);
   ctx.font = F(600, 28); ctx.fillStyle = '#3d6170';
   ctx.fillText('אינדינגב 2026 · מצפה גבולות', W - 40, 145);
 
@@ -108,7 +108,7 @@ async function shareTentImage() {
   const blob = await new Promise(r => cv.toBlob(r, 'image/png'));
   const file = new File([blob], 'my-tent-indienegev.png', { type: 'image/png' });
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
-    try { await navigator.share({ files: [file], text: `האוהל שלי באינדינגב ⛺` }); } catch (e) { /* בוטל */ }
+    try { await navigator.share({ files: [file], text: `האוהל שלי באינדינגב 🏠` }); } catch (e) { /* בוטל */ }
     return;
   }
   const url = URL.createObjectURL(blob);

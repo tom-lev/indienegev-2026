@@ -167,6 +167,15 @@ function restoreFromFile(file) {
   r.readAsText(file);
 }
 
+/* base64 ל-UTF-8 (מעבר מהקובץ המקומי לאתר דרך #BK=) */
+function b64utf8(str) {
+  const bytes = new TextEncoder().encode(str);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+const unb64utf8 = b64 => new TextDecoder().decode(Uint8Array.from(atob(b64.replace(/\s/g, '')), c => c.charCodeAt(0)));
+
 /* ───────── תזכורת גיבוי ───────── */
 function backupNudge() {
   if (!hasData() || isBackedUp()) return '';
@@ -187,7 +196,6 @@ function bindNudge(root) {
     const b = e.target.closest('[data-bk]');
     if (!b) return;
     if (b.dataset.bk === 'save') { downloadBackup(); rerender(); }
-    else if (b.dataset.bk === 'dismiss') { S.prefs.cloudDismissed = true; save(); rerender(); }
     else openBackupPanel();
   });
 }
@@ -253,6 +261,7 @@ function openBackupPanel() {
       if (a === 'share') { await shareBackup(); api.render(); }
       if (a === 'code') toast(await copyText(encodeShare(S.name, S.picks)) ? 'קוד הלוז הועתק' : 'לא הצלחתי להעתיק');
       if (a === 'cloud-restore') { await cloudRestore(); api.render(); }
+      if (a === 'cloud-now') { toast('מסנכרן…'); const ok = await cloudNow(); toast(ok ? 'מסונכרן ✓' : `הסנכרון נכשל: ${cloudState.error || 'אין קליטה'}`); api.render(); }
       if (a === 'cloud-out') { await cloudSignOut(); api.render(); }
       if (x.dataset.snap != null) {
         const s = snaps[+x.dataset.snap];
@@ -273,6 +282,6 @@ function openBackupPanel() {
 /* אתחול (נקרא מ-main.js אחרי הרינדור הראשון) */
 function initBackup() {
   requestPersist();
-  loadCloud().then(() => { if (cloudAuth) { render(); scheduleCloud(2000); } });
+  loadCloud().then(() => { renderHeader(); if (cloudAuth) pullCloud(); else maybeShowWelcome(); });
   recoverFromMirror().then(dailySnapshot);
 }

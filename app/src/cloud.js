@@ -1,9 +1,13 @@
-/* גיבוי אוטומטי לענן – צד הדף: כניסה עם Google, תזמון גיבוי, מצב ושחזור.
-   כשיש קליטה – מעלים מיד. בנוסף נרשם Background Sync, כך שאם אין קליטה
-   הדפדפן יריץ את הגיבוי ב-Service Worker ברגע שהקליטה חוזרת, גם אם האפליקציה סגורה. */
+/* גיבוי וסנכרון לענן – צד הדף.
+   - חובה: בכניסה הראשונה מסך התחברות עם Google (בלי "לא עכשיו").
+   - סנכרון אמיתי בין מכשירים: כל העלאה קוראת קודם את הענן וממזגת (CC.sync), ופתיחה/חזרה לאפליקציה מושכת עדכונים.
+   - כשיש קליטה – מיד. בלי קליטה – Background Sync (אנדרואיד, גם כשהאפליקציה סגורה),
+     ובעת יציאה מהאפליקציה – בקשת keepalive (כולל אייפון).
+   - שורת מצב "גיבוי אחרון לענן" בכל המסכים. */
 
 let cloudAuth = null;   // { uid, email, name } אם מחובר
-let cloudState = {};    // { fp, at, error, tried } – מתעדכן גם מה-Service Worker
+let cloudState = {};    // { fp, at, error, tried, updateTime } – מתעדכן גם מה-Service Worker
+let cloudReady = false; // נטען המצב מ-IndexedDB
 
 async function loadCloud() {
   if (!CC.on) return;
@@ -12,84 +16,120 @@ async function loadCloud() {
     cloudAuth = a ? { uid: a.uid, email: a.email, name: a.name } : null;
     cloudState = (await CC.get('cloud')) || {};
   } catch (e) { /* אין IndexedDB */ }
+  cloudReady = true;
   warmAuth();
 }
 const cloudBackedUp = () => !!cloudAuth && cloudState.fp === dataFingerprint();
 
-/* נקרא אחרי כל שמירה (מ-mirrorSave, אחרי שהעותק ב-IndexedDB עודכן) */
+/* החלת מצב שהגיע מהענן (מיזוג/משיכה) – בלי גרסה קודמת על כל סנכרון */
+function applyCloudState(st) {
+  const keepBackup = S.backup;
+  const d = defaults();
+  for (const k of Object.keys(S)) delete S[k];
+  Object.assign(S, d, st, { prefs: { ...d.prefs, ...(st.prefs || {}) }, backup: keepBackup });
+  save();
+  syncTent();
+  rerender();
+}
+
+/* ───────── תזמון ───────── */
 let cloudTimer = null;
 function scheduleCloud(delay = 3000) {
   if (!CC.on || !cloudAuth || cloudBackedUp()) return;
-  if (!navigator.onLine) return registerCloudSync(); // אין קליטה – הדפדפן יריץ ברקע כשתחזור
+  if (!navigator.onLine) return registerCloudSync();
   clearTimeout(cloudTimer);
   cloudTimer = setTimeout(cloudNow, delay);
 }
-/* Background Sync: הדפדפן יריץ את הגיבוי ב-Service Worker כשתהיה קליטה, גם אם האפליקציה סגורה */
 function registerCloudSync() {
   if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) return;
   navigator.serviceWorker.ready.then(r => r.sync && r.sync.register('cloud-backup')).catch(() => {});
 }
+let syncing = null;
 async function cloudNow() {
   if (!CC.on || !cloudAuth) return false;
   if (!navigator.onLine) { registerCloudSync(); return false; }
-  try {
-    await CC.upload();
-    cloudState = (await CC.get('cloud')) || {};
-    refreshCloudUi();
-    return true;
-  } catch (e) {
-    registerCloudSync(); // נכשל (קליטה חלשה) – ננסה שוב ברקע
-    cloudState = (await CC.get('cloud')) || {};
-    refreshCloudUi();
-    return false;
-  }
+  if (syncing) return syncing;
+  syncing = (async () => {
+    try {
+      await IDB.set('state', JSON.stringify(S)); // לסנכרן את המצב העדכני ביותר
+      const res = await CC.sync();
+      cloudState = (await CC.get('cloud')) || {};
+      if (res.state) {
+        applyCloudState(res.state);
+        if (res.result === 'pulled' || res.result === 'merged') toast('עודכן מהענן ↻');
+      }
+      return true;
+    } catch (e) {
+      registerCloudSync();
+      cloudState = (await CC.get('cloud')) || {};
+      return false;
+    } finally {
+      syncing = null;
+      refreshCloudUi();
+    }
+  })();
+  return syncing;
+}
+/* משיכת עדכונים ממכשירים אחרים: בפתיחה ובחזרה לאפליקציה (לכל היותר פעם ב-20 שניות) */
+let lastPull = 0;
+function pullCloud() {
+  if (!CC.on || !cloudAuth || !navigator.onLine || Date.now() - lastPull < 20000) return;
+  lastPull = Date.now();
+  cloudNow();
 }
 function refreshCloudUi() {
+  renderHeader();
   if (tab === 'mine') rerender();
   for (const l of layers) if (l.panel && l.panel.isBackup && !l.panel.closed) l.panel.render();
+  maybeShowWelcome();
 }
-window.addEventListener('online', () => scheduleCloud(1000));
+window.addEventListener('online', () => { lastPull = 0; pullCloud(); });
 
-/* ───────── גיבוי ברגע היציאה מהאפליקציה ─────────
-   מעבר לאפליקציה אחרת / נעילת מסך / סגירה: שולחים את הגיבוי בבקשת keepalive,
-   שהדפדפן מסיים גם אחרי שהדף הוקפא או נסגר (עובד גם באייפון, שאין בו Background Sync).
-   אין זמן לחדש טוקן ברגע היציאה – לכן שומרים טוקן טרי בזיכרון כל עוד האפליקציה פתוחה. */
+/* ───────── גיבוי ברגע היציאה מהאפליקציה (keepalive) ─────────
+   אין זמן לקרוא ולמזג – לכן כותבים רק אם הענן לא השתנה מאז הסנכרון האחרון (precondition);
+   אם מכשיר אחר כתב בינתיים, הכתיבה נדחית והמיזוג יקרה בסנכרון הבא. */
 let authCache = null;
 async function warmAuth() {
   if (!CC.on || !cloudAuth || !navigator.onLine) return;
-  try { authCache = await CC.auth(); } catch (e) { /* ננסה שוב בהמשך */ }
+  try { authCache = await CC.auth(); } catch (e) { /* */ }
 }
 setInterval(() => { if (!document.hidden) warmAuth(); }, 20 * MIN);
 let flushedFp = null;
 function flushOnHide() {
-  if (!CC.on || !cloudAuth || !navigator.onLine || cloudBackedUp()) return;
+  if (!CC.on || !cloudAuth || !navigator.onLine || cloudBackedUp() || !cloudState.updateTime) return registerCloudSync();
   const a = authCache;
   if (!a || a.exp < Date.now() + 30000) return registerCloudSync();
-  const u = CC.buildUpload(S, a);
-  if (u.fp === flushedFp) return;          // visibilitychange + pagehide – לא שולחים פעמיים
-  if (u.size > 60000) return registerCloudSync(); // מגבלת keepalive של הדפדפן (64KB)
+  const st = CC.clean(S);
+  const u = CC.buildUpload(st, a, cloudState.updateTime);
+  if (u.fp === flushedFp) return;
+  if (u.size > 60000) return registerCloudSync(); // מגבלת keepalive (64KB)
   flushedFp = u.fp;
   clearTimeout(cloudTimer);
-  fetch(u.url, { ...u.init, keepalive: true }).then(r => {
+  fetch(u.url, { ...u.init, keepalive: true }).then(async r => {
     if (!r.ok) throw new Error(r.status);
-    cloudState = { fp: u.fp, at: Date.now(), error: null };
-    return CC.set('cloud', cloudState);
+    const j = await r.json();
+    cloudState = { fp: u.fp, at: Date.now(), error: null, updateTime: j.updateTime };
+    await CC.set('cloud', cloudState);
+    await CC.set('base', st);
   }).catch(() => { flushedFp = null; });
-  registerCloudSync(); // באנדרואיד: רשת ביטחון אם הבקשה לא הגיעה
+  registerCloudSync();
 }
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) flushOnHide();
-  else { flushedFp = null; warmAuth(); }
+  else { flushedFp = null; warmAuth(); pullCloud(); }
 });
 window.addEventListener('pagehide', flushOnHide);
-/* הודעה מה-Service Worker שגיבוי ברקע הצליח */
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('message', async e => {
-    if (e.data && e.data.type === 'cloud-synced') { cloudState = (await CC.get('cloud')) || {}; refreshCloudUi(); }
+    if (!e.data || e.data.type !== 'cloud-synced') return;
+    cloudState = (await CC.get('cloud')) || {};
+    const raw = await IDB.get('state').catch(() => null);
+    if (raw) { const m = JSON.parse(raw); if (CC.fp(m) !== dataFingerprint()) applyCloudState(m); }
+    refreshCloudUi();
   });
 }
 
-/* ───────── כניסה עם Google (Google Identity Services) ───────── */
+/* ───────── כניסה עם Google ───────── */
 let gisLoaded = null;
 function loadGis() {
   return gisLoaded || (gisLoaded = new Promise((res, rej) => {
@@ -101,57 +141,63 @@ function loadGis() {
     document.head.append(s);
   }));
 }
-/* מציג את כפתור "המשך עם Google" בתוך el */
 async function renderGoogleButton(el) {
-  if (!navigator.onLine) { el.innerHTML = '<p style="margin:0">צריך קליטה בשביל ההתחברות (פעם אחת).</p>'; return; }
+  if (!navigator.onLine) { el.innerHTML = '<p class="g-note">צריך קליטה בשביל ההתחברות (פעם אחת).</p>'; return; }
   try {
     await loadGis();
     google.accounts.id.initialize({ client_id: CC.cfg.googleClientId, callback: onGoogleCredential, auto_select: false, use_fedcm_for_prompt: true });
     el.innerHTML = '';
     google.accounts.id.renderButton(el, { theme: 'filled_blue', size: 'large', shape: 'pill', text: 'continue_with', locale: 'he', width: Math.min(320, el.clientWidth || 300) });
   } catch (e) {
-    el.innerHTML = `<p style="margin:0">לא הצלחתי לטעון את ההתחברות: ${esc(e.message)}</p>`;
+    el.innerHTML = `<p class="g-note">לא הצלחתי לטעון את ההתחברות (${esc(e.message)}). ננסה שוב כשתהיה קליטה.</p>`;
   }
 }
+let signingIn = false;
 async function onGoogleCredential(resp) {
+  if (signingIn) return;
+  signingIn = true;
   try {
     toast('מתחבר…');
     const a = await CC.signInWithGoogleToken(resp.credential);
     cloudAuth = { uid: a.uid, email: a.email, name: a.name };
-    cloudState = {};
     authCache = a;
-    if (!S.name && a.name) { S.name = a.name.split(' ')[0]; save(); }
-    await afterSignIn();
+    await afterSignIn(a);
   } catch (e) {
     toast(e.message);
+  } finally {
+    signingIn = false;
   }
 }
-/* אחרי כניסה: אם יש גיבוי בענן – מציעים לשחזר (בטלפון חדש זה כל השחזור) */
-async function afterSignIn() {
-  let remote = null;
-  try { remote = await CC.download(); } catch (e) { /* */ }
-  const o = remote && parseBackup(remote.text);
-  if (o) {
-    const same = CC.fp(o.state) === dataFingerprint();
-    if (!same && (!hasData() || confirm(`נמצא גיבוי בענן מ-${fmtStamp(remote.updatedAt || o.createdAt)}:\n${backupSummary(o)}\n\nלשחזר אותו? (הנתונים שבטלפון יישמרו כגרסה קודמת)\nביטול = לשמור את מה שבטלפון ולגבות אותו לענן.`))) {
-      await applyState(o.state, 'לפני שחזור מהענן');
-      await CC.set('cloud', { fp: CC.fp(o.state), at: Date.now(), error: null });
-      cloudState = await CC.get('cloud');
-      toast('הנתונים שוחזרו מהענן ✓');
-      refreshCloudUi();
-      return;
-    }
+/* אחרי כניסה:
+   - המכשיר שייך לחשבון אחר (מכשיר משותף) → הנתונים של הקודם נשמרים כגרסה קודמת במכשיר, ולא עולים לחשבון החדש.
+   - אחרת → מיזוג בין מה שבמכשיר למה שבענן (בלי לאבד כלום משני הצדדים). */
+async function afterSignIn(a) {
+  const owner = await CC.get('owner');
+  if (owner && owner !== a.uid) {
+    if (hasData()) await takeSnapshot('נתוני החשבון הקודם');
+    const keepPrefs = { view: S.prefs.view, filter: S.prefs.filter };
+    const d = defaults();
+    for (const k of Object.keys(S)) delete S[k];
+    Object.assign(S, d, { prefs: { ...d.prefs, ...keepPrefs }, backup: {} });
+    save(); syncTent();
+    await CC.del('base'); await CC.del('cloud');
+  } else if (!owner) {
+    await CC.del('base'); // אין בסיס משותף – מיזוג "איחוד" בלי מחיקות
+    if (hasData()) await takeSnapshot('לפני סנכרון ראשון');
   }
-  toast(`מחובר כ-${cloudAuth.name || cloudAuth.email} · הגיבוי האוטומטי פעיל ✓`);
-  await IDB.set('state', JSON.stringify(S)).catch(() => {});
-  await cloudNow();
-  refreshCloudUi();
+  cloudState = (await CC.get('cloud')) || {};
+  lastPull = Date.now();
+  const ok = await cloudNow();
+  // שם ברירת מחדל מגוגל – רק אם גם אחרי הסנכרון אין שם (לא דורסים שם שנבחר)
+  if (!S.name && a.name) { S.name = a.name.split(' ')[0]; save(); }
+  closeWelcome();
+  render();
+  toast(ok ? `מחובר כ-${a.name || a.email} · הגיבוי והסנכרון פעילים ✓` : `מחובר כ-${a.name || a.email} · הגיבוי יתבצע כשתהיה קליטה`);
 }
 async function cloudSignOut() {
-  if (!confirm('להתנתק? הגיבוי האוטומטי ייעצר. הגיבוי שכבר בענן נשאר.')) return;
-  await CC.del('auth');
-  await CC.del('cloud');
-  cloudAuth = null; cloudState = {}; authCache = null;
+  if (!confirm('להתנתק מהחשבון? הנתונים נשארים בטלפון ובענן. בלי חשבון אין גיבוי – תתבקש להתחבר שוב.')) return;
+  await CC.del('auth'); // הבסיס והבעלות נשמרים: התחברות חוזרת לאותו חשבון ממזגת נכון
+  cloudAuth = null; authCache = null;
   try { google.accounts.id.disableAutoSelect(); } catch (e) { /* */ }
   refreshCloudUi();
 }
@@ -161,60 +207,87 @@ async function cloudRestore() {
     const remote = await CC.download();
     const o = remote && parseBackup(remote.text);
     if (!o) return toast('עוד אין גיבוי בענן');
-    if (!confirm(`לשחזר את הגיבוי מהענן (${fmtStamp(remote.updatedAt || o.createdAt)})?\n${backupSummary(o)}\n\nהמצב הנוכחי יישמר כגרסה קודמת.`)) return;
+    if (!confirm(`להחליף את מה שבטלפון במה שבענן (${fmtStamp(remote.updatedAt || o.createdAt)})?\n${backupSummary(o)}\n\nהמצב הנוכחי יישמר כגרסה קודמת.`)) return;
     await applyState(o.state, 'לפני שחזור מהענן');
+    await CC.set('base', CC.clean(S));
+    await CC.set('cloud', { ...cloudState, fp: dataFingerprint(), at: Date.now(), error: null });
+    cloudState = await CC.get('cloud');
     toast('שוחזר מהענן ✓');
+    refreshCloudUi();
   } catch (e) {
     toast(`השחזור נכשל: ${e.name === 'AbortError' ? 'הקליטה חלשה מדי' : e.message}`);
   }
 }
 
-/* ───────── שורת מצב + הצעה להפעלה ───────── */
+/* ───────── מסך פתיחה: התחברות חובה ───────── */
+let welcomeEl = null;
+function maybeShowWelcome() {
+  if (!CC.on || !cloudReady || cloudAuth || welcomeEl) return;
+  welcomeEl = document.createElement('section');
+  welcomeEl.className = 'welcome';
+  welcomeEl.setAttribute('role', 'dialog');
+  welcomeEl.innerHTML = `<div class="w-card">
+    <img src="${ASSETS.wordmark}" alt="inDnegev" class="w-logo">
+    <h2>הלוז שלי · אינדינגב 2026</h2>
+    <p>התחברות אחת עם Google. מאז הכל נשמר ומגובה לבד: הלוז, הפתקים, האוהל והחברים – ומסונכרן בין הטלפונים שלך. בטלפון חדש מתחברים והכל חוזר.</p>
+    <div class="gbtn" id="wgbtn"></div>
+    <p class="w-small">נשמרים רק השם והאימייל לזיהוי. כל משתמש רואה רק את הנתונים שלו.</p>
+    <button class="w-later hidden" data-wlater>אין קליטה עכשיו – להמשיך בינתיים</button>
+  </div>`;
+  document.body.append(welcomeEl);
+  const btn = $('#wgbtn', welcomeEl);
+  renderGoogleButton(btn).then(() => {
+    // בלי קליטה אי אפשר להתחבר – מאפשרים להמשיך, והמסך יחזור כשתהיה קליטה
+    if (!navigator.onLine || !btn.querySelector('iframe, div[role=button]')) $('[data-wlater]', welcomeEl).classList.remove('hidden');
+  });
+  welcomeEl.querySelector('[data-wlater]').onclick = () => {
+    closeWelcome();
+    const again = () => { window.removeEventListener('online', again); setTimeout(maybeShowWelcome, 1500); };
+    window.addEventListener('online', again);
+  };
+}
+function closeWelcome() {
+  if (welcomeEl) { welcomeEl.remove(); welcomeEl = null; }
+}
+
+/* ───────── שורת מצב (בכל המסכים) ───────── */
 function cloudStatus() {
   if (!CC.on) return '';
-  if (!cloudAuth) {
-    if (S.prefs.cloudDismissed) return `<button class="cloud-status off" data-bk="panel">☁️ אין גיבוי אוטומטי לענן · להפעלה</button>`;
-    return `<div class="banner cloud-offer"><b>☁️ להפעיל גיבוי אוטומטי?</b><br>
-      התחברות אחת עם Google, ומאז כל השינויים מגובים לבד כשיש קליטה. בטלפון חדש – מתחברים והכל חוזר.
-      <div class="btn-row" style="margin-top:8px"><button class="btn sm" data-bk="panel">הפעלה</button>
-      <button class="btn alt sm" data-bk="dismiss">לא עכשיו</button></div></div>`;
-  }
   let icon, text, cls = '';
-  const s = cloudState;
-  if (s.error && !cloudBackedUp()) {
-    icon = '⚠️'; cls = 'warn';
-    text = `גיבוי לענן ${s.at ? `אחרון ${agoText(s.at)}` : 'עוד לא הצליח'} · ${s.error}`;
-  } else if (s.at) {
-    icon = cloudBackedUp() ? '✅' : '☁️';
-    text = `גיבוי אחרון לענן: ${agoText(s.at)}${cloudBackedUp() ? '' : ' · שינויים חדשים יגובו כשתהיה קליטה'}`;
+  if (!cloudAuth) {
+    icon = '⚠️'; cls = 'warn'; text = 'אין גיבוי – צריך להתחבר';
   } else {
-    icon = '☁️'; text = 'גיבוי לענן: יתבצע כשתהיה קליטה';
+    const s = cloudState;
+    if (s.error && /להתחבר/.test(s.error)) { icon = '⚠️'; cls = 'warn'; text = 'צריך להתחבר מחדש כדי להמשיך לגבות'; }
+    else if (s.error && !cloudBackedUp()) { icon = '⚠️'; cls = 'warn'; text = `לא גובה${s.at ? ` מאז ${agoText(s.at)}` : ''} · ${s.error}`; }
+    else if (s.at) {
+      icon = cloudBackedUp() ? '✅' : '☁️';
+      text = cloudBackedUp() ? `גיבוי אחרון לענן: ${agoText(s.at)}` : `גיבוי אחרון: ${agoText(s.at)} · יש שינויים שיגובו כשתהיה קליטה`;
+    } else { icon = '☁️'; text = 'הגיבוי יתבצע כשתהיה קליטה'; }
   }
-  return `<button class="cloud-status ${cls}" data-bk="panel">${icon} ${esc(text)}</button>`;
+  return `<button class="cloud-status ${cls}" data-cloudpanel>${icon} ${esc(text)}</button>`;
 }
 
 /* קטע הענן במסך "גיבוי ושחזור" */
 function cloudPanelSection() {
-  if (!CC.on) {
-    return `<div class="card-box"><h3>☁️ גיבוי אוטומטי לענן</h3>
-      <p style="margin:0">עוד לא הוגדר באפליקציה הזו.</p></div>`;
-  }
+  if (!CC.on) return '';
   if (!cloudAuth) {
-    return `<div class="card-box"><h3>☁️ גיבוי אוטומטי לענן</h3>
-      <p>התחברות אחת עם Google. מאז כל שינוי מגובה לבד כשיש קליטה – גם כשהאפליקציה סגורה (ב-Chrome). בטלפון חדש: מתחברים והכל חוזר.</p>
-      <div id="gbtn" class="gbtn"></div>
-      <p style="margin:8px 0 0;font-size:12.5px">נשמר רק השם והאימייל לזיהוי. כל משתמש רואה רק את הגיבוי שלו.</p></div>`;
+    return `<div class="card-box"><h3>☁️ גיבוי וסנכרון</h3>
+      <p>צריך להתחבר עם Google כדי שהנתונים יגובו ויסונכרנו בין הטלפונים.</p>
+      <div id="gbtn" class="gbtn"></div></div>`;
   }
   const s = cloudState;
-  return `<div class="card-box"><h3>☁️ גיבוי אוטומטי לענן</h3>
+  return `<div class="card-box"><h3>☁️ גיבוי וסנכרון</h3>
     <p>מחובר כ-<b>${esc(cloudAuth.name || '')}</b> <span dir="ltr">${esc(cloudAuth.email || '')}</span></p>
     <ul class="bk-status">
-      <li>${cloudBackedUp() ? '✅ מגובה' : '⏳ יש שינויים שיגובו כשתהיה קליטה'}</li>
+      <li>${cloudBackedUp() ? '✅ מגובה ומסונכרן' : '⏳ יש שינויים שיגובו כשתהיה קליטה'}</li>
       <li>גיבוי אחרון: ${s.at ? agoText(s.at) : 'עוד לא'}</li>
       ${s.error ? `<li class="warn-t">ניסיון אחרון נכשל: ${esc(s.error)}</li>` : ''}
     </ul>
     <div class="btn-row" style="margin-top:8px">
-      <button class="btn alt" data-b="cloud-restore">שחזור מהענן</button>
-      <button class="btn alt" data-b="cloud-out">התנתקות</button>
-    </div></div>`;
+      <button class="btn" data-b="cloud-now">סנכרון עכשיו</button>
+      <button class="btn alt" data-b="cloud-restore">החלפה במה שבענן</button>
+    </div>
+    ${s.error && /להתחבר/.test(s.error) ? '<p style="margin:10px 0 6px">צריך להתחבר מחדש:</p><div id="gbtn" class="gbtn"></div>' : ''}
+    <button class="btn alt sm" data-b="cloud-out" style="margin-top:10px">התנתקות / החלפת חשבון</button></div>`;
 }
