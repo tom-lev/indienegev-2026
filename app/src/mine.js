@@ -46,7 +46,6 @@ function renderMine(view) {
   view.innerHTML = `<div class="scroll" id="mscroll"><div class="pad">
     ${warn}
     ${migrateBanner()}
-    ${backupNudge()}
     ${all.length ? `<div class="mine-head">
       <div class="stats">${must} חייב · ${maybe} אולי${S.friends.length ? ` · ${S.friends.length} חברים` : ''}</div>
       <label class="switch"><input type="checkbox" id="showMaybe" ${S.prefs.showMaybe ? 'checked' : ''}> הצג אולי</label>
@@ -56,7 +55,6 @@ function renderMine(view) {
 
   const sc = $('#mscroll');
   bindRows(sc);
-  bindNudge(sc);
   bindMigrate(sc);
   sc.addEventListener('click', e => {
     const go = e.target.closest('[data-go]');

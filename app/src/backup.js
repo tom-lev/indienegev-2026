@@ -176,29 +176,6 @@ function b64utf8(str) {
 }
 const unb64utf8 = b64 => new TextDecoder().decode(Uint8Array.from(atob(b64.replace(/\s/g, '')), c => c.charCodeAt(0)));
 
-/* ───────── תזכורת גיבוי ───────── */
-function backupNudge() {
-  if (!hasData() || isBackedUp()) return '';
-  // עם גיבוי לענן פעיל לא מציקים בלי קליטה – רק אם הענן לא הצליח יממה
-  if (cloudAuth && cloudState.at && Date.now() - cloudState.at < 24 * HOUR) return '';
-  const last = lastBackupAt();
-  const notes = unbackedNotes();
-  const picks = Object.keys(S.picks).length;
-  const due = !last ? (picks >= 5 || S.notes.length >= 1) : (notes >= 3 || Date.now() - last > 12 * HOUR);
-  if (!due) return '';
-  const what = notes ? `${notes} פתקים` : 'שינויים';
-  return `<div class="banner backup-nudge"><b>💾 יש ${what} שלא גובו</b>${last ? ` · גיבוי אחרון ${agoText(last)}` : ''}
-    <div class="btn-row" style="margin-top:8px"><button class="btn sm" data-bk="save">${ICON.download} שמירת גיבוי</button>
-    <button class="btn alt sm" data-bk="panel">אפשרויות</button></div></div>`;
-}
-function bindNudge(root) {
-  root.addEventListener('click', e => {
-    const b = e.target.closest('[data-bk]');
-    if (!b) return;
-    if (b.dataset.bk === 'save') { downloadBackup(); rerender(); }
-    else openBackupPanel();
-  });
-}
 function agoText(ms) {
   const m = Math.round((Date.now() - ms) / MIN);
   if (m < 2) return 'עכשיו';
