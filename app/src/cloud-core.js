@@ -134,21 +134,44 @@ const CC = (() => {
     if (r.status === 404) return null;
     if (!r.ok) throw new Error(r.status === 403 ? 'אין הרשאה' : `שגיאה ${r.status}`);
     const j = await r.json();
-    return { state: JSON.parse(j.fields.data.stringValue).state, fp: +j.fields.fp.integerValue, updateTime: j.updateTime,
-      updatedAt: Date.parse(j.fields.updatedAt && j.fields.updatedAt.timestampValue) || 0 };
+    const prev = ((j.fields.prev && j.fields.prev.arrayValue && j.fields.prev.arrayValue.values) || [])
+      .map(v => ({ data: v.mapValue.fields.data.stringValue, at: +v.mapValue.fields.at.integerValue }));
+    return { raw: j.fields.data.stringValue, state: JSON.parse(j.fields.data.stringValue).state, fp: +j.fields.fp.integerValue,
+      updateTime: j.updateTime, prev, updatedAt: Date.parse(j.fields.updatedAt && j.fields.updatedAt.timestampValue) || 0 };
   }
 
-  /* בקשת כתיבה. precondition: כותבים רק אם הענן לא השתנה מאז שקראנו אותו (אחרת מכשיר אחר כתב בינתיים) */
-  function buildUpload(st, a, updateTime) {
+  /* ───────── הגנות מאובדן נתונים ───────── */
+  const size = st => Object.keys(st.picks || {}).length + (st.notes || []).length + Object.keys(st.ratings || {}).length
+    + Object.keys(st.nope || {}).length + (st.friends || []).length + ((st.prefs && st.prefs.tent) ? 1 : 0);
+  const PREV_KEEP = 8; // כמה גרסאות קודמות נשמרות בענן
+
+  /* בקשת כתיבה.
+     - precondition: כותבים רק אם הענן לא השתנה מאז שקראנו אותו (אחרת מכשיר אחר כתב בינתיים).
+     - updateMask: מעדכנים רק את השדות שלנו, כך שהיסטוריית הגרסאות (prev) לא נמחקת בכתיבה מהירה. */
+  function buildUpload(st, a, updateTime, prev) {
     const f = fp(st);
-    const body = JSON.stringify({ fields: {
+    const fields = {
       data: { stringValue: backupFrom(st) },
       fp: { integerValue: String(f) },
       updatedAt: { timestampValue: new Date().toISOString() },
-    } });
-    const pre = updateTime ? `?currentDocument.updateTime=${encodeURIComponent(updateTime)}` : '?currentDocument.exists=false';
-    return { url: docUrl(a.uid) + pre, fp: f, size: body.length * 2,
+    };
+    const mask = ['data', 'fp', 'updatedAt'];
+    if (prev) {
+      fields.prev = { arrayValue: { values: prev.map(p => ({ mapValue: { fields: { data: { stringValue: p.data }, at: { integerValue: String(p.at) } } } })) } };
+      mask.push('prev');
+    }
+    const body = JSON.stringify({ fields });
+    const pre = updateTime ? `currentDocument.updateTime=${encodeURIComponent(updateTime)}` : 'currentDocument.exists=false';
+    const qs = mask.map(m => `updateMask.fieldPaths=${m}`).join('&') + '&' + pre;
+    return { url: docUrl(a.uid) + '?' + qs, fp: f, size: body.length * 2,
       init: { method: 'PATCH', headers: { Authorization: `Bearer ${a.idToken}`, 'Content-Type': 'application/json' }, body } };
+  }
+
+  /* יומן סנכרון (לאבחון): 30 האירועים האחרונים */
+  async function logSync(e) {
+    const l = (await get('synclog')) || [];
+    l.unshift({ at: Date.now(), ...e });
+    await set('synclog', l.slice(0, 30));
   }
 
   /* סנכרון מלא: קריאה מהענן ← מיזוג ← כתיבה (אם צריך) ← עדכון המכשיר (אם צריך).
@@ -161,16 +184,24 @@ const CC = (() => {
       const local = JSON.parse(raw);
       const a = await auth();
       const remote = await getRemote(a);
-      let base = await get('base');
-      let merged = local;
+      const base = await get('base');
+      let merged = local, guard = '';
       if (remote && remote.fp !== fp(local)) {
         // הענן לא השתנה מאז הסנכרון האחרון → המקומי פשוט חדש יותר. אחרת – ממזגים.
         merged = (base && remote.fp === status.fp) ? local : merge3(base, local, remote.state);
+        // הגנה: סנכרון לעולם לא מוחק בבת אחת הרבה נתונים (מכשיר ריק, מצב מקומי שנמחק או ישן).
+        // אם התוצאה מאבדת יותר מ-3 פריטים ויותר מ-30% – מאחדים במקום (שום דבר לא נמחק).
+        const most = Math.max(size(local), size(remote.state)), lost = most - size(merged);
+        if (lost > 3 && lost > most * 0.3) { merged = merge3(null, local, remote.state); guard = `blocked mass delete (${lost}/${most})`; }
       }
       const mfp = fp(merged);
       let result = 'same', updateTime = remote && remote.updateTime;
       if (!remote || remote.fp !== mfp) {
-        const u = buildUpload(merged, a, remote && remote.updateTime);
+        // הגרסה שבענן נשמרת בהיסטוריה לפני שדורסים אותה
+        const prev = remote ? (size(remote.state) ? [{ data: remote.raw, at: remote.updatedAt || Date.now() }, ...remote.prev] : remote.prev) : [];
+        let keep = prev.slice(0, PREV_KEEP);
+        while (keep.length && keep.reduce((s, p) => s + p.data.length, 0) > 700000) keep = keep.slice(0, -1); // מגבלת גודל מסמך
+        const u = buildUpload(merged, a, remote && remote.updateTime, keep);
         const r = await req(u.url, u.init);
         if ((r.status === 400 || r.status === 409 || r.status === 412) && attempt < 2) return sync(attempt + 1); // מכשיר אחר כתב בדיוק עכשיו
         if (!r.ok) throw new Error(r.status === 403 ? 'אין הרשאה' : `שגיאה ${r.status}`);
@@ -180,7 +211,9 @@ const CC = (() => {
       await set('base', clean(merged));
       await set('cloud', { fp: mfp, at: Date.now(), error: null, updateTime });
       await set('owner', a.uid);
-      if (mfp !== fp(local)) {
+      const changed = mfp !== fp(local);
+      await logSync({ result: changed ? (result === 'pushed' ? 'merged' : 'pulled') : result, local: size(local), remote: remote ? size(remote.state) : -1, merged: size(merged), base: base ? size(base) : -1, guard });
+      if (changed) {
         merged.savedAt = Date.now();
         await set('state', JSON.stringify(merged)); // כדי שגם פתיחה הבאה (או ה-SW) יראו את המצב הממוזג
         return { result: result === 'pushed' ? 'merged' : 'pulled', state: merged };
@@ -188,10 +221,20 @@ const CC = (() => {
       return { result };
     } catch (e) {
       await set('cloud', { ...status, error: errText(e), tried: Date.now() });
+      await logSync({ result: 'error', error: errText(e) }).catch(() => {});
       throw e;
     }
   }
   const upload = () => sync();
+
+  /* גרסאות קודמות שבענן: [{ at, state }] */
+  async function history() {
+    const a = await auth();
+    const remote = await getRemote(a);
+    if (!remote) return [];
+    return [{ at: remote.updatedAt, state: remote.state, current: true },
+      ...remote.prev.map(p => ({ at: p.at, state: JSON.parse(p.data).state }))];
+  }
 
   /* הורדת הגיבוי מהענן: { text, updatedAt } או null אם אין */
   async function download() {
@@ -201,5 +244,5 @@ const CC = (() => {
     return { text: JSON.stringify({ app: 'indienegev-2026', kind: 'backup', v: 1, createdAt: remote.updatedAt, state: remote.state }), updatedAt: remote.updatedAt };
   }
 
-  return { on, cfg, get, set, del, fp, sync, upload, download, signInWithGoogleToken, auth, buildUpload, merge3, clean };
+  return { on, cfg, get, set, del, fp, sync, upload, download, history, size, signInWithGoogleToken, auth, buildUpload, merge3, clean };
 })();

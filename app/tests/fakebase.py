@@ -159,6 +159,12 @@ class H(BaseHTTPRequestHandler):
                 LOG.append(f'write CONFLICT stale {uid}')
                 return self.reply(400, {'error': {'status': 'FAILED_PRECONDITION'}})
             ut = ts()
+            if 'updateMask.fieldPaths' in q and cur:
+                doc = json.loads(cur['body']); new = json.loads(b)
+                for fp in q['updateMask.fieldPaths']:
+                    if fp in new['fields']: doc['fields'][fp] = new['fields'][fp]
+                    else: doc['fields'].pop(fp, None)
+                b = json.dumps(doc)
             DOCS[uid] = {'body': b, 'updated': time.time(), 'ut': ut}
             LOG.append(f'write {uid}')
         out = json.loads(b); out['updateTime'] = ut

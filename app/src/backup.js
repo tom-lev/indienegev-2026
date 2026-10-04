@@ -239,6 +239,27 @@ function openBackupPanel() {
       if (a === 'code') toast(await copyText(encodeShare(S.name, S.picks)) ? 'קוד הלוז הועתק' : 'לא הצלחתי להעתיק');
       if (a === 'cloud-now') { toast('מסנכרן…'); const ok = await cloudNow(); toast(ok ? 'מסונכרן ✓' : `הסנכרון נכשל: ${cloudState.error || 'אין קליטה'}`); api.render(); }
       if (a === 'cloud-out') { await cloudSignOut(); api.render(); }
+      if (a === 'cloud-hist') {
+        const box = $('#cloudHist', body);
+        box.innerHTML = '<p style="margin:8px 0 0">טוען…</p>';
+        try {
+          const h = await CC.history();
+          const log = (await CC.get('synclog')) || [];
+          box.innerHTML = (h.length ? h.map((v, i) => `<div class="snap"><span><b>${fmtStamp(v.at)}</b>${v.current ? ' · נוכחי' : ''} · ${CC.size(v.state)} פריטים (${Object.keys(v.state.picks || {}).length} הופעות, ${(v.state.notes || []).length} פתקים)</span>
+              ${v.current ? '' : `<button class="btn alt sm" data-chist="${i}">שחזור</button>`}</div>`).join('') : '<p style="margin:8px 0 0">אין גרסאות בענן.</p>')
+            + `<details style="margin-top:8px"><summary style="font-size:12.5px;color:var(--ink-2)">יומן סנכרון (לאבחון)</summary><pre class="synclog">${esc(log.map(l => `${fmtStamp(l.at)} ${l.result}${l.error ? ' ' + l.error : ''} local:${l.local ?? ''} cloud:${l.remote ?? ''} → ${l.merged ?? ''}${l.guard ? ' ⚠ ' + l.guard : ''}`).join('\n'))}</pre></details>`;
+          box.onclick = async ev => {
+            const bt = ev.target.closest('[data-chist]');
+            if (!bt) return;
+            const v = h[+bt.dataset.chist];
+            if (!confirm(`לשחזר את הגרסה מ-${fmtStamp(v.at)}? (${CC.size(v.state)} פריטים)\nהמצב הנוכחי יישמר כגרסה קודמת, וגם יישאר בהיסטוריה שבענן.`)) return;
+            await applyState(v.state, 'לפני שחזור מהענן');
+            toast('שוחזר ✓ · מסנכרן…');
+            await cloudNow();
+            api.render();
+          };
+        } catch (e) { box.innerHTML = `<p class="warn-t">לא הצלחתי לטעון: ${esc(e.message)}</p>`; }
+      }
       if (x.dataset.snap != null) {
         const s = snaps[+x.dataset.snap];
         if (!confirm(`לחזור לגרסה מ-${fmtStamp(s.at)}?\nהמצב הנוכחי יישמר כגרסה קודמת.`)) return;

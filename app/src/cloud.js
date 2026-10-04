@@ -23,6 +23,8 @@ const cloudBackedUp = () => !!cloudAuth && cloudState.fp === dataFingerprint();
 
 /* החלת מצב שהגיע מהענן (מיזוג/משיכה) – בלי גרסה קודמת על כל סנכרון */
 function applyCloudState(st) {
+  // עדכון מהענן שמסיר נתונים (למשל מחיקה במכשיר אחר) – קודם שומרים גרסה קודמת במכשיר
+  if (CC.size(st) < CC.size(S)) takeSnapshot('לפני עדכון מהענן');
   const keepBackup = S.backup;
   const d = defaults();
   for (const k of Object.keys(S)) delete S[k];
@@ -97,10 +99,11 @@ setInterval(() => { if (!document.hidden) warmAuth(); }, 20 * MIN);
 let flushedFp = null;
 function flushOnHide() {
   if (!CC.on || !cloudAuth || !navigator.onLine || cloudBackedUp() || !cloudState.updateTime) return registerCloudSync();
+  if (!hasData()) return; // לעולם לא שולחים מצב ריק בלי מיזוג
   const a = authCache;
   if (!a || a.exp < Date.now() + 30000) return registerCloudSync();
   const st = CC.clean(S);
-  const u = CC.buildUpload(st, a, cloudState.updateTime);
+  const u = CC.buildUpload(st, a, cloudState.updateTime); // בלי prev: ה-updateMask שומר את ההיסטוריה שבענן
   if (u.fp === flushedFp) return;
   if (u.size > 60000) return registerCloudSync(); // מגבלת keepalive (64KB)
   flushedFp = u.fp;
@@ -267,6 +270,8 @@ function cloudPanelSection() {
       ${s.error ? `<li class="warn-t">ניסיון אחרון נכשל: ${esc(s.error)}</li>` : ''}
     </ul>
     <button class="btn block" data-b="cloud-now" style="margin-top:8px">סנכרון עכשיו</button>
+    <button class="btn alt block" data-b="cloud-hist" style="margin-top:8px">גרסאות קודמות בענן</button>
+    <div id="cloudHist"></div>
     ${s.error && /להתחבר/.test(s.error) ? '<p style="margin:10px 0 6px">צריך להתחבר מחדש:</p><div id="gbtn" class="gbtn"></div>' : ''}
     <button class="btn alt sm" data-b="cloud-out" style="margin-top:10px">התנתקות / החלפת חשבון</button></div>`;
 }

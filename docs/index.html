@@ -892,6 +892,8 @@ details.journal .jm { font-size: 12.5px; font-weight: 700; color: var(--ink-2); 
 
 .note-saved { font-size: 12px; font-weight: 700; color: var(--green); min-height: 16px; margin: -4px 4px 4px; text-align: start; }
 
+.synclog { direction: ltr; text-align: left; font-size: 10.5px; white-space: pre-wrap; background: rgba(21,63,76,.06); border-radius: 8px; padding: 6px; max-height: 220px; overflow: auto; margin: 6px 0 0; }
+
 </style>
 </head>
 <body>
@@ -3988,21 +3990,44 @@ const CC = (() => {
     if (r.status === 404) return null;
     if (!r.ok) throw new Error(r.status === 403 ? 'אין הרשאה' : `שגיאה ${r.status}`);
     const j = await r.json();
-    return { state: JSON.parse(j.fields.data.stringValue).state, fp: +j.fields.fp.integerValue, updateTime: j.updateTime,
-      updatedAt: Date.parse(j.fields.updatedAt && j.fields.updatedAt.timestampValue) || 0 };
+    const prev = ((j.fields.prev && j.fields.prev.arrayValue && j.fields.prev.arrayValue.values) || [])
+      .map(v => ({ data: v.mapValue.fields.data.stringValue, at: +v.mapValue.fields.at.integerValue }));
+    return { raw: j.fields.data.stringValue, state: JSON.parse(j.fields.data.stringValue).state, fp: +j.fields.fp.integerValue,
+      updateTime: j.updateTime, prev, updatedAt: Date.parse(j.fields.updatedAt && j.fields.updatedAt.timestampValue) || 0 };
   }
 
-  /* בקשת כתיבה. precondition: כותבים רק אם הענן לא השתנה מאז שקראנו אותו (אחרת מכשיר אחר כתב בינתיים) */
-  function buildUpload(st, a, updateTime) {
+  /* ───────── הגנות מאובדן נתונים ───────── */
+  const size = st => Object.keys(st.picks || {}).length + (st.notes || []).length + Object.keys(st.ratings || {}).length
+    + Object.keys(st.nope || {}).length + (st.friends || []).length + ((st.prefs && st.prefs.tent) ? 1 : 0);
+  const PREV_KEEP = 8; // כמה גרסאות קודמות נשמרות בענן
+
+  /* בקשת כתיבה.
+     - precondition: כותבים רק אם הענן לא השתנה מאז שקראנו אותו (אחרת מכשיר אחר כתב בינתיים).
+     - updateMask: מעדכנים רק את השדות שלנו, כך שהיסטוריית הגרסאות (prev) לא נמחקת בכתיבה מהירה. */
+  function buildUpload(st, a, updateTime, prev) {
     const f = fp(st);
-    const body = JSON.stringify({ fields: {
+    const fields = {
       data: { stringValue: backupFrom(st) },
       fp: { integerValue: String(f) },
       updatedAt: { timestampValue: new Date().toISOString() },
-    } });
-    const pre = updateTime ? `?currentDocument.updateTime=${encodeURIComponent(updateTime)}` : '?currentDocument.exists=false';
-    return { url: docUrl(a.uid) + pre, fp: f, size: body.length * 2,
+    };
+    const mask = ['data', 'fp', 'updatedAt'];
+    if (prev) {
+      fields.prev = { arrayValue: { values: prev.map(p => ({ mapValue: { fields: { data: { stringValue: p.data }, at: { integerValue: String(p.at) } } } })) } };
+      mask.push('prev');
+    }
+    const body = JSON.stringify({ fields });
+    const pre = updateTime ? `currentDocument.updateTime=${encodeURIComponent(updateTime)}` : 'currentDocument.exists=false';
+    const qs = mask.map(m => `updateMask.fieldPaths=${m}`).join('&') + '&' + pre;
+    return { url: docUrl(a.uid) + '?' + qs, fp: f, size: body.length * 2,
       init: { method: 'PATCH', headers: { Authorization: `Bearer ${a.idToken}`, 'Content-Type': 'application/json' }, body } };
+  }
+
+  /* יומן סנכרון (לאבחון): 30 האירועים האחרונים */
+  async function logSync(e) {
+    const l = (await get('synclog')) || [];
+    l.unshift({ at: Date.now(), ...e });
+    await set('synclog', l.slice(0, 30));
   }
 
   /* סנכרון מלא: קריאה מהענן ← מיזוג ← כתיבה (אם צריך) ← עדכון המכשיר (אם צריך).
@@ -4015,16 +4040,24 @@ const CC = (() => {
       const local = JSON.parse(raw);
       const a = await auth();
       const remote = await getRemote(a);
-      let base = await get('base');
-      let merged = local;
+      const base = await get('base');
+      let merged = local, guard = '';
       if (remote && remote.fp !== fp(local)) {
         // הענן לא השתנה מאז הסנכרון האחרון → המקומי פשוט חדש יותר. אחרת – ממזגים.
         merged = (base && remote.fp === status.fp) ? local : merge3(base, local, remote.state);
+        // הגנה: סנכרון לעולם לא מוחק בבת אחת הרבה נתונים (מכשיר ריק, מצב מקומי שנמחק או ישן).
+        // אם התוצאה מאבדת יותר מ-3 פריטים ויותר מ-30% – מאחדים במקום (שום דבר לא נמחק).
+        const most = Math.max(size(local), size(remote.state)), lost = most - size(merged);
+        if (lost > 3 && lost > most * 0.3) { merged = merge3(null, local, remote.state); guard = `blocked mass delete (${lost}/${most})`; }
       }
       const mfp = fp(merged);
       let result = 'same', updateTime = remote && remote.updateTime;
       if (!remote || remote.fp !== mfp) {
-        const u = buildUpload(merged, a, remote && remote.updateTime);
+        // הגרסה שבענן נשמרת בהיסטוריה לפני שדורסים אותה
+        const prev = remote ? (size(remote.state) ? [{ data: remote.raw, at: remote.updatedAt || Date.now() }, ...remote.prev] : remote.prev) : [];
+        let keep = prev.slice(0, PREV_KEEP);
+        while (keep.length && keep.reduce((s, p) => s + p.data.length, 0) > 700000) keep = keep.slice(0, -1); // מגבלת גודל מסמך
+        const u = buildUpload(merged, a, remote && remote.updateTime, keep);
         const r = await req(u.url, u.init);
         if ((r.status === 400 || r.status === 409 || r.status === 412) && attempt < 2) return sync(attempt + 1); // מכשיר אחר כתב בדיוק עכשיו
         if (!r.ok) throw new Error(r.status === 403 ? 'אין הרשאה' : `שגיאה ${r.status}`);
@@ -4034,7 +4067,9 @@ const CC = (() => {
       await set('base', clean(merged));
       await set('cloud', { fp: mfp, at: Date.now(), error: null, updateTime });
       await set('owner', a.uid);
-      if (mfp !== fp(local)) {
+      const changed = mfp !== fp(local);
+      await logSync({ result: changed ? (result === 'pushed' ? 'merged' : 'pulled') : result, local: size(local), remote: remote ? size(remote.state) : -1, merged: size(merged), base: base ? size(base) : -1, guard });
+      if (changed) {
         merged.savedAt = Date.now();
         await set('state', JSON.stringify(merged)); // כדי שגם פתיחה הבאה (או ה-SW) יראו את המצב הממוזג
         return { result: result === 'pushed' ? 'merged' : 'pulled', state: merged };
@@ -4042,10 +4077,20 @@ const CC = (() => {
       return { result };
     } catch (e) {
       await set('cloud', { ...status, error: errText(e), tried: Date.now() });
+      await logSync({ result: 'error', error: errText(e) }).catch(() => {});
       throw e;
     }
   }
   const upload = () => sync();
+
+  /* גרסאות קודמות שבענן: [{ at, state }] */
+  async function history() {
+    const a = await auth();
+    const remote = await getRemote(a);
+    if (!remote) return [];
+    return [{ at: remote.updatedAt, state: remote.state, current: true },
+      ...remote.prev.map(p => ({ at: p.at, state: JSON.parse(p.data).state }))];
+  }
 
   /* הורדת הגיבוי מהענן: { text, updatedAt } או null אם אין */
   async function download() {
@@ -4055,7 +4100,7 @@ const CC = (() => {
     return { text: JSON.stringify({ app: 'indienegev-2026', kind: 'backup', v: 1, createdAt: remote.updatedAt, state: remote.state }), updatedAt: remote.updatedAt };
   }
 
-  return { on, cfg, get, set, del, fp, sync, upload, download, signInWithGoogleToken, auth, buildUpload, merge3, clean };
+  return { on, cfg, get, set, del, fp, sync, upload, download, history, size, signInWithGoogleToken, auth, buildUpload, merge3, clean };
 })();
 
 
@@ -4301,6 +4346,27 @@ function openBackupPanel() {
       if (a === 'code') toast(await copyText(encodeShare(S.name, S.picks)) ? 'קוד הלוז הועתק' : 'לא הצלחתי להעתיק');
       if (a === 'cloud-now') { toast('מסנכרן…'); const ok = await cloudNow(); toast(ok ? 'מסונכרן ✓' : `הסנכרון נכשל: ${cloudState.error || 'אין קליטה'}`); api.render(); }
       if (a === 'cloud-out') { await cloudSignOut(); api.render(); }
+      if (a === 'cloud-hist') {
+        const box = $('#cloudHist', body);
+        box.innerHTML = '<p style="margin:8px 0 0">טוען…</p>';
+        try {
+          const h = await CC.history();
+          const log = (await CC.get('synclog')) || [];
+          box.innerHTML = (h.length ? h.map((v, i) => `<div class="snap"><span><b>${fmtStamp(v.at)}</b>${v.current ? ' · נוכחי' : ''} · ${CC.size(v.state)} פריטים (${Object.keys(v.state.picks || {}).length} הופעות, ${(v.state.notes || []).length} פתקים)</span>
+              ${v.current ? '' : `<button class="btn alt sm" data-chist="${i}">שחזור</button>`}</div>`).join('') : '<p style="margin:8px 0 0">אין גרסאות בענן.</p>')
+            + `<details style="margin-top:8px"><summary style="font-size:12.5px;color:var(--ink-2)">יומן סנכרון (לאבחון)</summary><pre class="synclog">${esc(log.map(l => `${fmtStamp(l.at)} ${l.result}${l.error ? ' ' + l.error : ''} local:${l.local ?? ''} cloud:${l.remote ?? ''} → ${l.merged ?? ''}${l.guard ? ' ⚠ ' + l.guard : ''}`).join('\n'))}</pre></details>`;
+          box.onclick = async ev => {
+            const bt = ev.target.closest('[data-chist]');
+            if (!bt) return;
+            const v = h[+bt.dataset.chist];
+            if (!confirm(`לשחזר את הגרסה מ-${fmtStamp(v.at)}? (${CC.size(v.state)} פריטים)\nהמצב הנוכחי יישמר כגרסה קודמת, וגם יישאר בהיסטוריה שבענן.`)) return;
+            await applyState(v.state, 'לפני שחזור מהענן');
+            toast('שוחזר ✓ · מסנכרן…');
+            await cloudNow();
+            api.render();
+          };
+        } catch (e) { box.innerHTML = `<p class="warn-t">לא הצלחתי לטעון: ${esc(e.message)}</p>`; }
+      }
       if (x.dataset.snap != null) {
         const s = snaps[+x.dataset.snap];
         if (!confirm(`לחזור לגרסה מ-${fmtStamp(s.at)}?\nהמצב הנוכחי יישמר כגרסה קודמת.`)) return;
@@ -4351,6 +4417,8 @@ const cloudBackedUp = () => !!cloudAuth && cloudState.fp === dataFingerprint();
 
 /* החלת מצב שהגיע מהענן (מיזוג/משיכה) – בלי גרסה קודמת על כל סנכרון */
 function applyCloudState(st) {
+  // עדכון מהענן שמסיר נתונים (למשל מחיקה במכשיר אחר) – קודם שומרים גרסה קודמת במכשיר
+  if (CC.size(st) < CC.size(S)) takeSnapshot('לפני עדכון מהענן');
   const keepBackup = S.backup;
   const d = defaults();
   for (const k of Object.keys(S)) delete S[k];
@@ -4425,10 +4493,11 @@ setInterval(() => { if (!document.hidden) warmAuth(); }, 20 * MIN);
 let flushedFp = null;
 function flushOnHide() {
   if (!CC.on || !cloudAuth || !navigator.onLine || cloudBackedUp() || !cloudState.updateTime) return registerCloudSync();
+  if (!hasData()) return; // לעולם לא שולחים מצב ריק בלי מיזוג
   const a = authCache;
   if (!a || a.exp < Date.now() + 30000) return registerCloudSync();
   const st = CC.clean(S);
-  const u = CC.buildUpload(st, a, cloudState.updateTime);
+  const u = CC.buildUpload(st, a, cloudState.updateTime); // בלי prev: ה-updateMask שומר את ההיסטוריה שבענן
   if (u.fp === flushedFp) return;
   if (u.size > 60000) return registerCloudSync(); // מגבלת keepalive (64KB)
   flushedFp = u.fp;
@@ -4595,6 +4664,8 @@ function cloudPanelSection() {
       ${s.error ? `<li class="warn-t">ניסיון אחרון נכשל: ${esc(s.error)}</li>` : ''}
     </ul>
     <button class="btn block" data-b="cloud-now" style="margin-top:8px">סנכרון עכשיו</button>
+    <button class="btn alt block" data-b="cloud-hist" style="margin-top:8px">גרסאות קודמות בענן</button>
+    <div id="cloudHist"></div>
     ${s.error && /להתחבר/.test(s.error) ? '<p style="margin:10px 0 6px">צריך להתחבר מחדש:</p><div id="gbtn" class="gbtn"></div>' : ''}
     <button class="btn alt sm" data-b="cloud-out" style="margin-top:10px">התנתקות / החלפת חשבון</button></div>`;
 }
