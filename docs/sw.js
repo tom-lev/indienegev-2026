@@ -1,4 +1,4 @@
-const FIREBASE_CFG = {"apiKey": "", "projectId": "", "googleClientId": ""};
+const FIREBASE_CFG = {"apiKey": "AIzaSyDMNlvqnDlASfIKdL5EYonDHtDuFQPN_N4", "projectId": "indnegev-14c1b", "googleClientId": "177429003497-movbi1a9k0e9j595djfuhg282e8av1l0.apps.googleusercontent.com"};
 /* מנוע הגיבוי לענן (Firebase דרך REST) – רץ גם בדף וגם ב-Service Worker.
    בלי DOM ובלי SDK, כדי שה-Service Worker יוכל לגבות ברקע (Background Sync) גם כשהאפליקציה סגורה.
    FIREBASE_CFG מוגדר לפני הקובץ הזה (בבנייה): { apiKey, projectId, googleClientId, endpoints? } */
@@ -134,7 +134,7 @@ const CC = (() => {
 /* Service Worker – האפליקציה נפתחת מהעותק השמור בטלפון, גם בלי קליטה.
    אסטרטגיה: מטמון קודם (פתיחה מיידית גם בקליטה חלשה). עדכון גרסה מגיע כ-SW חדש
    (הקובץ הזה משתנה בכל בנייה בגלל VERSION), שמחכה עד שהמשתמש מאשר רענון. */
-const VERSION = '29569dbcaeaf';
+const VERSION = '1c995d579e70';
 const CACHE = 'indn26-' + VERSION;
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
