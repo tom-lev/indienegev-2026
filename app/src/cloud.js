@@ -201,24 +201,6 @@ async function cloudSignOut() {
   try { google.accounts.id.disableAutoSelect(); } catch (e) { /* */ }
   refreshCloudUi();
 }
-async function cloudRestore() {
-  try {
-    toast('מוריד…');
-    const remote = await CC.download();
-    const o = remote && parseBackup(remote.text);
-    if (!o) return toast('עוד אין גיבוי בענן');
-    if (!confirm(`להחליף את מה שבטלפון במה שבענן (${fmtStamp(remote.updatedAt || o.createdAt)})?\n${backupSummary(o)}\n\nהמצב הנוכחי יישמר כגרסה קודמת.`)) return;
-    await applyState(o.state, 'לפני שחזור מהענן');
-    await CC.set('base', CC.clean(S));
-    await CC.set('cloud', { ...cloudState, fp: dataFingerprint(), at: Date.now(), error: null });
-    cloudState = await CC.get('cloud');
-    toast('שוחזר מהענן ✓');
-    refreshCloudUi();
-  } catch (e) {
-    toast(`השחזור נכשל: ${e.name === 'AbortError' ? 'הקליטה חלשה מדי' : e.message}`);
-  }
-}
-
 /* ───────── מסך פתיחה: התחברות חובה ───────── */
 let welcomeEl = null;
 function maybeShowWelcome() {
@@ -284,10 +266,7 @@ function cloudPanelSection() {
       <li>גיבוי אחרון: ${s.at ? agoText(s.at) : 'עוד לא'}</li>
       ${s.error ? `<li class="warn-t">ניסיון אחרון נכשל: ${esc(s.error)}</li>` : ''}
     </ul>
-    <div class="btn-row" style="margin-top:8px">
-      <button class="btn" data-b="cloud-now">סנכרון עכשיו</button>
-      <button class="btn alt" data-b="cloud-restore">החלפה במה שבענן</button>
-    </div>
+    <button class="btn block" data-b="cloud-now" style="margin-top:8px">סנכרון עכשיו</button>
     ${s.error && /להתחבר/.test(s.error) ? '<p style="margin:10px 0 6px">צריך להתחבר מחדש:</p><div id="gbtn" class="gbtn"></div>' : ''}
     <button class="btn alt sm" data-b="cloud-out" style="margin-top:10px">התנתקות / החלפת חשבון</button></div>`;
 }

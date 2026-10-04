@@ -237,7 +237,6 @@ function openBackupPanel() {
       if (a === 'save') { downloadBackup(); api.render(); }
       if (a === 'share') { await shareBackup(); api.render(); }
       if (a === 'code') toast(await copyText(encodeShare(S.name, S.picks)) ? 'קוד הלוז הועתק' : 'לא הצלחתי להעתיק');
-      if (a === 'cloud-restore') { await cloudRestore(); api.render(); }
       if (a === 'cloud-now') { toast('מסנכרן…'); const ok = await cloudNow(); toast(ok ? 'מסונכרן ✓' : `הסנכרון נכשל: ${cloudState.error || 'אין קליטה'}`); api.render(); }
       if (a === 'cloud-out') { await cloudSignOut(); api.render(); }
       if (x.dataset.snap != null) {
