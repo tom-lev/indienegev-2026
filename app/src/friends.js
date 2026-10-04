@@ -1,7 +1,7 @@
 /* לוז קבוצתי: רשימת חברים, הופעות משותפות */
 
 /* ───────── דמויות ─────────
-   כל משתמש בוחר לעצמו דמות (S.avatar = { i, auto }); היא עוברת לחברים בקוד/בלינק/בלוז החי.
+   כל משתמש בוחר לעצמו דמות (S.avatar = { i, auto, at }; at = מתי קיבל אותה); היא עוברת לחברים בקוד/בלינק/בלוז החי.
    אצלי – לכל אחד דמות אחרת: מי שהדמות שבחר כבר תפוסה (אצלי) מקבל לתצוגה דמות פנויה. */
 const myAvatar = () => (S.avatar && validAv(S.avatar.i) ? S.avatar.i : null);
 function meLook() {
@@ -38,27 +38,30 @@ function ensureAvatar() {
   // מכשיר חדש שעוד לא קיבל את הנתונים מהענן – לא בוחרים, כדי לא לדרוס דמות שנבחרה במכשיר אחר
   if (typeof cloudAuth !== 'undefined' && cloudAuth && !(cloudState && cloudState.at)) return false;
   const i = freeAvatar(new Set(takenAvatars().keys()));
-  S.avatar = { i: i == null ? 0 : i, auto: true };
+  S.avatar = { i: i == null ? 0 : i, auto: true, at: Date.now() };
   resolveAvatars();
   return true;
 }
 function setMyAvatar(i) {
-  S.avatar = { i, auto: false };
+  S.avatar = { i, auto: false, at: Date.now() };
   resolveAvatars();
   save();
   rerender();
 }
-/* חבר נוסף/התעדכן עם דמות שכבר שלי, ואת שלי לא בחרתי בעצמי – אני עובר לדמות פנויה.
-   אם גם הוא קיבל אותה אוטומטית באותו זמן – רק אחד מאיתנו מוותר (לפי המזהה), כדי שלא נתחלף שוב ושוב */
-function yieldAvatar(av, src, theirAuto) {
+/* דמות תפוסה כל עוד מי שקיבל אותה (אוטומטית או בבחירה) לא ויתר עליה.
+   אם בכל זאת לשנינו אותה דמות (קיבלנו לפני שידענו זה על זה) – מי שקיבל אותה מאוחר יותר עובר לדמות פנויה.
+   theirAt = מתי החבר קיבל אותה (לא ידוע = לפניי). זמן זהה – לפי המזהה, כדי שרק אחד יוותר */
+function yieldAvatar(av, src, theirAt, name) {
+  if (!validAv(av) || myAvatar() !== av) return false;
+  const myAt = S.avatar.at || 0, at = theirAt == null ? 0 : theirAt;
   const me = typeof cloudAuth !== 'undefined' && cloudAuth ? cloudAuth.uid : null;
-  if (theirAuto && src && me && me < src) return; // שנינו אוטומטיים – המזהה הקטן שומר
-  if (theirAuto && !src) return;
-  if (validAv(av) && S.avatar && S.avatar.auto && S.avatar.i === av) {
-    const used = new Set([av, ...S.friends.map(f => f.avatar).filter(validAv)]);
-    const i = freeAvatar(used);
-    if (i != null) S.avatar = { i, auto: true };
-  }
+  if (at > myAt || (at === myAt && src && me && me < src)) return false; // אני הייתי ראשון
+  const used = new Set([av, ...takenAvatars().keys(), ...S.friends.map(f => f.avatar).filter(validAv)]);
+  const i = freeAvatar(used);
+  if (i == null) return false;
+  S.avatar = { i, auto: true, at: Date.now() };
+  toast(`${AVATARS[av][0]} כבר של ${name || 'חבר/ה'} · קיבלת ${AVATARS[i][0]} (אפשר להחליף במסך החברים)`);
+  return true;
 }
 /* בוחר דמות: 10 אפשרויות, התפוסות (אצל החברים שלי) חסומות */
 function avatarPicker() {
@@ -82,7 +85,7 @@ function upsertFriend(d) {
   const mine = d.src && typeof cloudAuth !== 'undefined' && cloudAuth && cloudAuth.uid === d.src;
   const src = mine ? null : d.src || null;
   const existing = (src && S.friends.find(f => f.src === src)) || S.friends.find(f => f.name === d.name);
-  if (!mine) yieldAvatar(d.avatar, src);
+  if (!mine && !src) yieldAvatar(d.avatar, null, null, d.name); // לוז חי – מחכים לזמן האמיתי מהענן
   if (existing) {
     existing.picks = d.picks;
     existing.importedAt = Date.now();
@@ -129,7 +132,8 @@ async function refreshFriends(force = false) {
       if (cur.liveErr) { delete cur.liveErr; ui = true; }
       const same = JSON.stringify(Object.entries(r.picks).sort()) === JSON.stringify(Object.entries(cur.picks).sort());
       if (!same) { cur.picks = r.picks; cur.importedAt = r.at || Date.now(); changed = true; }
-      if (validAv(r.avatar) && cur.avatar !== r.avatar) { yieldAvatar(r.avatar, cur.src, r.avAuto); cur.avatar = r.avatar; changed = true; }
+      if (validAv(r.avatar) && cur.avatar !== r.avatar) { cur.avatar = r.avatar; changed = true; }
+      if (validAv(r.avatar) && yieldAvatar(r.avatar, cur.src, r.avAt, cur.name)) changed = true;
     }
     if (resolveAvatars()) changed = true;
   } finally { friendsPulling = false; }

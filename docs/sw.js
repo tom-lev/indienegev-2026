@@ -223,13 +223,13 @@ const CC = (() => {
   const shareUrl = uid => `${ep.fs}/shares/${encodeURIComponent(uid)}`;
   async function publishShare(a, st) {
     const av = st.avatar && Number.isInteger(st.avatar.i) ? st.avatar.i : -1;
-    const auto = !!(st.avatar && st.avatar.auto);
-    const s = canon([st.name || '', st.picks || {}, av, auto]);
+    const avAt = (st.avatar && st.avatar.at) || 0;
+    const s = canon([st.name || '', st.picks || {}, av, avAt]);
     let h = 0;
     for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
     const pub = (await get('share')) || {};
     if (pub.uid === a.uid && pub.fp === h) return false;
-    const fields = { name: { stringValue: (st.name || '').slice(0, 24) }, picks: { stringValue: JSON.stringify(st.picks || {}) }, at: { integerValue: String(Date.now()) }, avatar: { integerValue: String(av) }, avAuto: { booleanValue: auto } };
+    const fields = { name: { stringValue: (st.name || '').slice(0, 24) }, picks: { stringValue: JSON.stringify(st.picks || {}) }, at: { integerValue: String(Date.now()) }, avatar: { integerValue: String(av) }, avAt: { integerValue: String(avAt) } };
     const r = await req(shareUrl(a.uid), { method: 'PATCH', headers: { Authorization: `Bearer ${a.idToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ fields }) });
     if (!r.ok) throw new Error(`שגיאה ${r.status}`);
     await set('share', { uid: a.uid, fp: h, at: Date.now() });
@@ -242,7 +242,7 @@ const CC = (() => {
     if (!r.ok) throw new Error(`שגיאה ${r.status}`);
     const f = (await r.json()).fields || {};
     const av = f.avatar ? +f.avatar.integerValue : -1;
-    return { name: f.name ? f.name.stringValue : '', picks: JSON.parse((f.picks && f.picks.stringValue) || '{}'), at: +((f.at && f.at.integerValue) || 0), avatar: av >= 0 ? av : null, avAuto: !!(f.avAuto && f.avAuto.booleanValue) };
+    return { name: f.name ? f.name.stringValue : '', picks: JSON.parse((f.picks && f.picks.stringValue) || '{}'), at: +((f.at && f.at.integerValue) || 0), avatar: av >= 0 ? av : null, avAt: f.avAt ? +f.avAt.integerValue : null };
   }
 
   /* יומן סנכרון (לאבחון): 30 האירועים האחרונים */
@@ -325,7 +325,7 @@ const CC = (() => {
 /* Service Worker – האפליקציה נפתחת מהעותק השמור בטלפון, גם בלי קליטה.
    אסטרטגיה: מטמון קודם (פתיחה מיידית גם בקליטה חלשה). עדכון גרסה מגיע כ-SW חדש
    (הקובץ הזה משתנה בכל בנייה בגלל VERSION), שמחכה עד שהמשתמש מאשר רענון. */
-const VERSION = '51c2221a3428';
+const VERSION = '678aefdc4ec2';
 const CACHE = 'indn26-' + VERSION;
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 

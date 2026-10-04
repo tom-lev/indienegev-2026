@@ -133,37 +133,51 @@ async function device(label) {
   const codeAv = await A.ev(() => encodeShare(S.name, S.picks, cloudAuth.uid, myAvatar()));
   check('הדמות בקוד', await B.ev(c => decodeShare(c).avatar === 0, codeAv));
   check('קוד עם דמות – ההופעות לא השתנו (תואם לגרסאות ישנות)', await B.ev(c => { const d = decodeShare(c); return Object.keys(d.picks).length === Object.keys(decodeShare(c.replace(/\.uid-alice$/, '')).picks).length; }, codeAv));
-  await B.ev(() => { S.avatar = { i: 0, auto: true }; save(); });
-  await B.ev(c => upsertFriend(decodeShare(c)), codeAv); await sleep(600);
-  let bv = await B.ev(() => ({ me: myAvatar(), alice: S.friends[0].emoji }));
-  check('בוב (אוטומטי) עבר לדמות אחרת כשאליס בחרה 🦋', bv.alice === '🦋' && bv.me !== 0 && bv.me != null, JSON.stringify(bv));
+  // בוב מוסיף את אליס: 🦋 שלה תפוס אצלו; לבוב (עוד בלי דמות) – דמות פנויה
+  await B.ev(() => { delete S.avatar; save(); });
+  await B.ev(c => upsertFriend(decodeShare(c)), codeAv); await sleep(1500);
+  let bv = await B.ev(() => ({ me: myAvatar(), alice: S.friends[0].emoji, auto: S.avatar && S.avatar.auto }));
+  check('בוב קיבל אוטומטית דמות פנויה (לא 🦋)', bv.alice === '🦋' && bv.me != null && bv.me !== 0 && bv.auto, JSON.stringify(bv));
+  await B.ev(() => cloudNow()); await sleep(2500);
+  // אליס מוסיפה את בוב: הדמות שבוב קיבל אוטומטית – תפוסה אצלה
+  const codeB = await B.ev(() => encodeShare(S.name, S.picks, cloudAuth.uid, myAvatar()));
+  await A.ev(c => upsertFriend(decodeShare(c)), codeB); await sleep(1500);
+  await A.ev(() => { setTab('mine'); render(); openFriends(); }); await sleep(500);
+  const pa = await A.ev(() => [...document.querySelectorAll('.panel .av-opt')].filter(b => b.disabled).map(b => +b.dataset.av));
+  check('דמות שבוב קיבל אוטומטית – תפוסה אצל אליס', JSON.stringify(pa) === JSON.stringify([bv.me]), JSON.stringify(pa));
+  await A.ev(() => popLayer()); await sleep(300);
   await B.ev(() => { setTab('mine'); S.prefs.mineView = 'me'; render(); openFriends(); }); await sleep(500);
   const pk = await B.ev(() => ({ dis: [...document.querySelectorAll('.panel .av-opt')].filter(b => b.disabled).map(b => +b.dataset.av), n: document.querySelectorAll('.panel .av-opt').length, by: (document.querySelector('.panel .av-opt[disabled] small') || {}).textContent }));
   check('בוחר עם 10 דמויות, 🦋 תפוס ע"י אליס', pk.n === 10 && JSON.stringify(pk.dis) === '[0]' && pk.by === 'אליס', JSON.stringify(pk));
-  await B.page.click('.panel .av-opt[data-av="0"]', { force: true }).catch(() => {}); await sleep(200);
+  await B.ev(() => document.querySelector('.panel .av-opt[data-av="0"]').click()); await sleep(200);
   check('אי אפשר לבחור דמות תפוסה', await B.ev(() => myAvatar() !== 0));
   await B.page.click('.panel .av-opt[data-av="4"]'); await sleep(300);
   check('בחירה חופשית של דמות פנויה (🍄)', await B.ev(() => S.avatar.i === 4 && !S.avatar.auto && !!document.querySelector('.panel .av-opt.on[data-av="4"]')));
   if (process.env.SHOTS) await B.page.screenshot({ path: process.env.SHOTS + '/v-avatar.png' });
-  await B.ev(() => popLayer()); await sleep(300);
+  await B.ev(() => { popLayer(); cloudNow(); }); await sleep(2500);
   // אליס מחליפה דמות → אצל בוב מתעדכן
   await A.ev(() => { setMyAvatar(5); cloudNow(); }); await sleep(2500);
   await B.ev(() => refreshFriends(true)); await sleep(1200);
   check('אליס החליפה ל-🌊 → אצל בוב מתעדכן', await B.ev(() => S.friends[0].emoji === '🌊'));
-  // אצלי – לכל אחד דמות שונה, גם אם שני חברים בחרו אותה דמות
-  await B.ev(() => upsertFriend({ name: 'דנה', picks: {}, avatar: 5 })); await sleep(300);
+  // התנגשות (קיבלו אותה דמות לפני שידעו): מי שהיה ראשון שומר – גם אם קיבל אוטומטית
+  await B.ev(() => { S.avatar = { i: 7, auto: true, at: Date.now() - 60000 }; save(); cloudNow(); }); await sleep(2500);
+  await A.ev(() => { S.avatar = { i: 7, auto: false, at: Date.now() }; save(); cloudNow(); }); await sleep(2500);
+  await A.ev(() => refreshFriends(true)); await sleep(1500);
+  await B.ev(() => refreshFriends(true)); await sleep(1500);
+  const cf1 = { a: await A.ev(() => myAvatar()), b: await B.ev(() => myAvatar()) };
+  check('בוב קיבל 🐢 אוטומטית ראשון – שומר; אליס (בחרה אחריו) עוברת', cf1.b === 7 && cf1.a !== 7, JSON.stringify(cf1));
+  // זמן זהה – רק אחד מוותר
+  const T = Date.now() - 1000;
+  await A.ev(t => { S.avatar = { i: 8, auto: true, at: t }; save(); cloudNow(); }, T);
+  await B.ev(t => { S.avatar = { i: 8, auto: true, at: t }; save(); cloudNow(); }, T); await sleep(2500);
+  await A.ev(() => refreshFriends(true)); await B.ev(() => refreshFriends(true)); await sleep(1500);
+  const cf2 = { a: await A.ev(() => myAvatar()), b: await B.ev(() => myAvatar()) };
+  check('אותו זמן בדיוק – רק בוב (מזהה גדול) מוותר', cf2.a === 8 && cf2.b !== 8, JSON.stringify(cf2));
+  // אצלי – לכל אחד דמות ייחודית, גם אם שני חברים בחרו אותה דמות
+  await B.ev(() => { setMyAvatar(4); upsertFriend({ name: 'דנה', picks: {}, avatar: 8 }); }); await sleep(300);
   const looks = await B.ev(() => [meLook().emoji, ...S.friends.map(f => f.emoji)]);
-  check('לכל אחד דמות ייחודית אצלי', new Set(looks).size === looks.length && looks[1] === '🌊', looks.join(' '));
-  check('דנה לא יכולה לקחת לבוב את 🍄', await B.ev(() => S.friends[1].emoji !== '🍄'));
-  // שנינו אוטומטיים עם אותה דמות – רק אחד מוותר
-  await A.ev(() => { S.avatar = { i: 7, auto: true }; save(); cloudNow(); }); await sleep(2500);
-  await B.ev(() => { S.avatar = { i: 7, auto: true }; save(); refreshFriends(true); }); await sleep(1500);
-  const tie = await B.ev(() => ({ b: myAvatar(), a: S.friends[0].avatar }));
-  check('שנינו אוטומטיים – בוב (מזהה גדול) מוותר, אליס שומרת', tie.a === 7 && tie.b !== 7, JSON.stringify(tie));
-  // הדמות מגובה (חוזרת במכשיר חדש)
-  await B.ev(() => { setMyAvatar(2); cloudNow(); }); await sleep(2500);
-  s = await srv();
-  check('הדמות בגיבוי', s.docs['uid-bob'].state.avatar && s.docs['uid-bob'].state.avatar.i === 2);
+  check('לכל אחד דמות ייחודית אצלי', new Set(looks).size === looks.length, looks.join(' '));
+  check('הדמות בגיבוי', await (async () => { await B.ev(() => cloudNow()); await sleep(2500); const st = await srv(); return st.docs['uid-bob'].state.avatar && st.docs['uid-bob'].state.avatar.i === 4; })());
   await B.ev(() => { S.friends = []; save(); });
   await A.ev(() => { S.friends = []; save(); });
 
