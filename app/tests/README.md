@@ -13,3 +13,10 @@ node app/tests/suite.js
 # 4. חשוב: לבנות מחדש את הגרסה האמיתית לפני push
 python app/build.py
 ```
+
+## בדיקות ניווט
+
+```
+python app/fence_check.py                 # בלי פרוזדורי הכניסה, מתחם ההופעות מנותק לגמרי (אין חציית גדר)
+node app/tests/routes-shortest.js         # כל 2,550 זוגות הנקודות: נגישות, והשוואה למסלול הקצר ביותר האפשרי
+```

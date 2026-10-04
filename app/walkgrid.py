@@ -24,8 +24,21 @@ INNER_FENCES = [
 ]
 
 
-# מתחמי בישול (כמו ב-data.js): מרכז השלט באחוזים
-COOKING = [(15.5, 35.6), (21.6, 68.4), (31.0, 79.6), (49.4, 75.7), (70.0, 76.5)]
+def _poi(types):
+    """מיקומי נקודות מסוג מסוים, ישירות מ-src/data.js (מקור אחד לנתונים)"""
+    import re
+    txt = (Path(__file__).resolve().parent / 'src' / 'data.js').read_text(encoding='utf-8')
+    out = []
+    for m in re.finditer(r"type: '(\w+)'[^}]*?mapX: ([\d.]+), mapY: ([\d.]+)", txt):
+        if m.group(1) in types:
+            out.append((float(m.group(2)), float(m.group(3))))
+    return out
+
+
+# מתחמי בישול (סיר + שלט) ואייקונים קטנים (שירותים, ברזיות, מקלחות) מצוירים על השבילים – אפשר לעבור דרכם
+COOKING = _poi({'cook'})
+ICONS = _poi({'wc', 'water', 'shower'})
+SQUARES = _poi({'wc', 'shower'})  # אייקונים מרובעים כחולים – הפנים שלהם עביר (אחרת הם נראים כמו הנהר)
 
 
 def classify(rgb):
@@ -61,6 +74,9 @@ def build(map_path, out_w=3200, with_gates=True):
     # מתחמי הבישול מצוירים על השבילים (סיר + שלט) ואפשר לעבור דרכם: בתחום השלט כל מה שאינו חלקה – עביר
     for cx, cy in COOKING:
         box = (abs(xs - cx) < 2.6) & (ys > cy - 3.4) & (ys < cy + 1.6)
+        light_path |= box & ~plot_green
+    for cx, cy in ICONS:
+        box = (abs(xs - cx) < 1.1) & (abs(ys - cy) < 2.0)
         light_path |= box & ~plot_green
     # קמפינג+: מתחת לשביל האלכסוני שיורד מ-(64,70) ל-(50,95)
     plus_zone = (xs > 49) & (ys > 70 + (64 - xs) * 1.786)
@@ -103,14 +119,18 @@ def build(map_path, out_w=3200, with_gates=True):
     # הקטנה לתאים: תא הליך רק אם רובו הליך (קווים דקים של גדר נשמרים כחסימה)
     GH, GW = H // CELL, W // CELL
     blocks = walk[:GH * CELL, :GW * CELL].reshape(GH, CELL, GW, CELL).mean(axis=(1, 3))
-    # הנהר/הגדר הכחולה: תא שיש בו כחול נחסם (גם אם רובו עביר), חוץ מבפרוזדורי הכניסה
+    # הגדר הכחולה שמקיפה את מתחם ההופעות: תא שיש בו כחול נחסם (גם אם רובו עביר), חוץ מבפרוזדורי הכניסה
     r0, g0, b0 = (a[..., i].astype(int) for i in range(3))
     river = (b0 > 150) & (r0 < 120) & (b0 > g0)
     corm = np.asarray(cor) > 127
     river &= ~corm
+    for cx, cy in SQUARES:  # אייקון מרובע כחול (שירותים/מקלחות) הוא לא נהר
+        river &= ~((abs(xs - cx) < 1.25) & (abs(ys - cy) < 2.3))
     rfrac = river[:GH * CELL, :GW * CELL].reshape(GH, CELL, GW, CELL).mean(axis=(1, 3))
     cfrac = corm[:GH * CELL, :GW * CELL].reshape(GH, CELL, GW, CELL).mean(axis=(1, 3))
     grid = ((blocks > 0.6) & (rfrac < 0.1)) | (cfrac > 0.5)
+    build.nogate = grid & ~(cfrac > 0.05)  # לבדיקות: הרשת בלי פרוזדורי הכניסה – מתחם ההופעות חייב להיות מנותק בה
+
     # מתחם ההופעות (הצהוב): מסלול בין שתי נקודות בקמפינג מעדיף לא לעבור דרכו
     ffrac = yellow[:GH * CELL, :GW * CELL].reshape(GH, CELL, GW, CELL).mean(axis=(1, 3))
     build.fest = ffrac > 0.3

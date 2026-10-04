@@ -95,10 +95,25 @@ const WALK = (() => {
       if (nd < dist[n]) { dist[n] = nd; q[t++] = n; }
     }
   }
-  return { GW, GH, main, dist, fest, cell: ASSETS.walkCell * MAP_W / ASSETS.walkBase };
+  /* "מרכזיות": כמה התא רחוק מקו האמצע של השביל המקומי, יחסית לרוחב השביל (0 = באמצע, 1 = בשוליים).
+     כך שביל צר ושביל רחב עולים אותו דבר באמצע שלהם – לא עושים סיבוב כדי ללכת בשביל רחב. */
+  const R = 10, tmp = new Float32Array(N), ridge = new Float32Array(N), off = new Float32Array(N);
+  for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) {
+    let m = 0;
+    for (let k = Math.max(0, x - R); k <= Math.min(GW - 1, x + R); k++) { const v = dist[y * GW + k]; if (v > m && v < 1e8) m = v; }
+    tmp[y * GW + x] = m;
+  }
+  for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) {
+    let m = 0;
+    for (let k = Math.max(0, y - R); k <= Math.min(GH - 1, y + R); k++) { const v = tmp[k * GW + x]; if (v > m) m = v; }
+    ridge[y * GW + x] = m;
+  }
+  for (let i = 0; i < N; i++) if (main[i]) off[i] = ridge[i] > 0 ? Math.max(0, 1 - dist[i] / ridge[i]) : 0;
+  return { GW, GH, main, dist, fest, off, cell: ASSETS.walkCell * MAP_W / ASSETS.walkBase };
 })();
 
-const PREFERRED_CLEARANCE = 10; // תאים: מתחת למרחק הזה מהמכשול יש קנס שגדל ככל שמתקרבים לשוליים – המסלול נצמד למרכז השביל
+const PREFERRED_CLEARANCE = 10; // תאים: בקיצור המסלול לקווים ישרים – לא מתקרבים לשוליים יותר מהמסלול המקורי
+const CENTER_WEIGHT = 1.2;      // קנס על התרחקות מאמצע השביל (יחסית לרוחבו)
 
 function cellOf(p) {
   return [Math.min(WALK.GW - 1, Math.max(0, Math.floor(p.x / WALK.cell))),
@@ -121,7 +136,8 @@ function snapCell(p) {
 }
 
 const FEST_COST = 6; // פי כמה יקר לעבור במתחם ההופעות כשההתחלה והיעד שניהם מחוצה לו
-function astar(s, g) {
+/* plain = אורך טהור (לבדיקות): בלי העדפת מרכז השביל; מתחם ההופעות חסום כשההתחלה והיעד מחוצה לו */
+function astar(s, g, plain = false) {
   const avoidFest = !WALK.fest[s] && !WALK.fest[g];
   const { GW, GH, main, dist } = WALK, N = GW * GH;
   const cost = new Float32Array(N).fill(Infinity), prev = new Int32Array(N).fill(-1), closed = new Uint8Array(N);
@@ -168,9 +184,9 @@ function astar(s, g) {
       if (nx < 0 || ny < 0 || nx >= GW || ny >= GH) continue;
       const n = ny * GW + nx;
       if (!main[n] || closed[n]) continue;
-      const pen = Math.max(0, PREFERRED_CLEARANCE - dist[n]);
-      const fm = avoidFest && WALK.fest[n] ? FEST_COST : 1;
-      const nc = cost[c] + (dx && dy ? 1.414 : 1) * (1 + 0.6 * pen * pen / PREFERRED_CLEARANCE) * fm;
+      const o = WALK.off[n];
+      const fm = avoidFest && WALK.fest[n] ? (plain ? 1e6 : FEST_COST) : 1;
+      const nc = cost[c] + (dx && dy ? 1.414 : 1) * (plain ? 1 : 1 + CENTER_WEIGHT * o * o) * fm;
       if (nc < cost[n]) { cost[n] = nc; prev[n] = c; push(n, nc + heur(n)); }
     }
   }
