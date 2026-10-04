@@ -85,6 +85,18 @@ const CC = (() => {
 
   const docUrl = uid => `${ep.fs}/backups/${uid}`;
 
+  /* בקשת ההעלאה עצמה (משותפת להעלאה רגילה ולשליחה ברגע היציאה מהאפליקציה) */
+  function buildUpload(st, a) {
+    const f = fp(st);
+    const body = JSON.stringify({ fields: {
+      data: { stringValue: backupFrom(st) },
+      fp: { integerValue: String(f) },
+      updatedAt: { timestampValue: new Date().toISOString() },
+    } });
+    return { url: docUrl(a.uid), fp: f, size: body.length * 2,
+      init: { method: 'PATCH', headers: { Authorization: `Bearer ${a.idToken}`, 'Content-Type': 'application/json' }, body } };
+  }
+
   /* העלאת המצב האחרון (מהעותק ב-IndexedDB). מחזיר 'ok' / 'same' / 'empty' */
   async function upload() {
     const raw = await get('state');
@@ -94,13 +106,9 @@ const CC = (() => {
     const status = (await get('cloud')) || {};
     if (status.fp === f) return 'same';
     const a = await auth();
-    const body = { fields: {
-      data: { stringValue: backupFrom(st) },
-      fp: { integerValue: String(f) },
-      updatedAt: { timestampValue: new Date().toISOString() },
-    } };
+    const u = buildUpload(st, a);
     try {
-      const r = await req(docUrl(a.uid), { method: 'PATCH', headers: { Authorization: `Bearer ${a.idToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const r = await req(u.url, u.init);
       if (!r.ok) throw new Error(r.status === 403 ? 'אין הרשאה (חוקי האבטחה ב-Firebase)' : `שגיאה ${r.status}`);
       await set('cloud', { fp: f, at: Date.now(), error: null });
       return 'ok';
@@ -120,13 +128,13 @@ const CC = (() => {
     return { text: j.fields.data.stringValue, updatedAt: Date.parse(j.fields.updatedAt && j.fields.updatedAt.timestampValue) || 0 };
   }
 
-  return { on, cfg, get, set, del, fp, upload, download, signInWithGoogleToken, auth };
+  return { on, cfg, get, set, del, fp, upload, download, signInWithGoogleToken, auth, buildUpload };
 })();
 
 /* Service Worker – האפליקציה נפתחת מהעותק השמור בטלפון, גם בלי קליטה.
    אסטרטגיה: מטמון קודם (פתיחה מיידית גם בקליטה חלשה). עדכון גרסה מגיע כ-SW חדש
    (הקובץ הזה משתנה בכל בנייה בגלל VERSION), שמחכה עד שהמשתמש מאשר רענון. */
-const VERSION = 'e07c1d34531b';
+const VERSION = '29569dbcaeaf';
 const CACHE = 'indn26-' + VERSION;
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 

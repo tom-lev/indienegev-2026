@@ -12,6 +12,7 @@ async function loadCloud() {
     cloudAuth = a ? { uid: a.uid, email: a.email, name: a.name } : null;
     cloudState = (await CC.get('cloud')) || {};
   } catch (e) { /* אין IndexedDB */ }
+  warmAuth();
 }
 const cloudBackedUp = () => !!cloudAuth && cloudState.fp === dataFingerprint();
 
@@ -48,6 +49,39 @@ function refreshCloudUi() {
   for (const l of layers) if (l.panel && l.panel.isBackup && !l.panel.closed) l.panel.render();
 }
 window.addEventListener('online', () => scheduleCloud(1000));
+
+/* ───────── גיבוי ברגע היציאה מהאפליקציה ─────────
+   מעבר לאפליקציה אחרת / נעילת מסך / סגירה: שולחים את הגיבוי בבקשת keepalive,
+   שהדפדפן מסיים גם אחרי שהדף הוקפא או נסגר (עובד גם באייפון, שאין בו Background Sync).
+   אין זמן לחדש טוקן ברגע היציאה – לכן שומרים טוקן טרי בזיכרון כל עוד האפליקציה פתוחה. */
+let authCache = null;
+async function warmAuth() {
+  if (!CC.on || !cloudAuth || !navigator.onLine) return;
+  try { authCache = await CC.auth(); } catch (e) { /* ננסה שוב בהמשך */ }
+}
+setInterval(() => { if (!document.hidden) warmAuth(); }, 20 * MIN);
+let flushedFp = null;
+function flushOnHide() {
+  if (!CC.on || !cloudAuth || !navigator.onLine || cloudBackedUp()) return;
+  const a = authCache;
+  if (!a || a.exp < Date.now() + 30000) return registerCloudSync();
+  const u = CC.buildUpload(S, a);
+  if (u.fp === flushedFp) return;          // visibilitychange + pagehide – לא שולחים פעמיים
+  if (u.size > 60000) return registerCloudSync(); // מגבלת keepalive של הדפדפן (64KB)
+  flushedFp = u.fp;
+  clearTimeout(cloudTimer);
+  fetch(u.url, { ...u.init, keepalive: true }).then(r => {
+    if (!r.ok) throw new Error(r.status);
+    cloudState = { fp: u.fp, at: Date.now(), error: null };
+    return CC.set('cloud', cloudState);
+  }).catch(() => { flushedFp = null; });
+  registerCloudSync(); // באנדרואיד: רשת ביטחון אם הבקשה לא הגיעה
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) flushOnHide();
+  else { flushedFp = null; warmAuth(); }
+});
+window.addEventListener('pagehide', flushOnHide);
 /* הודעה מה-Service Worker שגיבוי ברקע הצליח */
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('message', async e => {
@@ -85,6 +119,7 @@ async function onGoogleCredential(resp) {
     const a = await CC.signInWithGoogleToken(resp.credential);
     cloudAuth = { uid: a.uid, email: a.email, name: a.name };
     cloudState = {};
+    authCache = a;
     if (!S.name && a.name) { S.name = a.name.split(' ')[0]; save(); }
     await afterSignIn();
   } catch (e) {
@@ -116,7 +151,7 @@ async function cloudSignOut() {
   if (!confirm('להתנתק? הגיבוי האוטומטי ייעצר. הגיבוי שכבר בענן נשאר.')) return;
   await CC.del('auth');
   await CC.del('cloud');
-  cloudAuth = null; cloudState = {};
+  cloudAuth = null; cloudState = {}; authCache = null;
   try { google.accounts.id.disableAutoSelect(); } catch (e) { /* */ }
   refreshCloudUi();
 }
