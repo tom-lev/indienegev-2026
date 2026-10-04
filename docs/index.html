@@ -4327,8 +4327,9 @@ function openBackupPanel() {
       <div class="card-box">
         <h3>גרסאות קודמות במכשיר</h3>
         <p>נשמרות אוטומטית לפני כל שחזור, החלפת לוז או איפוס, ופעם ב-12 שעות.</p>
-        ${snaps.length ? snaps.map((s, i) => `<div class="snap"><span><b>${fmtStamp(s.at)}</b> · ${esc(s.reason)}</span>
-          <button class="btn alt sm" data-snap="${i}">שחזור</button></div>`).join('') : '<p style="margin:0">עוד אין גרסאות.</p>'}
+        ${snaps.length ? snaps.map((s, i) => { let c = ''; try { const st = JSON.parse(s.state); c = ` · ${Object.keys(st.picks || {}).length} הופעות, ${(st.notes || []).length} פתקים${st.prefs && st.prefs.tent ? ', אוהל' : ''}`; } catch (e) { /* */ }
+          return `<div class="snap"><span><b>${fmtStamp(s.at)}</b> · ${esc(s.reason)}${c}</span>
+          <button class="btn alt sm" data-snap="${i}">שחזור</button></div>`; }).join('') : '<p style="margin:0">עוד אין גרסאות.</p>'}
       </div>
 
       <div class="card-box">
