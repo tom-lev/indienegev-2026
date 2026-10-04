@@ -7,7 +7,7 @@ const TABS = [
   { id: 'search', label: 'חיפוש', title: 'חיפוש', icon: ICON.search },
   { id: 'map', label: 'מפה', title: 'מפה', icon: ICON.map },
 ];
-let tab = isLive() ? 'now' : 'grid';
+let tab = 'mine'; // פתיחת האפליקציה – תמיד "הלוז שלי", בלשונית "שלי"
 let viewDay = null;
 
 function currentViewDay() {
@@ -181,6 +181,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && ta
 document.addEventListener('visibilitychange', () => { if (document.hidden && draft) finishDraft(false); });
 
 /* אתחול */
+S.prefs.mineView = 'me';
 render();
 initBackup();
 initPwa();
