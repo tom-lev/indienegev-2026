@@ -172,10 +172,11 @@ function friendAvatars(list, sm = true) {
   return `<span class="avs">${list.map(f => `<span class="av ${sm ? 'sm' : ''}" style="--fc:${f.color}" title="${esc(f.name)}">${f.emoji}</span>`).join('')}</span>`;
 }
 function eventRow(ev, opts = {}) {
-  const lv = level(ev.id);
+  const lv = opts.lv !== undefined ? opts.lv : level(ev.id); // opts.lv – רמה בלוז של חבר
+  const mine = opts.lv !== undefined && level(ev.id);
   const st = STAGE[ev.stage];
   const name = opts.hl ? highlight(ev.name, opts.hl) : esc(ev.name);
-  const going = friendsGoing(ev);
+  const going = opts.noFriends ? [] : friendsGoing(ev);
   const right = opts.nav
     ? `<button class="nav-btn" data-nav="${ev.id}" aria-label="ניווט ל${esc(st.name)}">${ICON.pin}</button>`
     : `<button class="star-btn ${lv ? 'on' + lv : ''}" data-star="${ev.id}" aria-label="${lv ? 'הסר מהלוז' : 'הוסף כחייב'}">${lv ? LV_ICON[lv] : '☆'}</button>`;
@@ -183,7 +184,7 @@ function eventRow(ev, opts = {}) {
     <div class="t">${ev.s}<small>${opts.showDay ? DAY[ev.day].label : ev.e}</small></div>
     <div>
       <div class="n">${isNope(ev.id) ? '<span class="nope-i" title="לא בשבילי">👎</span> ' : ''}${name}</div>
-      <div class="sub"><span class="stag">${esc(st.short)}</span>${opts.showDay ? `<span>${timeRange(ev)}</span>` : ''}${ev.type !== 'show' ? `<span class="chip soft">${TYPES[ev.type]}</span>` : ''}${ev.cancelled ? '<span class="chip warn">בוטל</span>' : ''}${opts.levelChip && lv ? `<span class="chip ${lv === 2 ? '' : 'soft'}">${LV_ICON[lv]} ${LV_LABEL[lv]}</span>` : ''}${going.length ? friendAvatars(going) : ''}${notesFor(ev.id).length ? `<span class="chip soft">📝 ${notesFor(ev.id).length}</span>` : ''}</div>
+      <div class="sub"><span class="stag">${esc(st.short)}</span>${opts.showDay ? `<span>${timeRange(ev)}</span>` : ''}${ev.type !== 'show' ? `<span class="chip soft">${TYPES[ev.type]}</span>` : ''}${ev.cancelled ? '<span class="chip warn">בוטל</span>' : ''}${opts.levelChip && lv ? `<span class="chip ${lv === 2 ? '' : 'soft'}">${LV_ICON[lv]} ${LV_LABEL[lv]}</span>` : ''}${mine ? `<span class="chip soft">${LV_ICON[mine]} גם אצלי</span>` : ''}${going.length ? friendAvatars(going) : ''}${notesFor(ev.id).length ? `<span class="chip soft">📝 ${notesFor(ev.id).length}</span>` : ''}</div>
       ${opts.hint ? `<div class="hint">${esc(opts.hint)}</div>` : ''}
     </div>
     ${right}

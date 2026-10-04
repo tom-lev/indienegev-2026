@@ -1,10 +1,13 @@
 /* לוז קבוצתי: רשימת חברים, הופעות משותפות */
 
 function upsertFriend(d) {
-  const existing = S.friends.find(f => f.name === d.name);
+  const mine = d.src && typeof cloudAuth !== 'undefined' && cloudAuth && cloudAuth.uid === d.src;
+  const src = mine ? null : d.src || null;
+  const existing = (src && S.friends.find(f => f.src === src)) || S.friends.find(f => f.name === d.name);
   if (existing) {
     existing.picks = d.picks;
     existing.importedAt = Date.now();
+    if (src) existing.src = src;
   } else {
     const i = S.friends.length;
     S.friends.push({
@@ -15,10 +18,40 @@ function upsertFriend(d) {
       picks: d.picks,
       importedAt: Date.now(),
       active: true,
+      ...(src ? { src } : {}),
     });
   }
   save();
+  if (src) { friendsPulledAt = 0; refreshFriends(); }
+  return existing || S.friends[S.friends.length - 1];
 }
+
+/* לוז חי: משיכת הלוז העדכני של כל חבר ששיתף עם קוד חי (בפתיחה, בחזרה לאפליקציה, בחזרת קליטה, בכניסה ללשונית שלו).
+   לכל היותר פעם בדקה. בלי קליטה – נשאר הלוז האחרון שנמשך. */
+let friendsPulledAt = 0, friendsPulling = false;
+async function refreshFriends(force = false) {
+  if (typeof CC === 'undefined' || !CC.on || !navigator.onLine || friendsPulling) return;
+  if (!force && Date.now() - friendsPulledAt < 60000) return;
+  const list = S.friends.filter(f => f.src);
+  if (!list.length) return;
+  friendsPulling = true; friendsPulledAt = Date.now();
+  let changed = false, ui = false;
+  try {
+    for (const f of list) {
+      let r;
+      try { r = await CC.fetchShare(f.src); } catch (e) { continue; } // קליטה חלשה – ננסה בפעם הבאה
+      const cur = S.friends.find(x => x.src === f.src); // ייתכן שהרשימה השתנתה בזמן הבקשה
+      if (!cur) continue;
+      if (!r) { if (cur.liveErr !== 'gone') { cur.liveErr = 'gone'; ui = true; } continue; }
+      if (cur.liveErr) { delete cur.liveErr; ui = true; }
+      const same = JSON.stringify(Object.entries(r.picks).sort()) === JSON.stringify(Object.entries(cur.picks).sort());
+      if (!same) { cur.picks = r.picks; cur.importedAt = r.at || Date.now(); changed = true; }
+    }
+  } finally { friendsPulling = false; }
+  if (changed || ui) { save(); rerender(); }
+}
+window.addEventListener('online', () => refreshFriends(true));
+document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshFriends(); });
 
 function ago(ms) {
   const m = Math.round((Date.now() - ms) / MIN);
@@ -48,7 +81,7 @@ function openFriends() {
         <button class="av" style="--fc:${f.color}" data-emoji="${f.id}" aria-label="החלפת אימוג'י">${f.emoji}</button>
         <div class="info">
           <div class="n">${esc(f.name)}</div>
-          <div class="m">${Object.keys(f.picks).length} הופעות · עודכן ${ago(f.importedAt)}</div>
+          <div class="m">${Object.keys(f.picks).length} הופעות · ${f.src ? (f.liveErr === 'gone' ? 'הפסיק/ה לשתף' : '🔄 מתעדכן לבד') : 'צילום מצב'} · ${ago(f.importedAt)}</div>
         </div>
         <button class="icon-btn" data-toggle="${f.id}" aria-label="${f.active === false ? 'הצג' : 'הסתר'}">${f.active === false ? ICON.eyeOff : ICON.eye}</button>
         <button class="icon-btn" data-rename="${f.id}" aria-label="שינוי שם">${ICON.edit}</button>
@@ -72,7 +105,7 @@ function openFriends() {
       <button class="btn block" data-a="import" style="margin-bottom:14px">${ICON.import} הוספת חבר/ה (קוד או QR)</button>
       ${fr.length ? friendRows : `<div class="empty" style="padding:16px"><p>עוד אין חברים ברשימה. בקשו מהם לשתף את הלוז שלהם (בכפתור "שתף" ב"הלוז שלי") וייבאו אותו כאן.</p></div>`}
       ${fr.length ? `<label class="switch" style="margin:6px 0 4px"><input type="checkbox" id="onGrid" ${S.prefs.friendsOnGrid ? 'checked' : ''}> הצג חברים על הלוז המלא</label>
-        <p style="font-size:12.5px;color:var(--ink-2);margin:6px 0 0">הלוז של חבר/ה הוא צילום מצב מרגע הייבוא. אם הם משנים משהו, צריך לייבא שוב.</p>` : ''}
+        <p style="font-size:12.5px;color:var(--ink-2);margin:6px 0 0">🔄 = הלוז מתעדכן לבד כשיש אינטרנט. "צילום מצב" = קוד ישן – לעדכון מבקשים מהם קוד חדש. הלוז של כל חבר מופיע כלשונית נפרדת ב"הלוז שלי".</p>` : ''}
       ${fr.length ? `<h3 class="section-t">הופעות משותפות <span class="chip soft">${shared.length}</span></h3>
         ${sharedRows || '<p style="color:var(--ink-2)">עוד אין הופעה שלפחות שניים מכם בחרו.</p>'}` : ''}`;
 
@@ -97,7 +130,7 @@ function openFriends() {
       }
       if (b.dataset.del) {
         const x = f(b.dataset.del);
-        if (confirm(`למחוק את ${x.name} מרשימת החברים?`)) { S.friends = S.friends.filter(y => y !== x); save(); api.render(); }
+        if (confirm(`למחוק את ${x.name} מרשימת החברים?`)) { S.friends = S.friends.filter(y => y !== x); if (S.prefs.mineView === x.id) S.prefs.mineView = 'me'; save(); api.render(); }
         return;
       }
       rowClick(e);

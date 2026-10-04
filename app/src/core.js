@@ -155,7 +155,8 @@ function b64uDec(str) {
   while (str.length % 4) str += '=';
   return Uint8Array.from(atob(str), c => c.charCodeAt(0));
 }
-function encodeShare(name, picks) {
+/* קוד שיתוף: INDN1.<לוז>[.<מזהה הלוז החי בענן>]. גרסאות ישנות מתעלמות מהחלק השני */
+function encodeShare(name, picks, src) {
   let nb = new TextEncoder().encode((name || '').trim());
   if (nb.length > 60) nb = nb.slice(0, 60);
   const pb = new Uint8Array(Math.ceil(EVENTS.length / 4));
@@ -168,10 +169,10 @@ function encodeShare(name, picks) {
   out[1] = nb.length;
   out.set(nb, 2);
   out.set(pb, 2 + nb.length);
-  return 'INDN1.' + b64uEnc(out);
+  return 'INDN1.' + b64uEnc(out) + (src ? '.' + src : '');
 }
 function decodeShare(text) {
-  const m = String(text || '').match(/INDN1\.([A-Za-z0-9_-]{4,})/);
+  const m = String(text || '').match(/INDN1\.([A-Za-z0-9_-]{4,})(?:\.([A-Za-z0-9_-]{6,128}))?/);
   if (!m) return null;
   try {
     const b = b64uDec(m[1]);
@@ -183,10 +184,12 @@ function decodeShare(text) {
       const lv = ((pb[ev.idx >> 2] || 0) >> ((ev.idx & 3) * 2)) & 3;
       if (lv) picks[ev.id] = Math.min(lv, 2);
     }
-    return { name: name || 'חבר/ה', picks };
+    return { name: name || 'חבר/ה', picks, src: m[2] || null };
   } catch (e) { return null; }
 }
 const shareMessage = code => `הלוז שלי לאינדינגב 2026 🦋\nלייבוא באפליקציה "הלוז שלי": ${code}`;
+/* לינק שיתוף: פותח את האתר עם הקוד, ושם מוצג "X רוצה לשתף איתך את הלוז" */
+const shareLink = code => 'https://tom-lev.github.io/indienegev-2026/#' + code;
 
 /* ───────── חיפוש ───────── */
 const FINALS = { 'ך': 'כ', 'ם': 'מ', 'ן': 'נ', 'ף': 'פ', 'ץ': 'צ' };

@@ -11,6 +11,7 @@ python -m http.server 8765 --bind 127.0.0.1 -d docs  # האפליקציה על 8
 # 3. הרצה (צריך puppeteer-core ו-Chrome)
 node app/tests/suite.js
 node app/tests/redirect.js      # כניסה בהפניה (אייפון)
+node app/tests/friends-live.js  # לוז חי של חברים, לשוניות, לינק שיתוף
 # 4. חשוב: לבנות מחדש את הגרסה האמיתית לפני push
 python app/build.py
 ```

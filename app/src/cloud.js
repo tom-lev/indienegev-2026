@@ -265,6 +265,7 @@ function maybeShowWelcome() {
     <img src="${ASSETS.wordmark}" alt="inDnegev" class="w-logo">
     <h2>הלוז שלי · אינדינגב 2026</h2>
     <p>התחברות אחת עם Google. מאז הכל נשמר ומגובה לבד: הלוז, הפתקים, האוהל והחברים – ומסונכרן בין הטלפונים שלך. בטלפון חדש מתחברים והכל חוזר.</p>
+    ${typeof inviteFrom !== 'undefined' && inviteFrom ? `<p class="w-invite">אחרי ההתחברות יחכה לך הלוז ש${esc(inviteFrom)} שיתף/ה איתך 🦋</p>` : ''}
     <div class="gbtn" id="wgbtn"></div>
     <p class="w-small">נשמרים רק השם והאימייל לזיהוי. כל משתמש רואה רק את הנתונים שלו.</p>
     <button class="w-later hidden" data-wlater>אין קליטה עכשיו – להמשיך בינתיים</button>

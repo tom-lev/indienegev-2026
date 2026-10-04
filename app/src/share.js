@@ -44,6 +44,15 @@ async function shareText(text) {
   toast(await copyText(text) ? 'הקוד הועתק, אפשר להדביק בוואטסאפ' : 'לא הצלחתי להעתיק, סמנו את הקוד והעתיקו ידנית');
 }
 
+async function shareLinkMsg(code) {
+  const url = shareLink(code), text = `${S.name || 'חבר/ה'} משתף/ת איתך את הלוז לאינדינגב 2026 🦋`;
+  if (navigator.share) {
+    try { await navigator.share({ text, url }); return; }
+    catch (e) { if (e.name === 'AbortError') return; }
+  }
+  toast(await copyText(`${text}\n${url}`) ? 'הלינק הועתק, אפשר להדביק בוואטסאפ' : 'לא הצלחתי להעתיק');
+}
+
 function askName(then) {
   if (S.name) return then();
   const n = prompt('איך לקרוא לך בלוז המשותף?', '');
@@ -55,17 +64,28 @@ function askName(then) {
 
 function openShare() {
   askName(() => openPanel('שיתוף הלוז שלי', (body, api) => {
-    const code = encodeShare(S.name, S.picks);
+    const live = typeof cloudAuth !== 'undefined' && cloudAuth ? cloudAuth.uid : null;
+    const code = encodeShare(S.name, S.picks, live);
     const count = Object.keys(S.picks).length;
     body.innerHTML = `
       <label class="field-l" for="myName">השם שלך (יופיע אצל מי שמייבא)</label>
       <input id="myName" class="text-in" value="${esc(S.name)}" maxlength="24" style="margin-bottom:16px">
+
+      <div class="card-box">
+        <h3>שליחת לינק</h3>
+        <p>הכי פשוט: שולחים לינק בוואטסאפ, החבר לוחץ ורואה "${esc(S.name)} רוצה לשתף איתך את הלוז".${live ? ' הלוז יתעדכן אצלו לבד.' : ''}</p>
+        <div class="btn-row">
+          <button class="btn" data-a="link">${ICON.share} שליחת לינק</button>
+          <button class="btn alt" data-a="copylink">${ICON.copy} העתקת לינק</button>
+        </div>
+      </div>
 
       <div class="card-box" style="text-align:center">
         <h3>סריקה פנים מול פנים</h3>
         <p>עובד גם בלי קליטה. החבר פותח "ייבוא" ← "סריקת QR".</p>
         <div class="qr-wrap"><canvas id="qr"></canvas></div>
         <p style="margin:0">${count} הופעות · כולל רמת עניין (חייב/אולי)</p>
+        ${live ? '<p style="margin:6px 0 0;font-weight:700">🔄 לוז חי: כשתשנה משהו, זה יתעדכן אצלם לבד כשיש אינטרנט.</p>' : ''}
       </div>
 
       <div class="card-box">
@@ -96,6 +116,8 @@ function openShare() {
       if (!b) return;
       const a = b.dataset.a;
       if (a === 'share') shareText(shareMessage(code));
+      if (a === 'link') shareLinkMsg(code);
+      if (a === 'copylink') toast(await copyText(shareLink(code)) ? 'הלינק הועתק' : 'לא הצלחתי להעתיק');
       if (a === 'copy') toast(await copyText(code) ? 'הועתק' : 'סמנו את הקוד והעתיקו ידנית');
       if (a.startsWith('img-')) showImage(a.slice(4), $('#imgOut', body), code);
     };
@@ -281,12 +303,19 @@ async function showImage(format, out, code) {
 }
 
 /* ───────── ייבוא ───────── */
-function openImport(initial) {
+const INVITE_KEY = 'indienegev-invite';
+let inviteFrom = null; // שם מי שהזמין (לינק שיתוף) – מוצג גם במסך ההתחברות
+function openImport(initial, opts = {}) {
   let decoded = initial ? decodeShare(initial) : null;
+  if (decoded && opts.invite) {
+    decoded.invite = true; inviteFrom = decoded.name;
+    // נשמר עד שמאשרים/סוגרים – כדי שלא יאבד במעבר לדף ההתחברות של Google (אייפון) וחזרה
+    try { localStorage.setItem(INVITE_KEY, JSON.stringify({ code: initial, at: Date.now() })); } catch (e) { /* */ }
+  }
   let scanning = null;
   const stopScan = () => { if (scanning) { scanning(); scanning = null; } };
 
-  openPanel('ייבוא לוז', (body, api) => {
+  openPanel(decoded && decoded.invite ? 'לוז ששותף איתך' : 'ייבוא לוז', (body, api) => {
     if (decoded) return renderImportPreview(body, api, decoded, () => { decoded = null; api.render(); });
     body.innerHTML = `
       <div class="card-box">
@@ -327,10 +356,11 @@ function openImport(initial) {
       const text = await decodeImageFile(f);
       if (!text) toast('לא נמצא QR בתמונה'); else done(text);
     };
-  }, stopScan);
+  }, () => { stopScan(); inviteFrom = null; try { localStorage.removeItem(INVITE_KEY); } catch (e) { /* */ } });
 }
 
 function renderImportPreview(body, api, d, back) {
+  if (d.invite) return renderInvite(body, api, d, back);
   const ids = Object.keys(d.picks);
   const must = ids.filter(id => d.picks[id] === 2).length;
   const perDay = DAYS.map(day => `${day.label}: ${ids.filter(id => EV[id] && EV[id].day === day.id).length}`).join(' · ');
@@ -373,6 +403,45 @@ function renderImportPreview(body, api, d, back) {
         api.close();
       });
     }
+  };
+}
+
+/* מסך הזמנה (נפתח מלינק): "X רוצה לשתף איתך את הלוז" + כפתור אחד */
+function renderInvite(body, api, d, back) {
+  const ids = Object.keys(d.picks);
+  const must = ids.filter(id => d.picks[id] === 2).length;
+  const common = ids.filter(id => level(id)).length;
+  const existing = (d.src && S.friends.find(f => f.src === d.src)) || S.friends.find(f => f.name === d.name);
+  const self = d.src && typeof cloudAuth !== 'undefined' && cloudAuth && cloudAuth.uid === d.src;
+  body.innerHTML = `
+    <div class="invite">
+      <img src="${ASSETS.butterfly}" alt="" class="invite-art">
+      <h2>${esc(d.name)} רוצה לשתף איתך את הלוז ${self ? '(זה הלוז שלך 🙂)' : ''}</h2>
+      <p>${ids.length} הופעות · ${must} חייב · ${ids.length - must} אולי${common ? ` · ${common} משותפות איתך` : ''}</p>
+      ${d.src ? '<p class="invite-live">🔄 הלוז יתעדכן אצלך לבד כש' + esc(d.name) + ' משנה משהו</p>' : ''}
+      <button class="btn block big" data-a="accept">${existing ? `עדכון הלוז של ${esc(d.name)}` : 'הוספה'}</button>
+      <p class="invite-note">הלוז של ${esc(d.name)} יופיע בלשונית נפרדת ב"הלוז שלי". הלוז שלך לא משתנה.</p>
+      <details class="invite-more"><summary>אפשרויות נוספות</summary>
+        <button class="btn alt block" data-a="merge" style="margin:10px 0">${ICON.plus} להוסיף את ההופעות ללוז שלי</button>
+        <button class="btn alt block" data-a="replace">${ICON.swap} להחליף את הלוז שלי בלוז הזה</button>
+      </details>
+    </div>`;
+  body.onclick = e => {
+    const b = e.target.closest('[data-a]');
+    if (!b) return;
+    if (b.dataset.a === 'accept') {
+      const f = upsertFriend(d);
+      inviteFrom = null;
+      api.close();
+      S.prefs.mineView = f.id; save();
+      setTab('mine');
+      toast(existing ? `הלוז של ${d.name} עודכן` : `הלוז של ${d.name} נוסף ✓`);
+      return;
+    }
+    // שאר האפשרויות – כמו בייבוא רגיל
+    renderImportPreview(body, api, { ...d, invite: false }, back);
+    const t = body.querySelector(`[data-a="${b.dataset.a}"]`);
+    if (t) t.click();
   };
 }
 

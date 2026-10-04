@@ -317,4 +317,5 @@ async function initBackup() {
   renderHeader();
   if (CC.on && await finishGoogleRedirect()) { if (!cloudAuth) maybeShowWelcome(); return; }
   if (cloudAuth) pullCloud(); else maybeShowWelcome();
+  refreshFriends();
 }

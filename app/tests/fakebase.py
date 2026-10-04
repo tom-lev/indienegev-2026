@@ -10,6 +10,7 @@ from urllib.parse import parse_qs, urlparse
 
 lock = threading.Lock()
 DOCS = {}          # uid -> {'body': str, 'updated': float}
+SHARES = {}        # uid -> body (לוז חי: קריאה לכולם, כתיבה לבעלים)
 TOKENS = {}        # idToken -> (uid, exp)
 REFRESH = {}       # refreshToken -> uid
 REVOKED = set()
@@ -79,7 +80,7 @@ class H(BaseHTTPRequestHandler):
             cmd = json.loads(b)
             with lock:
                 if cmd.get('reset'):
-                    DOCS.clear(); TOKENS.clear(); REFRESH.clear(); REVOKED.clear(); LOG.clear()
+                    DOCS.clear(); SHARES.clear(); TOKENS.clear(); REFRESH.clear(); REVOKED.clear(); LOG.clear()
                     MODE.update({'down': False, 'slow': 0, 'err': 0, 'tokenTtl': 3600})
                 for k in ('down', 'slow', 'err', 'tokenTtl'):
                     if k in cmd: MODE[k] = cmd[k]
@@ -88,6 +89,7 @@ class H(BaseHTTPRequestHandler):
                         if u == cmd['revoke']: REVOKED.add(rt)
                 if 'expireAll' in cmd:
                     for k, (u, e) in list(TOKENS.items()): TOKENS[k] = (u, 0)
+                if 'delShare' in cmd: SHARES.pop(cmd['delShare'], None)
                 if 'setDoc' in cmd:
                     d = cmd['setDoc']; DOCS[d['uid']] = {'body': d['body'], 'updated': time.time(), 'ut': ts()}
             return self.reply(200, {'ok': True})
@@ -138,9 +140,22 @@ class H(BaseHTTPRequestHandler):
             return 403, f'{who} -> {uid}'
         return None, None
 
+    def share_uid(self):
+        p = urlparse(self.path).path
+        return p[len('/fs/shares/'):] if p.startswith('/fs/shares/') else None
+
     def do_PATCH(self):
         b = self.body()
         if self.gate(): return
+        su = self.share_uid()
+        if su is not None:
+            code, why = self.rules(su)
+            if code:
+                LOG.append(f'share write DENIED {code} {why}')
+                return self.reply(code, {'error': {'status': 'PERMISSION_DENIED'}})
+            with lock:
+                SHARES[su] = b; LOG.append(f'share write {su}')
+            return self.reply(200, json.loads(b))
         uid = self.doc_uid()
         code, why = self.rules(uid)
         if code:
@@ -172,6 +187,11 @@ class H(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.gate(): return
+        su = self.share_uid()
+        if su is not None:
+            with lock:
+                d = SHARES.get(su); LOG.append(f'share read {su}' + ('' if d else ' (none)'))
+            return self.reply(200, json.loads(d)) if d else self.reply(404, {'error': {'status': 'NOT_FOUND'}})
         uid = self.doc_uid()
         code, why = self.rules(uid)
         if code:

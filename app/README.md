@@ -29,3 +29,27 @@ python app/build.py      # בונה את dist/indienegev.html
 | `assets/` | מטמון של תמונות מעובדות. מוחקים כדי לייצר מחדש |
 
 מיקומי הבמות על המפה מוגדרים ב-`STAGES` (`mapX`/`mapY` באחוזים).
+
+
+## לוז חי של חברים + לינק שיתוף
+
+- כל משתמש מחובר מפרסם עותק של הלוז בלבד (שם + הופעות + רמה) ב-`shares/<uid>`; מתעדכן בכל סנכרון.
+- קוד שיתוף: `INDN1.<לוז>.<uid>` (גרסאות ישנות מתעלמות מהסיומת). לינק: `https://tom-lev.github.io/indienegev-2026/#<קוד>` → מסך "X רוצה לשתף איתך את הלוז".
+- אצל החבר: הלוז נמשך בפתיחה / חזרה לאפליקציה / חזרת קליטה (לכל היותר פעם בדקה), ומוצג כלשונית נפרדת ב"הלוז שלי".
+
+חוקי Firestore הנדרשים:
+
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /backups/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+    match /shares/{uid} {
+      allow get: if true;
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
+  }
+}
+```

@@ -286,6 +286,30 @@ main#view { overflow: hidden; position: relative; min-height: 0; }
 .hour-sep::after { content: ''; flex: 1; height: 1.5px; background: var(--line); }
 
 /* ───────── הלוז שלי ───────── */
+.invite { text-align: center; padding: 8px 4px 20px; }
+.invite-art { width: 110px; height: auto; margin: 4px auto 10px; }
+.invite h2 { font-size: 22px; font-weight: 900; line-height: 1.3; margin-bottom: 8px; }
+.invite p { color: var(--ink-2); font-size: 15px; margin: 0 0 8px; }
+.invite .invite-live { font-weight: 700; color: var(--ink); }
+.invite .btn.big { min-height: 52px; font-size: 17px; margin: 14px 0 8px; }
+.invite .invite-note { font-size: 13px; }
+.invite-more { margin-top: 14px; text-align: start; }
+.invite-more summary { cursor: pointer; font-size: 13.5px; font-weight: 700; color: var(--ink-2); text-align: center; padding: 6px; }
+.w-invite { font-weight: 800; color: var(--ink) !important; background: rgba(244,111,106,.12); border-radius: 12px; padding: 10px; }
+.who-tabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 0 -14px 12px; padding: 2px 14px; }
+.who-tabs::-webkit-scrollbar { display: none; }
+.who-tabs button {
+  flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px 0 14px;
+  border-radius: 999px; border: 1.5px solid rgba(21,63,76,.18); font-size: 13.5px; font-weight: 800; color: var(--ink); background: var(--paper);
+}
+.who-tabs button[aria-selected="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.who-tabs .av.sm { width: 22px; height: 22px; font-size: 12px; }
+.friend-head { display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin-bottom: 10px; border-radius: 14px; background: color-mix(in srgb, var(--fc) 16%, transparent); }
+.friend-head .av { flex: none; }
+.friend-head b { display: block; font-size: 16px; }
+.friend-head small { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--ink-2); }
+.live-dot { width: 8px; height: 8px; border-radius: 50%; background: #3aa66b; flex: none; }
+.live-dot.off { background: var(--ink-3); }
 .mine-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
 .mine-head .stats { flex: 1; font-size: 13.5px; font-weight: 600; color: var(--ink-2); }
 .switch { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; }
@@ -1354,7 +1378,8 @@ function b64uDec(str) {
   while (str.length % 4) str += '=';
   return Uint8Array.from(atob(str), c => c.charCodeAt(0));
 }
-function encodeShare(name, picks) {
+/* קוד שיתוף: INDN1.<לוז>[.<מזהה הלוז החי בענן>]. גרסאות ישנות מתעלמות מהחלק השני */
+function encodeShare(name, picks, src) {
   let nb = new TextEncoder().encode((name || '').trim());
   if (nb.length > 60) nb = nb.slice(0, 60);
   const pb = new Uint8Array(Math.ceil(EVENTS.length / 4));
@@ -1367,10 +1392,10 @@ function encodeShare(name, picks) {
   out[1] = nb.length;
   out.set(nb, 2);
   out.set(pb, 2 + nb.length);
-  return 'INDN1.' + b64uEnc(out);
+  return 'INDN1.' + b64uEnc(out) + (src ? '.' + src : '');
 }
 function decodeShare(text) {
-  const m = String(text || '').match(/INDN1\.([A-Za-z0-9_-]{4,})/);
+  const m = String(text || '').match(/INDN1\.([A-Za-z0-9_-]{4,})(?:\.([A-Za-z0-9_-]{6,128}))?/);
   if (!m) return null;
   try {
     const b = b64uDec(m[1]);
@@ -1382,10 +1407,12 @@ function decodeShare(text) {
       const lv = ((pb[ev.idx >> 2] || 0) >> ((ev.idx & 3) * 2)) & 3;
       if (lv) picks[ev.id] = Math.min(lv, 2);
     }
-    return { name: name || 'חבר/ה', picks };
+    return { name: name || 'חבר/ה', picks, src: m[2] || null };
   } catch (e) { return null; }
 }
 const shareMessage = code => `הלוז שלי לאינדינגב 2026 🦋\nלייבוא באפליקציה "הלוז שלי": ${code}`;
+/* לינק שיתוף: פותח את האתר עם הקוד, ושם מוצג "X רוצה לשתף איתך את הלוז" */
+const shareLink = code => 'https://tom-lev.github.io/indienegev-2026/#' + code;
 
 /* ───────── חיפוש ───────── */
 const FINALS = { 'ך': 'כ', 'ם': 'מ', 'ן': 'נ', 'ף': 'פ', 'ץ': 'צ' };
@@ -1641,10 +1668,11 @@ function friendAvatars(list, sm = true) {
   return `<span class="avs">${list.map(f => `<span class="av ${sm ? 'sm' : ''}" style="--fc:${f.color}" title="${esc(f.name)}">${f.emoji}</span>`).join('')}</span>`;
 }
 function eventRow(ev, opts = {}) {
-  const lv = level(ev.id);
+  const lv = opts.lv !== undefined ? opts.lv : level(ev.id); // opts.lv – רמה בלוז של חבר
+  const mine = opts.lv !== undefined && level(ev.id);
   const st = STAGE[ev.stage];
   const name = opts.hl ? highlight(ev.name, opts.hl) : esc(ev.name);
-  const going = friendsGoing(ev);
+  const going = opts.noFriends ? [] : friendsGoing(ev);
   const right = opts.nav
     ? `<button class="nav-btn" data-nav="${ev.id}" aria-label="ניווט ל${esc(st.name)}">${ICON.pin}</button>`
     : `<button class="star-btn ${lv ? 'on' + lv : ''}" data-star="${ev.id}" aria-label="${lv ? 'הסר מהלוז' : 'הוסף כחייב'}">${lv ? LV_ICON[lv] : '☆'}</button>`;
@@ -1652,7 +1680,7 @@ function eventRow(ev, opts = {}) {
     <div class="t">${ev.s}<small>${opts.showDay ? DAY[ev.day].label : ev.e}</small></div>
     <div>
       <div class="n">${isNope(ev.id) ? '<span class="nope-i" title="לא בשבילי">👎</span> ' : ''}${name}</div>
-      <div class="sub"><span class="stag">${esc(st.short)}</span>${opts.showDay ? `<span>${timeRange(ev)}</span>` : ''}${ev.type !== 'show' ? `<span class="chip soft">${TYPES[ev.type]}</span>` : ''}${ev.cancelled ? '<span class="chip warn">בוטל</span>' : ''}${opts.levelChip && lv ? `<span class="chip ${lv === 2 ? '' : 'soft'}">${LV_ICON[lv]} ${LV_LABEL[lv]}</span>` : ''}${going.length ? friendAvatars(going) : ''}${notesFor(ev.id).length ? `<span class="chip soft">📝 ${notesFor(ev.id).length}</span>` : ''}</div>
+      <div class="sub"><span class="stag">${esc(st.short)}</span>${opts.showDay ? `<span>${timeRange(ev)}</span>` : ''}${ev.type !== 'show' ? `<span class="chip soft">${TYPES[ev.type]}</span>` : ''}${ev.cancelled ? '<span class="chip warn">בוטל</span>' : ''}${opts.levelChip && lv ? `<span class="chip ${lv === 2 ? '' : 'soft'}">${LV_ICON[lv]} ${LV_LABEL[lv]}</span>` : ''}${mine ? `<span class="chip soft">${LV_ICON[mine]} גם אצלי</span>` : ''}${going.length ? friendAvatars(going) : ''}${notesFor(ev.id).length ? `<span class="chip soft">📝 ${notesFor(ev.id).length}</span>` : ''}</div>
       ${opts.hint ? `<div class="hint">${esc(opts.hint)}</div>` : ''}
     </div>
     ${right}
@@ -1842,7 +1870,90 @@ function renderSchedule(view) {
 /* ── mine.js ── */
 /* מסך "הלוז שלי": רשימה כרונולוגית, קיבוץ התנגשויות לפי עדיפות, הפסקות */
 
+/* הלשונית הנבחרת ב"הלוז שלי": 'me' או מזהה חבר */
+function mineWho() {
+  const id = S.prefs.mineView;
+  return id && id !== 'me' ? S.friends.find(f => f.id === id) || null : null;
+}
+function mineTabs() {
+  if (!S.friends.length) return '';
+  const who = mineWho();
+  return `<div class="who-tabs" role="tablist" aria-label="של מי הלוז">
+    <button role="tab" data-who="me" aria-selected="${!who}">✦ שלי</button>
+    ${S.friends.map(f => `<button role="tab" data-who="${f.id}" aria-selected="${who === f}" style="--fc:${f.color}"><span class="av sm">${f.emoji}</span>${esc(f.name)}</button>`).join('')}
+  </div>`;
+}
+/* רשימת היום עם קיבוץ חפיפות. lvOf – הרמה של כל הופעה בלוז המוצג */
+function dayList(dayPicks, lvOf, rowOpts) {
+  return clusters(dayPicks).map((cl, i, arr) => {
+    let html = '';
+    if (i > 0) {
+      const prevEnd = Math.max(...arr[i - 1].map(e => e.end));
+      const gap = (cl[0].start - prevEnd) / MIN;
+      if (gap >= 10) html += `<div class="gap-row">הפסקה של ${fmtDur(gap)}</div>`;
+    }
+    if (cl.length === 1) return html + eventRow(cl[0], rowOpts(cl[0]));
+    const musts = cl.filter(e => lvOf(e.id) === 2);
+    const hardClash = musts.some((a, j) => musts.slice(j + 1).some(b => overlaps(a, b)));
+    const title = hardClash
+      ? `⚠ התנגשות: ${musts.length} הופעות "חייב" חופפות`
+      : musts.length ? '◐ חפיפה עם "אולי"' : '◐ חפיפה בין "אולי"';
+    const rows = cl.map(e => {
+      const muted = !hardClash && musts.length && lvOf(e.id) === 1;
+      return eventRow(e, { ...rowOpts(e), cls: muted ? 'muted' : '' });
+    }).join('');
+    return html + `<div class="clash ${hardClash ? '' : 'soft'}"><div class="clash-h">${title}</div>${rows}</div>`;
+  }).join('');
+}
+function bindMineCommon(sc) {
+  sc.addEventListener('click', e => {
+    const w = e.target.closest('[data-who]');
+    if (!w) return;
+    S.prefs.mineView = w.dataset.who; save(); render();
+    const sel = $('.who-tabs [aria-selected="true"]');
+    if (sel) sel.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+  });
+}
+
+/* הלוז של חבר – לשונית נפרדת, בלי לערבב עם הלוז שלי */
+function renderFriendMine(view, f) {
+  const dayId = currentViewDay();
+  const lvOf = id => f.picks[id] || 0;
+  const all = BY_START.filter(e => lvOf(e.id));
+  const dayPicks = all.filter(e => e.day === dayId && (S.prefs.showMaybe || lvOf(e.id) === 2));
+  const must = all.filter(e => lvOf(e.id) === 2).length;
+  const common = all.filter(e => level(e.id)).length;
+  const live = f.src
+    ? `<span class="live-dot ${f.liveErr ? 'off' : ''}"></span>${f.liveErr === 'gone' ? 'הפסיק/ה לשתף' : 'מתעדכן לבד'} · שינוי אחרון ${ago(f.importedAt)}`
+    : `צילום מצב מ${ago(f.importedAt)} · לעדכון צריך קוד חדש`;
+  const body = !all.length
+    ? `<div class="empty"><h2>ל${esc(f.name)} אין הופעות בלוז</h2></div>`
+    : !dayPicks.length
+      ? `<div class="empty"><img src="${ASSETS.flower}" alt="" style="width:120px"><h2>יום פנוי</h2><p>ל${esc(f.name)} אין בחירות ב${DAY[dayId].label}${S.prefs.showMaybe ? '' : ' (מוצגים רק "חייב")'}.</p></div>`
+      : dayList(dayPicks, lvOf, e => ({ nav: true, levelChip: true, lv: lvOf(e.id), noFriends: true }));
+  view.innerHTML = `<div class="scroll" id="mscroll"><div class="pad">
+    ${mineTabs()}
+    <div class="friend-head" style="--fc:${f.color}">
+      <span class="av" style="--fc:${f.color}">${f.emoji}</span>
+      <div><b>הלוז של ${esc(f.name)}</b><small>${live}</small></div>
+    </div>
+    <div class="mine-head">
+      <div class="stats">${must} חייב · ${all.length - must} אולי${common ? ` · ${common} משותפות איתך` : ''}</div>
+      <label class="switch"><input type="checkbox" id="showMaybe" ${S.prefs.showMaybe ? 'checked' : ''}> הצג אולי</label>
+    </div>
+    ${body}
+  </div></div>`;
+  const sc = $('#mscroll');
+  bindRows(sc);
+  bindMineCommon(sc);
+  const sm = $('#showMaybe');
+  if (sm) sm.onchange = () => { S.prefs.showMaybe = sm.checked; save(); rerender(); };
+  if (f.src) refreshFriends();
+}
+
 function renderMine(view) {
+  const who = mineWho();
+  if (who) return renderFriendMine(view, who);
   const dayId = currentViewDay();
   const all = myPicks();
   const dayPicks = all.filter(e => e.day === dayId && (S.prefs.showMaybe || level(e.id) === 2));
@@ -1862,25 +1973,7 @@ function renderMine(view) {
     body = `<div class="empty"><img src="${ASSETS.flower}" alt="" style="width:120px"><h2>יום פנוי</h2><p>אין לך בחירות ב${DAY[dayId].label}${S.prefs.showMaybe ? '' : ' (מוצגים רק "חייב")'}.</p>
       <button class="btn" data-go="grid">${ICON.grid} ללוז של ${DAY[dayId].label}</button></div>`;
   } else {
-    body = clusters(dayPicks).map((cl, i, arr) => {
-      let html = '';
-      if (i > 0) {
-        const prevEnd = Math.max(...arr[i - 1].map(e => e.end));
-        const gap = (cl[0].start - prevEnd) / MIN;
-        if (gap >= 10) html += `<div class="gap-row">הפסקה של ${fmtDur(gap)}</div>`;
-      }
-      if (cl.length === 1) return html + eventRow(cl[0], { nav: true, levelChip: true });
-      const musts = cl.filter(e => level(e.id) === 2);
-      const hardClash = musts.some((a, j) => musts.slice(j + 1).some(b => overlaps(a, b)));
-      const title = hardClash
-        ? `⚠ התנגשות: ${musts.length} הופעות "חייב" חופפות`
-        : musts.length ? '◐ חפיפה עם "אולי"' : '◐ חפיפה בין "אולי"';
-      const rows = cl.map(e => {
-        const muted = !hardClash && musts.length && level(e.id) === 1;
-        return eventRow(e, { nav: true, levelChip: true, cls: muted ? 'muted' : '' });
-      }).join('');
-      return html + `<div class="clash ${hardClash ? '' : 'soft'}"><div class="clash-h">${title}</div>${rows}</div>`;
-    }).join('');
+    body = dayList(dayPicks, level, () => ({ nav: true, levelChip: true, noFriends: true }));
   }
 
   const warn = storageOK ? '' : `<div class="banner warn"><b>שימו לב:</b> הדפדפן הזה לא מאפשר שמירה, אז הבחירות יימחקו כשהדף ייסגר. כדאי לשמור קובץ גיבוי (הגדרות ← גיבוי ושחזור).</div>`;
@@ -1888,8 +1981,9 @@ function renderMine(view) {
   view.innerHTML = `<div class="scroll" id="mscroll"><div class="pad">
     ${warn}
     ${migrateBanner()}
+    ${mineTabs()}
     ${all.length ? `<div class="mine-head">
-      <div class="stats">${must} חייב · ${maybe} אולי${S.friends.length ? ` · ${S.friends.length} חברים` : ''}</div>
+      <div class="stats">${must} חייב · ${maybe} אולי</div>
       <label class="switch"><input type="checkbox" id="showMaybe" ${S.prefs.showMaybe ? 'checked' : ''}> הצג אולי</label>
     </div>` : ''}
     ${body}
@@ -1898,6 +1992,7 @@ function renderMine(view) {
   const sc = $('#mscroll');
   bindRows(sc);
   bindMigrate(sc);
+  bindMineCommon(sc);
   sc.addEventListener('click', e => {
     const go = e.target.closest('[data-go]');
     if (go) setTab(go.dataset.go);
@@ -3033,6 +3128,15 @@ async function shareText(text) {
   toast(await copyText(text) ? 'הקוד הועתק, אפשר להדביק בוואטסאפ' : 'לא הצלחתי להעתיק, סמנו את הקוד והעתיקו ידנית');
 }
 
+async function shareLinkMsg(code) {
+  const url = shareLink(code), text = `${S.name || 'חבר/ה'} משתף/ת איתך את הלוז לאינדינגב 2026 🦋`;
+  if (navigator.share) {
+    try { await navigator.share({ text, url }); return; }
+    catch (e) { if (e.name === 'AbortError') return; }
+  }
+  toast(await copyText(`${text}\n${url}`) ? 'הלינק הועתק, אפשר להדביק בוואטסאפ' : 'לא הצלחתי להעתיק');
+}
+
 function askName(then) {
   if (S.name) return then();
   const n = prompt('איך לקרוא לך בלוז המשותף?', '');
@@ -3044,17 +3148,28 @@ function askName(then) {
 
 function openShare() {
   askName(() => openPanel('שיתוף הלוז שלי', (body, api) => {
-    const code = encodeShare(S.name, S.picks);
+    const live = typeof cloudAuth !== 'undefined' && cloudAuth ? cloudAuth.uid : null;
+    const code = encodeShare(S.name, S.picks, live);
     const count = Object.keys(S.picks).length;
     body.innerHTML = `
       <label class="field-l" for="myName">השם שלך (יופיע אצל מי שמייבא)</label>
       <input id="myName" class="text-in" value="${esc(S.name)}" maxlength="24" style="margin-bottom:16px">
+
+      <div class="card-box">
+        <h3>שליחת לינק</h3>
+        <p>הכי פשוט: שולחים לינק בוואטסאפ, החבר לוחץ ורואה "${esc(S.name)} רוצה לשתף איתך את הלוז".${live ? ' הלוז יתעדכן אצלו לבד.' : ''}</p>
+        <div class="btn-row">
+          <button class="btn" data-a="link">${ICON.share} שליחת לינק</button>
+          <button class="btn alt" data-a="copylink">${ICON.copy} העתקת לינק</button>
+        </div>
+      </div>
 
       <div class="card-box" style="text-align:center">
         <h3>סריקה פנים מול פנים</h3>
         <p>עובד גם בלי קליטה. החבר פותח "ייבוא" ← "סריקת QR".</p>
         <div class="qr-wrap"><canvas id="qr"></canvas></div>
         <p style="margin:0">${count} הופעות · כולל רמת עניין (חייב/אולי)</p>
+        ${live ? '<p style="margin:6px 0 0;font-weight:700">🔄 לוז חי: כשתשנה משהו, זה יתעדכן אצלם לבד כשיש אינטרנט.</p>' : ''}
       </div>
 
       <div class="card-box">
@@ -3085,6 +3200,8 @@ function openShare() {
       if (!b) return;
       const a = b.dataset.a;
       if (a === 'share') shareText(shareMessage(code));
+      if (a === 'link') shareLinkMsg(code);
+      if (a === 'copylink') toast(await copyText(shareLink(code)) ? 'הלינק הועתק' : 'לא הצלחתי להעתיק');
       if (a === 'copy') toast(await copyText(code) ? 'הועתק' : 'סמנו את הקוד והעתיקו ידנית');
       if (a.startsWith('img-')) showImage(a.slice(4), $('#imgOut', body), code);
     };
@@ -3270,12 +3387,19 @@ async function showImage(format, out, code) {
 }
 
 /* ───────── ייבוא ───────── */
-function openImport(initial) {
+const INVITE_KEY = 'indienegev-invite';
+let inviteFrom = null; // שם מי שהזמין (לינק שיתוף) – מוצג גם במסך ההתחברות
+function openImport(initial, opts = {}) {
   let decoded = initial ? decodeShare(initial) : null;
+  if (decoded && opts.invite) {
+    decoded.invite = true; inviteFrom = decoded.name;
+    // נשמר עד שמאשרים/סוגרים – כדי שלא יאבד במעבר לדף ההתחברות של Google (אייפון) וחזרה
+    try { localStorage.setItem(INVITE_KEY, JSON.stringify({ code: initial, at: Date.now() })); } catch (e) { /* */ }
+  }
   let scanning = null;
   const stopScan = () => { if (scanning) { scanning(); scanning = null; } };
 
-  openPanel('ייבוא לוז', (body, api) => {
+  openPanel(decoded && decoded.invite ? 'לוז ששותף איתך' : 'ייבוא לוז', (body, api) => {
     if (decoded) return renderImportPreview(body, api, decoded, () => { decoded = null; api.render(); });
     body.innerHTML = `
       <div class="card-box">
@@ -3316,10 +3440,11 @@ function openImport(initial) {
       const text = await decodeImageFile(f);
       if (!text) toast('לא נמצא QR בתמונה'); else done(text);
     };
-  }, stopScan);
+  }, () => { stopScan(); inviteFrom = null; try { localStorage.removeItem(INVITE_KEY); } catch (e) { /* */ } });
 }
 
 function renderImportPreview(body, api, d, back) {
+  if (d.invite) return renderInvite(body, api, d, back);
   const ids = Object.keys(d.picks);
   const must = ids.filter(id => d.picks[id] === 2).length;
   const perDay = DAYS.map(day => `${day.label}: ${ids.filter(id => EV[id] && EV[id].day === day.id).length}`).join(' · ');
@@ -3362,6 +3487,45 @@ function renderImportPreview(body, api, d, back) {
         api.close();
       });
     }
+  };
+}
+
+/* מסך הזמנה (נפתח מלינק): "X רוצה לשתף איתך את הלוז" + כפתור אחד */
+function renderInvite(body, api, d, back) {
+  const ids = Object.keys(d.picks);
+  const must = ids.filter(id => d.picks[id] === 2).length;
+  const common = ids.filter(id => level(id)).length;
+  const existing = (d.src && S.friends.find(f => f.src === d.src)) || S.friends.find(f => f.name === d.name);
+  const self = d.src && typeof cloudAuth !== 'undefined' && cloudAuth && cloudAuth.uid === d.src;
+  body.innerHTML = `
+    <div class="invite">
+      <img src="${ASSETS.butterfly}" alt="" class="invite-art">
+      <h2>${esc(d.name)} רוצה לשתף איתך את הלוז ${self ? '(זה הלוז שלך 🙂)' : ''}</h2>
+      <p>${ids.length} הופעות · ${must} חייב · ${ids.length - must} אולי${common ? ` · ${common} משותפות איתך` : ''}</p>
+      ${d.src ? '<p class="invite-live">🔄 הלוז יתעדכן אצלך לבד כש' + esc(d.name) + ' משנה משהו</p>' : ''}
+      <button class="btn block big" data-a="accept">${existing ? `עדכון הלוז של ${esc(d.name)}` : 'הוספה'}</button>
+      <p class="invite-note">הלוז של ${esc(d.name)} יופיע בלשונית נפרדת ב"הלוז שלי". הלוז שלך לא משתנה.</p>
+      <details class="invite-more"><summary>אפשרויות נוספות</summary>
+        <button class="btn alt block" data-a="merge" style="margin:10px 0">${ICON.plus} להוסיף את ההופעות ללוז שלי</button>
+        <button class="btn alt block" data-a="replace">${ICON.swap} להחליף את הלוז שלי בלוז הזה</button>
+      </details>
+    </div>`;
+  body.onclick = e => {
+    const b = e.target.closest('[data-a]');
+    if (!b) return;
+    if (b.dataset.a === 'accept') {
+      const f = upsertFriend(d);
+      inviteFrom = null;
+      api.close();
+      S.prefs.mineView = f.id; save();
+      setTab('mine');
+      toast(existing ? `הלוז של ${d.name} עודכן` : `הלוז של ${d.name} נוסף ✓`);
+      return;
+    }
+    // שאר האפשרויות – כמו בייבוא רגיל
+    renderImportPreview(body, api, { ...d, invite: false }, back);
+    const t = body.querySelector(`[data-a="${b.dataset.a}"]`);
+    if (t) t.click();
   };
 }
 
@@ -3440,10 +3604,13 @@ async function decodeImageFile(file) {
 /* לוז קבוצתי: רשימת חברים, הופעות משותפות */
 
 function upsertFriend(d) {
-  const existing = S.friends.find(f => f.name === d.name);
+  const mine = d.src && typeof cloudAuth !== 'undefined' && cloudAuth && cloudAuth.uid === d.src;
+  const src = mine ? null : d.src || null;
+  const existing = (src && S.friends.find(f => f.src === src)) || S.friends.find(f => f.name === d.name);
   if (existing) {
     existing.picks = d.picks;
     existing.importedAt = Date.now();
+    if (src) existing.src = src;
   } else {
     const i = S.friends.length;
     S.friends.push({
@@ -3454,10 +3621,40 @@ function upsertFriend(d) {
       picks: d.picks,
       importedAt: Date.now(),
       active: true,
+      ...(src ? { src } : {}),
     });
   }
   save();
+  if (src) { friendsPulledAt = 0; refreshFriends(); }
+  return existing || S.friends[S.friends.length - 1];
 }
+
+/* לוז חי: משיכת הלוז העדכני של כל חבר ששיתף עם קוד חי (בפתיחה, בחזרה לאפליקציה, בחזרת קליטה, בכניסה ללשונית שלו).
+   לכל היותר פעם בדקה. בלי קליטה – נשאר הלוז האחרון שנמשך. */
+let friendsPulledAt = 0, friendsPulling = false;
+async function refreshFriends(force = false) {
+  if (typeof CC === 'undefined' || !CC.on || !navigator.onLine || friendsPulling) return;
+  if (!force && Date.now() - friendsPulledAt < 60000) return;
+  const list = S.friends.filter(f => f.src);
+  if (!list.length) return;
+  friendsPulling = true; friendsPulledAt = Date.now();
+  let changed = false, ui = false;
+  try {
+    for (const f of list) {
+      let r;
+      try { r = await CC.fetchShare(f.src); } catch (e) { continue; } // קליטה חלשה – ננסה בפעם הבאה
+      const cur = S.friends.find(x => x.src === f.src); // ייתכן שהרשימה השתנתה בזמן הבקשה
+      if (!cur) continue;
+      if (!r) { if (cur.liveErr !== 'gone') { cur.liveErr = 'gone'; ui = true; } continue; }
+      if (cur.liveErr) { delete cur.liveErr; ui = true; }
+      const same = JSON.stringify(Object.entries(r.picks).sort()) === JSON.stringify(Object.entries(cur.picks).sort());
+      if (!same) { cur.picks = r.picks; cur.importedAt = r.at || Date.now(); changed = true; }
+    }
+  } finally { friendsPulling = false; }
+  if (changed || ui) { save(); rerender(); }
+}
+window.addEventListener('online', () => refreshFriends(true));
+document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshFriends(); });
 
 function ago(ms) {
   const m = Math.round((Date.now() - ms) / MIN);
@@ -3487,7 +3684,7 @@ function openFriends() {
         <button class="av" style="--fc:${f.color}" data-emoji="${f.id}" aria-label="החלפת אימוג'י">${f.emoji}</button>
         <div class="info">
           <div class="n">${esc(f.name)}</div>
-          <div class="m">${Object.keys(f.picks).length} הופעות · עודכן ${ago(f.importedAt)}</div>
+          <div class="m">${Object.keys(f.picks).length} הופעות · ${f.src ? (f.liveErr === 'gone' ? 'הפסיק/ה לשתף' : '🔄 מתעדכן לבד') : 'צילום מצב'} · ${ago(f.importedAt)}</div>
         </div>
         <button class="icon-btn" data-toggle="${f.id}" aria-label="${f.active === false ? 'הצג' : 'הסתר'}">${f.active === false ? ICON.eyeOff : ICON.eye}</button>
         <button class="icon-btn" data-rename="${f.id}" aria-label="שינוי שם">${ICON.edit}</button>
@@ -3511,7 +3708,7 @@ function openFriends() {
       <button class="btn block" data-a="import" style="margin-bottom:14px">${ICON.import} הוספת חבר/ה (קוד או QR)</button>
       ${fr.length ? friendRows : `<div class="empty" style="padding:16px"><p>עוד אין חברים ברשימה. בקשו מהם לשתף את הלוז שלהם (בכפתור "שתף" ב"הלוז שלי") וייבאו אותו כאן.</p></div>`}
       ${fr.length ? `<label class="switch" style="margin:6px 0 4px"><input type="checkbox" id="onGrid" ${S.prefs.friendsOnGrid ? 'checked' : ''}> הצג חברים על הלוז המלא</label>
-        <p style="font-size:12.5px;color:var(--ink-2);margin:6px 0 0">הלוז של חבר/ה הוא צילום מצב מרגע הייבוא. אם הם משנים משהו, צריך לייבא שוב.</p>` : ''}
+        <p style="font-size:12.5px;color:var(--ink-2);margin:6px 0 0">🔄 = הלוז מתעדכן לבד כשיש אינטרנט. "צילום מצב" = קוד ישן – לעדכון מבקשים מהם קוד חדש. הלוז של כל חבר מופיע כלשונית נפרדת ב"הלוז שלי".</p>` : ''}
       ${fr.length ? `<h3 class="section-t">הופעות משותפות <span class="chip soft">${shared.length}</span></h3>
         ${sharedRows || '<p style="color:var(--ink-2)">עוד אין הופעה שלפחות שניים מכם בחרו.</p>'}` : ''}`;
 
@@ -3536,7 +3733,7 @@ function openFriends() {
       }
       if (b.dataset.del) {
         const x = f(b.dataset.del);
-        if (confirm(`למחוק את ${x.name} מרשימת החברים?`)) { S.friends = S.friends.filter(y => y !== x); save(); api.render(); }
+        if (confirm(`למחוק את ${x.name} מרשימת החברים?`)) { S.friends = S.friends.filter(y => y !== x); if (S.prefs.mineView === x.id) S.prefs.mineView = 'me'; save(); api.render(); }
         return;
       }
       rowClick(e);
@@ -4105,6 +4302,31 @@ const CC = (() => {
       init: { method: 'PATCH', headers: { Authorization: `Bearer ${a.idToken}`, 'Content-Type': 'application/json' }, body } };
   }
 
+  /* ───────── לוז חי לחברים ─────────
+     עותק של הלוז בלבד (שם + הופעות + רמה) במסמך shares/<uid>, למי שיש לו את הקוד.
+     בלי פתקים, יומן, אוהל או 👎. רק בעל החשבון כותב; כל מי שיש לו את הקוד קורא. */
+  const shareUrl = uid => `${ep.fs}/shares/${encodeURIComponent(uid)}`;
+  async function publishShare(a, st) {
+    const s = canon([st.name || '', st.picks || {}]);
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+    const pub = (await get('share')) || {};
+    if (pub.uid === a.uid && pub.fp === h) return false;
+    const fields = { name: { stringValue: (st.name || '').slice(0, 24) }, picks: { stringValue: JSON.stringify(st.picks || {}) }, at: { integerValue: String(Date.now()) } };
+    const r = await req(shareUrl(a.uid), { method: 'PATCH', headers: { Authorization: `Bearer ${a.idToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ fields }) });
+    if (!r.ok) throw new Error(`שגיאה ${r.status}`);
+    await set('share', { uid: a.uid, fp: h, at: Date.now() });
+    return true;
+  }
+  /* הלוז העדכני של חבר: { name, picks, at } | null (אין / הפסיק לשתף) */
+  async function fetchShare(uid) {
+    const r = await req(`${shareUrl(uid)}?key=${cfg.apiKey}`, {}, 12000);
+    if (r.status === 404) return null;
+    if (!r.ok) throw new Error(`שגיאה ${r.status}`);
+    const f = (await r.json()).fields || {};
+    return { name: f.name ? f.name.stringValue : '', picks: JSON.parse((f.picks && f.picks.stringValue) || '{}'), at: +((f.at && f.at.integerValue) || 0) };
+  }
+
   /* יומן סנכרון (לאבחון): 30 האירועים האחרונים */
   async function logSync(e) {
     const l = (await get('synclog')) || [];
@@ -4140,6 +4362,7 @@ const CC = (() => {
       }
       await set('cloud', { fp: mfp, at: Date.now(), error: null, updateTime });
       await set('owner', a.uid);
+      await publishShare(a, merged).catch(() => {}); // לא חוסם את הגיבוי (למשל לפני שעודכנו חוקי האבטחה)
       // אם בזמן הסנכרון נשמר במכשיר משהו חדש (עריכה תוך כדי בקשה) – ממזגים אותו, לא דורסים
       let out = merged, again = false;
       const latestRaw = await get('state');
@@ -4178,7 +4401,7 @@ const CC = (() => {
     return { text: JSON.stringify({ app: 'indienegev-2026', kind: 'backup', v: 1, createdAt: remote.updatedAt, state: remote.state }), updatedAt: remote.updatedAt };
   }
 
-  return { on, cfg, get, set, del, fp, sync, upload, download, history, size, signInWithGoogleToken, auth, buildUpload, lww, stampEdits, replaceStamped, items, clean };
+  return { on, cfg, get, set, del, fp, sync, upload, download, history, size, signInWithGoogleToken, auth, buildUpload, fetchShare, publishShare, lww, stampEdits, replaceStamped, items, clean };
 })();
 
 
@@ -4502,6 +4725,7 @@ async function initBackup() {
   renderHeader();
   if (CC.on && await finishGoogleRedirect()) { if (!cloudAuth) maybeShowWelcome(); return; }
   if (cloudAuth) pullCloud(); else maybeShowWelcome();
+  refreshFriends();
 }
 
 
@@ -4773,6 +4997,7 @@ function maybeShowWelcome() {
     <img src="${ASSETS.wordmark}" alt="inDnegev" class="w-logo">
     <h2>הלוז שלי · אינדינגב 2026</h2>
     <p>התחברות אחת עם Google. מאז הכל נשמר ומגובה לבד: הלוז, הפתקים, האוהל והחברים – ומסונכרן בין הטלפונים שלך. בטלפון חדש מתחברים והכל חוזר.</p>
+    ${typeof inviteFrom !== 'undefined' && inviteFrom ? `<p class="w-invite">אחרי ההתחברות יחכה לך הלוז ש${esc(inviteFrom)} שיתף/ה איתך 🦋</p>` : ''}
     <div class="gbtn" id="wgbtn"></div>
     <p class="w-small">נשמרים רק השם והאימייל לזיהוי. כל משתמש רואה רק את הנתונים שלו.</p>
     <button class="w-later hidden" data-wlater>אין קליטה עכשיו – להמשיך בינתיים</button>
@@ -4961,7 +5186,8 @@ function renderHeader() {
   const t = TABS.find(x => x.id === tab);
   const withDays = tab === 'grid' || tab === 'mine';
   const d = currentViewDay();
-  const counts = Object.fromEntries(DAYS.map(x => [x.id, myPicks().filter(e => e.day === x.id).length]));
+  const who = tab === 'mine' ? mineWho() : null; // לשונית של חבר – הספירה לפי הלוז שלו
+  const counts = Object.fromEntries(DAYS.map(x => [x.id, (who ? BY_START.filter(e => who.picks[e.id]) : myPicks()).filter(e => e.day === x.id).length]));
   let tools = '';
   if (tab === 'grid') {
     tools = `<div class="toolbar">
@@ -5123,7 +5349,14 @@ window.addEventListener('hashchange', importFromHash);
 if (/INDN1\./.test(decodeURIComponent(location.hash))) {
   const code = decodeURIComponent(location.hash.slice(1));
   history.replaceState(null, '', location.pathname + location.search);
-  openImport(code);
+  openImport(code, { invite: true });
+} else {
+  // הזמנה שנפתחה לפני מעבר להתחברות עם Google – ממשיכים ממנה
+  try {
+    const inv = JSON.parse(localStorage.getItem(INVITE_KEY));
+    if (inv && Date.now() - inv.at < 3600000 && decodeShare(inv.code)) openImport(inv.code, { invite: true });
+    else localStorage.removeItem(INVITE_KEY);
+  } catch (e) { /* */ }
 }
 
 /* מקלדת פתוחה (הגובה הנראה קטן משמעותית מגובה המסך) – מסתירים את הטאבים */

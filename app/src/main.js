@@ -26,7 +26,8 @@ function renderHeader() {
   const t = TABS.find(x => x.id === tab);
   const withDays = tab === 'grid' || tab === 'mine';
   const d = currentViewDay();
-  const counts = Object.fromEntries(DAYS.map(x => [x.id, myPicks().filter(e => e.day === x.id).length]));
+  const who = tab === 'mine' ? mineWho() : null; // לשונית של חבר – הספירה לפי הלוז שלו
+  const counts = Object.fromEntries(DAYS.map(x => [x.id, (who ? BY_START.filter(e => who.picks[e.id]) : myPicks()).filter(e => e.day === x.id).length]));
   let tools = '';
   if (tab === 'grid') {
     tools = `<div class="toolbar">
@@ -188,7 +189,14 @@ window.addEventListener('hashchange', importFromHash);
 if (/INDN1\./.test(decodeURIComponent(location.hash))) {
   const code = decodeURIComponent(location.hash.slice(1));
   history.replaceState(null, '', location.pathname + location.search);
-  openImport(code);
+  openImport(code, { invite: true });
+} else {
+  // הזמנה שנפתחה לפני מעבר להתחברות עם Google – ממשיכים ממנה
+  try {
+    const inv = JSON.parse(localStorage.getItem(INVITE_KEY));
+    if (inv && Date.now() - inv.at < 3600000 && decodeShare(inv.code)) openImport(inv.code, { invite: true });
+    else localStorage.removeItem(INVITE_KEY);
+  } catch (e) { /* */ }
 }
 
 /* מקלדת פתוחה (הגובה הנראה קטן משמעותית מגובה המסך) – מסתירים את הטאבים */

@@ -214,6 +214,31 @@ const CC = (() => {
       init: { method: 'PATCH', headers: { Authorization: `Bearer ${a.idToken}`, 'Content-Type': 'application/json' }, body } };
   }
 
+  /* ───────── לוז חי לחברים ─────────
+     עותק של הלוז בלבד (שם + הופעות + רמה) במסמך shares/<uid>, למי שיש לו את הקוד.
+     בלי פתקים, יומן, אוהל או 👎. רק בעל החשבון כותב; כל מי שיש לו את הקוד קורא. */
+  const shareUrl = uid => `${ep.fs}/shares/${encodeURIComponent(uid)}`;
+  async function publishShare(a, st) {
+    const s = canon([st.name || '', st.picks || {}]);
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+    const pub = (await get('share')) || {};
+    if (pub.uid === a.uid && pub.fp === h) return false;
+    const fields = { name: { stringValue: (st.name || '').slice(0, 24) }, picks: { stringValue: JSON.stringify(st.picks || {}) }, at: { integerValue: String(Date.now()) } };
+    const r = await req(shareUrl(a.uid), { method: 'PATCH', headers: { Authorization: `Bearer ${a.idToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ fields }) });
+    if (!r.ok) throw new Error(`שגיאה ${r.status}`);
+    await set('share', { uid: a.uid, fp: h, at: Date.now() });
+    return true;
+  }
+  /* הלוז העדכני של חבר: { name, picks, at } | null (אין / הפסיק לשתף) */
+  async function fetchShare(uid) {
+    const r = await req(`${shareUrl(uid)}?key=${cfg.apiKey}`, {}, 12000);
+    if (r.status === 404) return null;
+    if (!r.ok) throw new Error(`שגיאה ${r.status}`);
+    const f = (await r.json()).fields || {};
+    return { name: f.name ? f.name.stringValue : '', picks: JSON.parse((f.picks && f.picks.stringValue) || '{}'), at: +((f.at && f.at.integerValue) || 0) };
+  }
+
   /* יומן סנכרון (לאבחון): 30 האירועים האחרונים */
   async function logSync(e) {
     const l = (await get('synclog')) || [];
@@ -249,6 +274,7 @@ const CC = (() => {
       }
       await set('cloud', { fp: mfp, at: Date.now(), error: null, updateTime });
       await set('owner', a.uid);
+      await publishShare(a, merged).catch(() => {}); // לא חוסם את הגיבוי (למשל לפני שעודכנו חוקי האבטחה)
       // אם בזמן הסנכרון נשמר במכשיר משהו חדש (עריכה תוך כדי בקשה) – ממזגים אותו, לא דורסים
       let out = merged, again = false;
       const latestRaw = await get('state');
@@ -287,5 +313,5 @@ const CC = (() => {
     return { text: JSON.stringify({ app: 'indienegev-2026', kind: 'backup', v: 1, createdAt: remote.updatedAt, state: remote.state }), updatedAt: remote.updatedAt };
   }
 
-  return { on, cfg, get, set, del, fp, sync, upload, download, history, size, signInWithGoogleToken, auth, buildUpload, lww, stampEdits, replaceStamped, items, clean };
+  return { on, cfg, get, set, del, fp, sync, upload, download, history, size, signInWithGoogleToken, auth, buildUpload, fetchShare, publishShare, lww, stampEdits, replaceStamped, items, clean };
 })();
