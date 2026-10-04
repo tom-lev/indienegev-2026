@@ -26,8 +26,8 @@ function renderHeader() {
   const t = TABS.find(x => x.id === tab);
   const withDays = tab === 'grid' || tab === 'mine';
   const d = currentViewDay();
-  const who = tab === 'mine' ? mineWho() : null; // לשונית של חבר – הספירה לפי הלוז שלו
-  const counts = Object.fromEntries(DAYS.map(x => [x.id, (who ? BY_START.filter(e => who.picks[e.id]) : myPicks()).filter(e => e.day === x.id).length]));
+  const set = tab === 'mine' ? mineSet() : []; // הספירה לפי הלשונית (שלי / משותף / חבר)
+  const counts = Object.fromEntries(DAYS.map(x => [x.id, set.filter(e => e.day === x.id).length]));
   let tools = '';
   if (tab === 'grid') {
     tools = `<div class="toolbar">

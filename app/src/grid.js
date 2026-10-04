@@ -18,22 +18,34 @@ function cardClass(ev) {
   return `card lv${lv} ${dim ? 'dim' : ''} ${isNope(ev.id) ? 'nope' : ''} ${ev.cancelled ? 'cancelled' : ''}`;
 }
 
-function renderGrid(view, dayId) {
-  const { evs, t0, t1 } = dayRange(dayId);
+/* גריד במות × שעות. o.only – רק חלק מההופעות (לוז אישי/של חבר/משותף): רק הבמות והשעות הרלוונטיות.
+   o.lvOf – רמה לכל הופעה (ברירת מחדל: שלי). o.people – מי הולך (נקודות בפינה) */
+function gridMarkup(dayId, o = {}) {
+  const lvOf = o.lvOf || level;
+  let { evs, t0, t1 } = dayRange(dayId);
+  let stages = STAGES;
+  if (o.only) {
+    evs = evs.filter(o.only);
+    stages = STAGES.filter(st => evs.some(e => e.stage === st.id));
+    const a = new Date(Math.min(...evs.map(e => e.start))); a.setMinutes(0, 0, 0); t0 = a.getTime();
+    const b = new Date(Math.max(...evs.map(e => e.end))); if (b.getMinutes()) b.setHours(b.getHours() + 1, 0, 0, 0); t1 = b.getTime();
+  }
   const H = (t1 - t0) / MIN * PPM;
-  const colw = Math.max(118, Math.min(150, Math.round((window.innerWidth - 46) / 2.5)));
+  const W = window.innerWidth - 46;
+  const colw = o.only ? Math.round(Math.max(118, Math.min(200, W / Math.min(stages.length, 2.5)))) : Math.max(118, Math.min(150, Math.round(W / 2.5)));
   const hours = [];
   for (let t = t0; t <= t1; t += HOUR) hours.push(t);
-  const showFriends = S.prefs.friendsOnGrid && activeFriends().length;
+  const showFriends = !o.only && S.prefs.friendsOnGrid && activeFriends().length;
 
-  const cols = STAGES.map(st => {
+  const cols = stages.map(st => {
     const cards = evs.filter(e => e.stage === st.id).map(ev => {
       const top = (ev.start - t0) / MIN * PPM;
       const h = dur(ev) * PPM - 3;
-      const lv = level(ev.id);
-      const going = showFriends ? friendsGoing(ev) : [];
-      return `<div class="${cardClass(ev)} ${h < 66 ? 'short' : ''}" data-ev="${ev.id}" style="top:${top + 1.5}px;height:${h}px">
-        ${lv ? `<span class="lv-badge">${LV_ICON[lv]}</span>` : isNope(ev.id) ? '<span class="lv-badge">👎</span>' : ''}
+      const lv = lvOf(ev.id);
+      const going = o.people ? o.people(ev) : showFriends ? friendsGoing(ev) : [];
+      const cls = o.only ? `card lv${lv} ${ev.cancelled ? 'cancelled' : ''}` : cardClass(ev);
+      return `<div class="${cls} ${h < 66 ? 'short' : ''}" data-ev="${ev.id}" style="top:${top + 1.5}px;height:${h}px">
+        ${lv ? `<span class="lv-badge">${LV_ICON[lv]}</span>` : !o.only && isNope(ev.id) ? '<span class="lv-badge">👎</span>' : ''}
         <b>${esc(ev.name)}</b><small>${timeRange(ev)}</small>
         ${going.length ? `<span class="fdots">${going.map(f => f.emoji).join('')}</span>` : ''}
       </div>`;
@@ -41,13 +53,18 @@ function renderGrid(view, dayId) {
     return `<div class="g-col" style="${stageVars(st.id)}">${cards}<div class="nowline hidden"></div></div>`;
   }).join('');
 
-  view.innerHTML = `<div class="gscroll" id="gscroll"><div class="grid" style="--h:${H}px;--hour:${60 * PPM}px;--colw:${colw}px">
+  const html = `<div class="grid" style="--h:${H}px;--hour:${60 * PPM}px;--colw:${colw}px;grid-template-columns:46px repeat(${stages.length}, var(--colw))">
     <div class="g-corner"></div>
-    ${STAGES.map(st => `<div class="g-head" style="--c:${st.color}"><i>${st.icon}</i>${esc(st.name)}</div>`).join('')}
+    ${stages.map(st => `<div class="g-head" style="--c:${st.color}"><i>${st.icon}</i>${esc(st.name)}</div>`).join('')}
     <div class="g-times">${hours.map(t => `<span style="top:${(t - t0) / MIN * PPM}px">${fmtT(t)}</span>`).join('')}<div class="now-pill hidden"></div></div>
     ${cols}
-  </div></div>`;
+  </div>`;
+  return { html, t0, t1 };
+}
 
+function renderGrid(view, dayId) {
+  const { html, t0, t1 } = gridMarkup(dayId);
+  view.innerHTML = `<div class="gscroll" id="gscroll">${html}</div>`;
   const sc = $('#gscroll');
   sc.dataset.t0 = t0;
   sc.dataset.t1 = t1;

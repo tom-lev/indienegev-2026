@@ -176,7 +176,7 @@ function eventRow(ev, opts = {}) {
   const mine = opts.lv !== undefined && level(ev.id);
   const st = STAGE[ev.stage];
   const name = opts.hl ? highlight(ev.name, opts.hl) : esc(ev.name);
-  const going = opts.noFriends ? [] : friendsGoing(ev);
+  const going = opts.people || (opts.noFriends ? [] : friendsGoing(ev)); // opts.people – לוז משותף (כולל אני)
   const right = opts.nav
     ? `<button class="nav-btn" data-nav="${ev.id}" aria-label="ניווט ל${esc(st.name)}">${ICON.pin}</button>`
     : `<button class="star-btn ${lv ? 'on' + lv : ''}" data-star="${ev.id}" aria-label="${lv ? 'הסר מהלוז' : 'הוסף כחייב'}">${lv ? LV_ICON[lv] : '☆'}</button>`;

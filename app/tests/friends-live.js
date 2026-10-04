@@ -50,11 +50,11 @@ async function device(label) {
   await B.ev(() => { setTab('mine'); viewDay = BY_START[0].day; S.prefs.showMaybe = true; render(); });
   await sleep(300);
   const tabs = await B.ev(() => [...document.querySelectorAll('.who-tabs [data-who]')].map(b => b.textContent.trim()));
-  check('יש לשוניות: שלי + אליס', tabs.length === 2 && /שלי/.test(tabs[0]) && /אליס/.test(tabs[1]), tabs.join(' | '));
+  check('יש לשוניות: שלי + משותף + אליס', tabs.length === 3 && /שלי/.test(tabs[0]) && /משותף/.test(tabs[1]) && /אליס/.test(tabs[2]), tabs.join(' | '));
   const meRows = await B.ev(() => ({ ids: [...document.querySelectorAll('#mscroll .row[data-ev]')].map(r => r.dataset.ev), avs: document.querySelectorAll('#mscroll .avs').length }));
   check('בלשונית שלי – רק ההופעות שלי, בלי אווטארים של חברים', meRows.avs === 0 && !meRows.ids.includes(await B.ev(() => BY_START[0].id)), JSON.stringify(meRows));
 
-  await B.page.click('.who-tabs [data-who]:not([data-who="me"])'); await sleep(400);
+  await B.page.click('.who-tabs [data-who^="f"]'); await sleep(400);
   const fv = await B.ev(() => ({
     head: (document.querySelector('.friend-head') || {}).textContent || '',
     ids: [...document.querySelectorAll('#mscroll .row[data-ev]')].map(r => r.dataset.ev),
@@ -67,6 +67,28 @@ async function device(label) {
   check('הופעה משותפת מסומנת "גם אצלי"', await B.ev(() => BY_START[5].day === viewDay) ? fv.both.length === 1 : true);
   check('כותרת: "הלוז של אליס · מתעדכן לבד"', /הלוז של אליס/.test(fv.head) && /מתעדכן לבד/.test(fv.head), fv.head.replace(/\s+/g, ' '));
   check('ספירת הימים לפי הלוז שלה', fv.count === '2' || fv.count.split(',').reduce((a, b) => a + +b, 0) === 2, fv.count);
+
+  // לפי במה – בלשונית של אליס
+  await B.page.click('[data-layout="stages"]'); await sleep(400);
+  const gs = await B.ev(() => ({ cards: [...document.querySelectorAll('#gscroll .card')].map(c => c.dataset.ev), heads: document.querySelectorAll('#gscroll .g-head').length, top: !!document.querySelector('.mine-top .who-tabs'), me: [...document.querySelectorAll('#gscroll .card')].filter(c => /✦/.test(c.textContent)).length }));
+  check('לפי במה (אליס): רק ההופעות שלה, רק הבמות שלה', JSON.stringify(gs.cards.slice().sort()) === JSON.stringify(dayIds.slice().sort()) && gs.heads === new Set(dayIds.map(i => i.split('-')[1])).size && gs.top, JSON.stringify(gs));
+  check('לפי במה: ✦ על הופעה שגם אצלי', gs.me === (await B.ev(() => BY_START[5].day === viewDay) ? 1 : 0), gs.me);
+  if (process.env.SHOTS) await B.page.screenshot({ path: process.env.SHOTS + '/v-friend-stages.png' });
+
+  // לוז משותף
+  await B.page.click('.who-tabs [data-who="shared"]'); await sleep(400);
+  const sh = await B.ev(() => ({ cards: [...document.querySelectorAll('#gscroll .card')].map(c => c.dataset.ev) }));
+  const union = await B.ev(() => [...new Set([...Object.keys(S.picks), ...Object.keys(S.friends[0].picks)])].filter(id => EV[id].day === viewDay));
+  check('משותף לפי במה: האיחוד של שנינו', JSON.stringify(sh.cards.slice().sort()) === JSON.stringify(union.slice().sort()), JSON.stringify(sh.cards));
+  await B.page.click('[data-layout="list"]'); await sleep(300);
+  const sl = await B.ev(() => [...document.querySelectorAll('#mscroll .row[data-ev]')].map(r => ({ id: r.dataset.ev, n: r.querySelectorAll('.avs .av').length, t: r.classList.contains('together') })));
+  check('משותף ברשימה: האיחוד, עם מי הולך', sl.length === union.length && sl.every(r => r.n >= 1), JSON.stringify(sl));
+  check('הופעה ששנינו בוחרים – מסומנת "ביחד" עם 2 אווטארים', sl.filter(r => r.t).every(r => r.n === 2) && sl.filter(r => r.t).length === (await B.ev(() => BY_START[5].day === viewDay) ? 1 : 0));
+  if (process.env.SHOTS) await B.page.screenshot({ path: process.env.SHOTS + '/v-shared-list.png' });
+  await B.page.click('[data-together="1"]'); await sleep(300);
+  const tg = await B.ev(() => [...document.querySelectorAll('#mscroll .row[data-ev]')].map(r => r.dataset.ev));
+  check('"רק ביחד" – רק הופעות ששנינו בוחרים', tg.length === sl.filter(r => r.t).length, JSON.stringify(tg));
+  await B.ev(() => { S.prefs.together = false; S.prefs.mineLayout = 'list'; S.prefs.mineView = S.friends[0].id; save(); render(); }); await sleep(300);
 
   // אליס משנה את הלוז → אצל בוב מתעדכן לבד
   await A.ev(() => { delete S.picks[BY_START[0].id]; S.picks[BY_START[2].id] = 2; save(); cloudNow(); }); await sleep(2500);
