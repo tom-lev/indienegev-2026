@@ -50,10 +50,13 @@ def build(map_path, out_w=3200, with_gates=True):
     from PIL import ImageFilter
     lp = Image.fromarray((light_path * 255).astype(np.uint8))
     lp = lp.filter(ImageFilter.MaxFilter(25)).filter(ImageFilter.MinFilter(25))
-    light_path = np.asarray(lp) > 127
+    # ממלאים רק פיקסלים שאינם ירוקים (אייקונים על השביל) – אף פעם לא את החלקות הירוקות עצמן,
+    # אחרת הסגירה "מעגלת" את פינות החלקות והמסלול חותך עליהן
+    plot_green = green & ~((g_ >= 212) & (r_ >= 125))
+    light_path = (np.asarray(lp) > 127) & ~plot_green
     # קמפינג+: מתחת לשביל האלכסוני שיורד מ-(64,70) ל-(50,95)
     plus_zone = (xs > 49) & (ys > 70 + (64 - xs) * 1.786)
-    shabbat_zone = (xs < 20) & (ys < 44)  # מתחם שבת, מקלחות, בישול ואדמה – שטח פתוח בלי חלקות
+    shabbat_zone = ((xs < 13.5) & (ys < 44)) | ((xs < 22) & (ys < 33))  # מתחם שבת, מקלחות, בישול ואדמה – שטח פתוח בלי חלקות
     open_field = green & ((xs > 63) | plus_zone | shabbat_zone)
     camp_ok = light_path | open_field
     walk = yellow | camp_ok | big_pink

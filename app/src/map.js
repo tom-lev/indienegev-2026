@@ -229,13 +229,13 @@ function findRoute(fromId, toId) {
 }
 
 /* קו שבור עם פינות מעוגלות */
-function roundedPath(pts, r = 45) {
+function roundedPath(pts, r = 22) {
   const f = n => n.toFixed(1);
   let d = `M${f(pts[0].x)},${f(pts[0].y)}`;
   for (let i = 1; i < pts.length - 1; i++) {
     const p = pts[i], a = pts[i - 1], b = pts[i + 1];
     const la = Math.hypot(p.x - a.x, p.y - a.y), lb = Math.hypot(b.x - p.x, b.y - p.y);
-    const ra = Math.min(r, la * 0.35) / la, rb = Math.min(r, lb * 0.35) / lb;
+    const ra = Math.min(r, la * 0.25) / la, rb = Math.min(r, lb * 0.25) / lb;
     const p1 = { x: p.x + (a.x - p.x) * ra, y: p.y + (a.y - p.y) * ra };
     const p2 = { x: p.x + (b.x - p.x) * rb, y: p.y + (b.y - p.y) * rb };
     d += ` L${f(p1.x)},${f(p1.y)} Q${f(p.x)},${f(p.y)} ${f(p2.x)},${f(p2.y)}`;
