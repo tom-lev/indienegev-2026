@@ -70,9 +70,9 @@ async function device(label) {
 
   // לפי במה – בלשונית של אליס
   await B.page.click('[data-layout="stages"]'); await sleep(400);
-  const gs = await B.ev(() => ({ cards: [...document.querySelectorAll('#gscroll .card')].map(c => c.dataset.ev), heads: document.querySelectorAll('#gscroll .g-head').length, top: !!document.querySelector('.mine-top .who-tabs'), me: [...document.querySelectorAll('#gscroll .card')].filter(c => /✦/.test(c.textContent)).length }));
+  const gs = await B.ev(() => ({ cards: [...document.querySelectorAll('#gscroll .card')].map(c => c.dataset.ev), heads: document.querySelectorAll('#gscroll .g-head').length, top: !!document.querySelector('.mine-top .who-tabs'), me: [...document.querySelectorAll('#gscroll .card')].filter(c => c.textContent.includes(meLook().emoji)).length }));
   check('לפי במה (אליס): רק ההופעות שלה, רק הבמות שלה', JSON.stringify(gs.cards.slice().sort()) === JSON.stringify(dayIds.slice().sort()) && gs.heads === new Set(dayIds.map(i => i.split('-')[1])).size && gs.top, JSON.stringify(gs));
-  check('לפי במה: ✦ על הופעה שגם אצלי', gs.me === (await B.ev(() => BY_START[5].day === viewDay) ? 1 : 0), gs.me);
+  check('לפי במה: הדמות שלי על הופעה שגם אצלי', gs.me === (await B.ev(() => BY_START[5].day === viewDay) ? 1 : 0), gs.me);
   if (process.env.SHOTS) await B.page.screenshot({ path: process.env.SHOTS + '/v-friend-stages.png' });
 
   // לוז משותף
@@ -127,6 +127,45 @@ async function device(label) {
   // ייבוא הקוד של עצמי לא יוצר "לוז חי" של עצמי
   await A.ev(c => upsertFriend(decodeShare(c)), code); await sleep(300);
   check('קוד של עצמי – בלי מקור חי', await A.ev(() => !S.friends[0].src));
+
+  // ───── דמויות ─────
+  await A.ev(() => { S.friends = []; save(); setMyAvatar(0); cloudNow(); }); await sleep(2500);
+  const codeAv = await A.ev(() => encodeShare(S.name, S.picks, cloudAuth.uid, myAvatar()));
+  check('הדמות בקוד', await B.ev(c => decodeShare(c).avatar === 0, codeAv));
+  check('קוד עם דמות – ההופעות לא השתנו (תואם לגרסאות ישנות)', await B.ev(c => { const d = decodeShare(c); return Object.keys(d.picks).length === Object.keys(decodeShare(c.replace(/\.uid-alice$/, '')).picks).length; }, codeAv));
+  await B.ev(() => { S.avatar = { i: 0, auto: true }; save(); });
+  await B.ev(c => upsertFriend(decodeShare(c)), codeAv); await sleep(600);
+  let bv = await B.ev(() => ({ me: myAvatar(), alice: S.friends[0].emoji }));
+  check('בוב (אוטומטי) עבר לדמות אחרת כשאליס בחרה 🦋', bv.alice === '🦋' && bv.me !== 0 && bv.me != null, JSON.stringify(bv));
+  await B.ev(() => { setTab('mine'); S.prefs.mineView = 'me'; render(); openFriends(); }); await sleep(500);
+  const pk = await B.ev(() => ({ dis: [...document.querySelectorAll('.panel .av-opt')].filter(b => b.disabled).map(b => +b.dataset.av), n: document.querySelectorAll('.panel .av-opt').length, by: (document.querySelector('.panel .av-opt[disabled] small') || {}).textContent }));
+  check('בוחר עם 10 דמויות, 🦋 תפוס ע"י אליס', pk.n === 10 && JSON.stringify(pk.dis) === '[0]' && pk.by === 'אליס', JSON.stringify(pk));
+  await B.page.click('.panel .av-opt[data-av="0"]', { force: true }).catch(() => {}); await sleep(200);
+  check('אי אפשר לבחור דמות תפוסה', await B.ev(() => myAvatar() !== 0));
+  await B.page.click('.panel .av-opt[data-av="4"]'); await sleep(300);
+  check('בחירה חופשית של דמות פנויה (🍄)', await B.ev(() => S.avatar.i === 4 && !S.avatar.auto && !!document.querySelector('.panel .av-opt.on[data-av="4"]')));
+  if (process.env.SHOTS) await B.page.screenshot({ path: process.env.SHOTS + '/v-avatar.png' });
+  await B.ev(() => popLayer()); await sleep(300);
+  // אליס מחליפה דמות → אצל בוב מתעדכן
+  await A.ev(() => { setMyAvatar(5); cloudNow(); }); await sleep(2500);
+  await B.ev(() => refreshFriends(true)); await sleep(1200);
+  check('אליס החליפה ל-🌊 → אצל בוב מתעדכן', await B.ev(() => S.friends[0].emoji === '🌊'));
+  // אצלי – לכל אחד דמות שונה, גם אם שני חברים בחרו אותה דמות
+  await B.ev(() => upsertFriend({ name: 'דנה', picks: {}, avatar: 5 })); await sleep(300);
+  const looks = await B.ev(() => [meLook().emoji, ...S.friends.map(f => f.emoji)]);
+  check('לכל אחד דמות ייחודית אצלי', new Set(looks).size === looks.length && looks[1] === '🌊', looks.join(' '));
+  check('דנה לא יכולה לקחת לבוב את 🍄', await B.ev(() => S.friends[1].emoji !== '🍄'));
+  // שנינו אוטומטיים עם אותה דמות – רק אחד מוותר
+  await A.ev(() => { S.avatar = { i: 7, auto: true }; save(); cloudNow(); }); await sleep(2500);
+  await B.ev(() => { S.avatar = { i: 7, auto: true }; save(); refreshFriends(true); }); await sleep(1500);
+  const tie = await B.ev(() => ({ b: myAvatar(), a: S.friends[0].avatar }));
+  check('שנינו אוטומטיים – בוב (מזהה גדול) מוותר, אליס שומרת', tie.a === 7 && tie.b !== 7, JSON.stringify(tie));
+  // הדמות מגובה (חוזרת במכשיר חדש)
+  await B.ev(() => { setMyAvatar(2); cloudNow(); }); await sleep(2500);
+  s = await srv();
+  check('הדמות בגיבוי', s.docs['uid-bob'].state.avatar && s.docs['uid-bob'].state.avatar.i === 2);
+  await B.ev(() => { S.friends = []; save(); });
+  await A.ev(() => { S.friends = []; save(); });
 
   // ───── לינק שיתוף: חבר חדש לוחץ על לינק ─────
   await A.ev(() => { S.picks[BY_START[3].id] = 2; save(); cloudNow(); }); await sleep(2500);

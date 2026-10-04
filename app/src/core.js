@@ -78,6 +78,10 @@ function logicalDay(t = now()) {
 /* ───────── שמירה ───────── */
 const KEY = 'indn26';
 const FRIEND_EMOJI = ['🦋', '🐘', '🐒', '🌵', '🌙', '🔥', '🌼', '🎸', '🪐', '🦎', '🍉', '⚡'];
+/* הדמות של כל משתמש: בוחר לעצמו אחת מ-10 (ייחודית בקבוצת החברים). [אימוג'י, צבע] */
+const AVATARS = [['🦋', '#ef8d83'], ['🌵', '#7fb685'], ['🌙', '#f4cc6e'], ['🐙', '#b190d6'], ['🍄', '#e07a5f'],
+  ['🌊', '#5f9fd1'], ['🦊', '#f2a65a'], ['🐢', '#a5c25c'], ['🍉', '#e7708f'], ['👽', '#7cc8bd']];
+const validAv = i => Number.isInteger(i) && i >= 0 && i < AVATARS.length;
 const FRIEND_COLOR = ['#ef8d83', '#c5cc69', '#9c9ab9', '#5f8eaa', '#96a96a', '#f4cc6e', '#3b7ca3', '#f46f6a'];
 
 function defaults() {
@@ -156,7 +160,7 @@ function b64uDec(str) {
   return Uint8Array.from(atob(str), c => c.charCodeAt(0));
 }
 /* קוד שיתוף: INDN1.<לוז>[.<מזהה הלוז החי בענן>]. גרסאות ישנות מתעלמות מהחלק השני */
-function encodeShare(name, picks, src) {
+function encodeShare(name, picks, src, avatar) {
   let nb = new TextEncoder().encode((name || '').trim());
   if (nb.length > 60) nb = nb.slice(0, 60);
   const pb = new Uint8Array(Math.ceil(EVENTS.length / 4));
@@ -164,11 +168,13 @@ function encodeShare(name, picks, src) {
     const lv = picks[ev.id] || 0;
     if (lv) pb[ev.idx >> 2] |= lv << ((ev.idx & 3) * 2);
   }
-  const out = new Uint8Array(2 + nb.length + pb.length);
+  const av = validAv(avatar) ? 1 : 0; // בייט אחרון = הדמות (גרסאות ישנות מתעלמות ממנו)
+  const out = new Uint8Array(2 + nb.length + pb.length + av);
   out[0] = DATA_VERSION;
   out[1] = nb.length;
   out.set(nb, 2);
   out.set(pb, 2 + nb.length);
+  if (av) out[2 + nb.length + pb.length] = avatar + 1;
   return 'INDN1.' + b64uEnc(out) + (src ? '.' + src : '');
 }
 function decodeShare(text) {
@@ -178,13 +184,15 @@ function decodeShare(text) {
     const b = b64uDec(m[1]);
     const nl = b[1];
     const name = new TextDecoder().decode(b.slice(2, 2 + nl));
-    const pb = b.slice(2 + nl);
+    const PBL = Math.ceil(EVENTS.length / 4);
+    const pb = b.slice(2 + nl, 2 + nl + PBL);
+    const avatar = b.length > 2 + nl + PBL && validAv(b[2 + nl + PBL] - 1) ? b[2 + nl + PBL] - 1 : null;
     const picks = {};
     for (const ev of EVENTS) {
       const lv = ((pb[ev.idx >> 2] || 0) >> ((ev.idx & 3) * 2)) & 3;
       if (lv) picks[ev.id] = Math.min(lv, 2);
     }
-    return { name: name || 'חבר/ה', picks, src: m[2] || null };
+    return { name: name || 'חבר/ה', picks, src: m[2] || null, avatar };
   } catch (e) { return null; }
 }
 const shareMessage = code => `הלוז שלי לאינדינגב 2026 🦋\nלייבוא באפליקציה "הלוז שלי": ${code}`;

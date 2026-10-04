@@ -65,11 +65,14 @@ function askName(then) {
 function openShare() {
   askName(() => openPanel('שיתוף הלוז שלי', (body, api) => {
     const live = typeof cloudAuth !== 'undefined' && cloudAuth ? cloudAuth.uid : null;
-    const code = encodeShare(S.name, S.picks, live);
+    if (ensureAvatar()) save();
+    const code = encodeShare(S.name, S.picks, live, myAvatar());
     const count = Object.keys(S.picks).length;
     body.innerHTML = `
       <label class="field-l" for="myName">השם שלך (יופיע אצל מי שמייבא)</label>
-      <input id="myName" class="text-in" value="${esc(S.name)}" maxlength="24" style="margin-bottom:16px">
+      <input id="myName" class="text-in" value="${esc(S.name)}" maxlength="24" style="margin-bottom:12px">
+      <label class="field-l">הדמות שלך</label>
+      ${avatarPicker()}
 
       <div class="card-box">
         <h3>שליחת לינק</h3>
@@ -110,6 +113,7 @@ function openShare() {
 
       <p style="font-size:13px;color:var(--ink-2)">💡 הקוד הוא גם גיבוי: שמרו אותו, ותוכלו לשחזר את הלוז בכל מכשיר דרך "ייבוא" ← "החלפת הלוז שלי".</p>`;
     drawQR($('#qr', body), code);
+    bindAvatarPicker(body, () => api.render());
     $('#myName', body).onchange = e => { S.name = e.target.value.trim().slice(0, 24) || S.name; save(); api.render(); };
     body.onclick = async e => {
       const b = e.target.closest('[data-a]');

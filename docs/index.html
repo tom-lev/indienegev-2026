@@ -307,6 +307,12 @@ main#view { overflow: hidden; position: relative; min-height: 0; }
 .shared-head { background: rgba(21,63,76,.07); }
 .shared-head .avs .av { width: 30px; height: 30px; font-size: 15px; }
 .who-tabs button svg { width: 18px; height: 18px; }
+.av-pick { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 4px 0 16px; }
+.av-opt { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 0; border-radius: 14px; border: 2px solid transparent; min-height: 54px; }
+.av-opt .av { width: 40px; height: 40px; font-size: 21px; }
+.av-opt.on { border-color: var(--ink); background: color-mix(in srgb, var(--fc) 22%, transparent); }
+.av-opt:disabled { opacity: .38; }
+.av-opt small { font-size: 10.5px; font-weight: 700; color: var(--ink-2); max-width: 64px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .who-tabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 0 -14px 12px; padding: 2px 14px; }
 .who-tabs::-webkit-scrollbar { display: none; }
 .who-tabs button {
@@ -1312,6 +1318,10 @@ function logicalDay(t = now()) {
 /* ───────── שמירה ───────── */
 const KEY = 'indn26';
 const FRIEND_EMOJI = ['🦋', '🐘', '🐒', '🌵', '🌙', '🔥', '🌼', '🎸', '🪐', '🦎', '🍉', '⚡'];
+/* הדמות של כל משתמש: בוחר לעצמו אחת מ-10 (ייחודית בקבוצת החברים). [אימוג'י, צבע] */
+const AVATARS = [['🦋', '#ef8d83'], ['🌵', '#7fb685'], ['🌙', '#f4cc6e'], ['🐙', '#b190d6'], ['🍄', '#e07a5f'],
+  ['🌊', '#5f9fd1'], ['🦊', '#f2a65a'], ['🐢', '#a5c25c'], ['🍉', '#e7708f'], ['👽', '#7cc8bd']];
+const validAv = i => Number.isInteger(i) && i >= 0 && i < AVATARS.length;
 const FRIEND_COLOR = ['#ef8d83', '#c5cc69', '#9c9ab9', '#5f8eaa', '#96a96a', '#f4cc6e', '#3b7ca3', '#f46f6a'];
 
 function defaults() {
@@ -1390,7 +1400,7 @@ function b64uDec(str) {
   return Uint8Array.from(atob(str), c => c.charCodeAt(0));
 }
 /* קוד שיתוף: INDN1.<לוז>[.<מזהה הלוז החי בענן>]. גרסאות ישנות מתעלמות מהחלק השני */
-function encodeShare(name, picks, src) {
+function encodeShare(name, picks, src, avatar) {
   let nb = new TextEncoder().encode((name || '').trim());
   if (nb.length > 60) nb = nb.slice(0, 60);
   const pb = new Uint8Array(Math.ceil(EVENTS.length / 4));
@@ -1398,11 +1408,13 @@ function encodeShare(name, picks, src) {
     const lv = picks[ev.id] || 0;
     if (lv) pb[ev.idx >> 2] |= lv << ((ev.idx & 3) * 2);
   }
-  const out = new Uint8Array(2 + nb.length + pb.length);
+  const av = validAv(avatar) ? 1 : 0; // בייט אחרון = הדמות (גרסאות ישנות מתעלמות ממנו)
+  const out = new Uint8Array(2 + nb.length + pb.length + av);
   out[0] = DATA_VERSION;
   out[1] = nb.length;
   out.set(nb, 2);
   out.set(pb, 2 + nb.length);
+  if (av) out[2 + nb.length + pb.length] = avatar + 1;
   return 'INDN1.' + b64uEnc(out) + (src ? '.' + src : '');
 }
 function decodeShare(text) {
@@ -1412,13 +1424,15 @@ function decodeShare(text) {
     const b = b64uDec(m[1]);
     const nl = b[1];
     const name = new TextDecoder().decode(b.slice(2, 2 + nl));
-    const pb = b.slice(2 + nl);
+    const PBL = Math.ceil(EVENTS.length / 4);
+    const pb = b.slice(2 + nl, 2 + nl + PBL);
+    const avatar = b.length > 2 + nl + PBL && validAv(b[2 + nl + PBL] - 1) ? b[2 + nl + PBL] - 1 : null;
     const picks = {};
     for (const ev of EVENTS) {
       const lv = ((pb[ev.idx >> 2] || 0) >> ((ev.idx & 3) * 2)) & 3;
       if (lv) picks[ev.id] = Math.min(lv, 2);
     }
-    return { name: name || 'חבר/ה', picks, src: m[2] || null };
+    return { name: name || 'חבר/ה', picks, src: m[2] || null, avatar };
   } catch (e) { return null; }
 }
 const shareMessage = code => `הלוז שלי לאינדינגב 2026 🦋\nלייבוא באפליקציה "הלוז שלי": ${code}`;
@@ -1899,8 +1913,6 @@ function renderSchedule(view) {
 /* מסך "הלוז שלי": לשוניות – שלי / משותף (אני + החברים) / כל חבר בנפרד.
    בכל לשונית: רשימה כרונולוגית (עם קיבוץ התנגשויות והפסקות) או לפי במות. */
 
-const ME = { name: 'אני', emoji: '✦', color: '#f46f6a' };
-
 /* הלשונית הנבחרת: { kind: 'me' } | { kind: 'shared' } | { kind: 'friend', f } */
 function mineSel() {
   const v = S.prefs.mineView;
@@ -1914,14 +1926,14 @@ function selLv(sel) {
   if (sel.kind === 'shared') return id => Math.max(level(id), ...activeFriends().map(f => f.picks[id] || 0));
   return level;
 }
-const sharedPeople = ev => [...(level(ev.id) ? [ME] : []), ...friendsGoing(ev)];
+const sharedPeople = ev => [...(level(ev.id) ? [meLook()] : []), ...friendsGoing(ev)];
 const mineSet = (sel = mineSel()) => { const lv = selLv(sel); return BY_START.filter(e => lv(e.id)); };
 
 function mineTabs(sel) {
   if (!S.friends.length) return '';
   const on = k => sel.kind === k;
   return `<div class="who-tabs" role="tablist" aria-label="של מי הלוז">
-    <button role="tab" data-who="me" aria-selected="${on('me')}">✦ שלי</button>
+    <button role="tab" data-who="me" aria-selected="${on('me')}" style="--fc:${meLook().color}"><span class="av sm">${meLook().emoji}</span>שלי</button>
     <button role="tab" data-who="shared" aria-selected="${on('shared')}">${ICON.users}משותף</button>
     ${S.friends.map(f => `<button role="tab" data-who="${f.id}" aria-selected="${sel.f === f}" style="--fc:${f.color}"><span class="av sm">${f.emoji}</span>${esc(f.name)}</button>`).join('')}
   </div>`;
@@ -1975,7 +1987,7 @@ function headCard(sel) {
   if (sel.kind === 'shared') {
     const act = activeFriends(), hidden = S.friends.length - act.length;
     return `<div class="friend-head shared-head">
-      ${friendAvatars([ME, ...act], false)}
+      ${friendAvatars([meLook(), ...act], false)}
       <div><b>הלוז המשותף</b><small>אני${act.map(f => ' + ' + esc(f.name)).join('')}${hidden ? ` · ${hidden} מוסתרים (במסך החברים)` : ''}</small></div>
     </div>`;
   }
@@ -2042,7 +2054,7 @@ function renderMine(view) {
     const g = gridMarkup(dayId, {
       only: e => ids.has(e.id),
       lvOf: sel.kind === 'friend' ? incl : level,
-      people: sel.kind === 'shared' ? sharedPeople : sel.kind === 'friend' ? (ev => (level(ev.id) ? [ME] : [])) : null,
+      people: sel.kind === 'shared' ? sharedPeople : sel.kind === 'friend' ? (ev => (level(ev.id) ? [meLook()] : [])) : null,
     });
     view.innerHTML = `<div class="mine-split"><div class="mine-top">${top}</div><div class="gscroll scroll" id="gscroll">${g.html}</div></div>`;
     const sc = $('#gscroll');
@@ -3229,11 +3241,14 @@ function askName(then) {
 function openShare() {
   askName(() => openPanel('שיתוף הלוז שלי', (body, api) => {
     const live = typeof cloudAuth !== 'undefined' && cloudAuth ? cloudAuth.uid : null;
-    const code = encodeShare(S.name, S.picks, live);
+    if (ensureAvatar()) save();
+    const code = encodeShare(S.name, S.picks, live, myAvatar());
     const count = Object.keys(S.picks).length;
     body.innerHTML = `
       <label class="field-l" for="myName">השם שלך (יופיע אצל מי שמייבא)</label>
-      <input id="myName" class="text-in" value="${esc(S.name)}" maxlength="24" style="margin-bottom:16px">
+      <input id="myName" class="text-in" value="${esc(S.name)}" maxlength="24" style="margin-bottom:12px">
+      <label class="field-l">הדמות שלך</label>
+      ${avatarPicker()}
 
       <div class="card-box">
         <h3>שליחת לינק</h3>
@@ -3274,6 +3289,7 @@ function openShare() {
 
       <p style="font-size:13px;color:var(--ink-2)">💡 הקוד הוא גם גיבוי: שמרו אותו, ותוכלו לשחזר את הלוז בכל מכשיר דרך "ייבוא" ← "החלפת הלוז שלי".</p>`;
     drawQR($('#qr', body), code);
+    bindAvatarPicker(body, () => api.render());
     $('#myName', body).onchange = e => { S.name = e.target.value.trim().slice(0, 24) || S.name; save(); api.render(); };
     body.onclick = async e => {
       const b = e.target.closest('[data-a]');
@@ -3683,14 +3699,94 @@ async function decodeImageFile(file) {
 /* ── friends.js ── */
 /* לוז קבוצתי: רשימת חברים, הופעות משותפות */
 
+/* ───────── דמויות ─────────
+   כל משתמש בוחר לעצמו דמות (S.avatar = { i, auto }); היא עוברת לחברים בקוד/בלינק/בלוז החי.
+   אצלי – לכל אחד דמות אחרת: מי שהדמות שבחר כבר תפוסה (אצלי) מקבל לתצוגה דמות פנויה. */
+const myAvatar = () => (S.avatar && validAv(S.avatar.i) ? S.avatar.i : null);
+function meLook() {
+  const i = myAvatar();
+  return i == null ? { name: 'אני', emoji: '✦', color: '#f46f6a' } : { name: 'אני', emoji: AVATARS[i][0], color: AVATARS[i][1] };
+}
+const lookIdx = f => AVATARS.findIndex(a => a[0] === f.emoji);
+/* דמויות שתפוסות ע"י החברים שלי: אינדקס → שם */
+function takenAvatars() {
+  const t = new Map();
+  for (const f of S.friends) { const i = lookIdx(f); if (i >= 0 && !t.has(i)) t.set(i, f.name); }
+  return t;
+}
+const freeAvatar = used => { for (let i = 0; i < AVATARS.length; i++) if (!used.has(i)) return i; return null; };
+/* לכל אחד דמות ייחודית אצלי. מחזיר true אם משהו השתנה */
+function resolveAvatars() {
+  const used = new Set();
+  const mine = myAvatar();
+  if (mine != null) used.add(mine);
+  let changed = false;
+  const put = (f, i) => {
+    const [e, c] = i == null ? [f.emoji, f.color] : AVATARS[i];
+    if (f.emoji !== e || f.color !== c) { f.emoji = e; f.color = c; changed = true; }
+    if (i != null) used.add(i);
+  };
+  const later = [];
+  for (const f of S.friends) { if (validAv(f.avatar) && !used.has(f.avatar)) put(f, f.avatar); else later.push(f); }
+  for (const f of later) { const cur = lookIdx(f); put(f, cur >= 0 && !used.has(cur) ? cur : freeAvatar(used)); }
+  return changed;
+}
+/* אם עוד לא בחרתי – מקבל דמות פנויה (אפשר להחליף בכל רגע) */
+function ensureAvatar() {
+  if (myAvatar() != null) return false;
+  // מכשיר חדש שעוד לא קיבל את הנתונים מהענן – לא בוחרים, כדי לא לדרוס דמות שנבחרה במכשיר אחר
+  if (typeof cloudAuth !== 'undefined' && cloudAuth && !(cloudState && cloudState.at)) return false;
+  const i = freeAvatar(new Set(takenAvatars().keys()));
+  S.avatar = { i: i == null ? 0 : i, auto: true };
+  resolveAvatars();
+  return true;
+}
+function setMyAvatar(i) {
+  S.avatar = { i, auto: false };
+  resolveAvatars();
+  save();
+  rerender();
+}
+/* חבר נוסף/התעדכן עם דמות שכבר שלי, ואת שלי לא בחרתי בעצמי – אני עובר לדמות פנויה.
+   אם גם הוא קיבל אותה אוטומטית באותו זמן – רק אחד מאיתנו מוותר (לפי המזהה), כדי שלא נתחלף שוב ושוב */
+function yieldAvatar(av, src, theirAuto) {
+  const me = typeof cloudAuth !== 'undefined' && cloudAuth ? cloudAuth.uid : null;
+  if (theirAuto && src && me && me < src) return; // שנינו אוטומטיים – המזהה הקטן שומר
+  if (theirAuto && !src) return;
+  if (validAv(av) && S.avatar && S.avatar.auto && S.avatar.i === av) {
+    const used = new Set([av, ...S.friends.map(f => f.avatar).filter(validAv)]);
+    const i = freeAvatar(used);
+    if (i != null) S.avatar = { i, auto: true };
+  }
+}
+/* בוחר דמות: 10 אפשרויות, התפוסות (אצל החברים שלי) חסומות */
+function avatarPicker() {
+  const taken = takenAvatars(), mine = myAvatar();
+  return `<div class="av-pick" role="radiogroup" aria-label="הדמות שלך">${AVATARS.map(([e, c], i) => {
+    const by = taken.get(i);
+    return `<button type="button" role="radio" class="av-opt ${i === mine ? 'on' : ''}" style="--fc:${c}" data-av="${i}" aria-checked="${i === mine}" ${by && i !== mine ? `disabled title="תפוס: ${esc(by)}"` : ''}>
+      <span class="av">${e}</span>${by && i !== mine ? `<small>${esc(by)}</small>` : ''}</button>`;
+  }).join('')}</div>`;
+}
+function bindAvatarPicker(root, after) {
+  root.addEventListener('click', e => {
+    const b = e.target.closest('[data-av]');
+    if (!b || b.disabled) return;
+    setMyAvatar(+b.dataset.av);
+    after && after();
+  });
+}
+
 function upsertFriend(d) {
   const mine = d.src && typeof cloudAuth !== 'undefined' && cloudAuth && cloudAuth.uid === d.src;
   const src = mine ? null : d.src || null;
   const existing = (src && S.friends.find(f => f.src === src)) || S.friends.find(f => f.name === d.name);
+  if (!mine) yieldAvatar(d.avatar, src);
   if (existing) {
     existing.picks = d.picks;
     existing.importedAt = Date.now();
     if (src) existing.src = src;
+    if (validAv(d.avatar)) existing.avatar = d.avatar;
   } else {
     const i = S.friends.length;
     S.friends.push({
@@ -3702,8 +3798,11 @@ function upsertFriend(d) {
       importedAt: Date.now(),
       active: true,
       ...(src ? { src } : {}),
+      ...(validAv(d.avatar) ? { avatar: d.avatar } : {}),
     });
   }
+  ensureAvatar();
+  resolveAvatars();
   save();
   if (src) { friendsPulledAt = 0; refreshFriends(); }
   return existing || S.friends[S.friends.length - 1];
@@ -3729,7 +3828,9 @@ async function refreshFriends(force = false) {
       if (cur.liveErr) { delete cur.liveErr; ui = true; }
       const same = JSON.stringify(Object.entries(r.picks).sort()) === JSON.stringify(Object.entries(cur.picks).sort());
       if (!same) { cur.picks = r.picks; cur.importedAt = r.at || Date.now(); changed = true; }
+      if (validAv(r.avatar) && cur.avatar !== r.avatar) { yieldAvatar(r.avatar, cur.src, r.avAuto); cur.avatar = r.avatar; changed = true; }
     }
+    if (resolveAvatars()) changed = true;
   } finally { friendsPulling = false; }
   if (changed || ui) { save(); rerender(); }
 }
@@ -3749,7 +3850,7 @@ function ago(ms) {
 function openFriends() {
   const api = openPanel('חברים והלוז הקבוצתי', (body, api) => {
     const fr = S.friends;
-    const me = { name: 'אני', emoji: '✦', color: '#f46f6a' };
+    const me = meLook();
 
     // הופעות משותפות: לפחות 2 אנשים (כולל אותי) מבין הפעילים
     const act = activeFriends();
@@ -3761,7 +3862,7 @@ function openFriends() {
 
     const friendRows = fr.map(f => `
       <div class="friend-row ${f.active === false ? 'off' : ''}">
-        <button class="av" style="--fc:${f.color}" data-emoji="${f.id}" aria-label="החלפת אימוג'י">${f.emoji}</button>
+        <span class="av" style="--fc:${f.color}">${f.emoji}</span>
         <div class="info">
           <div class="n">${esc(f.name)}</div>
           <div class="m">${Object.keys(f.picks).length} הופעות · ${f.src ? (f.liveErr === 'gone' ? 'הפסיק/ה לשתף' : '🔄 מתעדכן לבד') : 'צילום מצב'} · ${ago(f.importedAt)}</div>
@@ -3785,6 +3886,7 @@ function openFriends() {
     }).join('');
 
     body.innerHTML = `
+      <div class="card-box"><h3>הדמות שלך</h3><p>כך החברים יראו אותך. אפשר להחליף מתי שרוצים; דמות של חבר תפוסה.</p>${avatarPicker()}</div>
       <button class="btn block" data-a="import" style="margin-bottom:14px">${ICON.import} הוספת חבר/ה (קוד או QR)</button>
       ${fr.length ? friendRows : `<div class="empty" style="padding:16px"><p>עוד אין חברים ברשימה. בקשו מהם לשתף את הלוז שלהם (בכפתור "שתף" ב"הלוז שלי") וייבאו אותו כאן.</p></div>`}
       ${fr.length ? `<label class="switch" style="margin:6px 0 4px"><input type="checkbox" id="onGrid" ${S.prefs.friendsOnGrid ? 'checked' : ''}> הצג חברים על הלוז המלא</label>
@@ -3793,18 +3895,12 @@ function openFriends() {
         ${sharedRows || '<p style="color:var(--ink-2)">עוד אין הופעה שלפחות שניים מכם בחרו.</p>'}` : ''}`;
 
     body.onclick = e => {
+      if (e.target.closest('[data-av]')) return; // בוחר הדמות
       const b = e.target.closest('button, [data-ev]');
       if (!b) return;
       const f = id => S.friends.find(x => x.id === id);
       if (b.dataset.a === 'import') return openImport();
       if (b.dataset.toggle) { const x = f(b.dataset.toggle); x.active = x.active === false; save(); return api.render(); }
-      if (b.dataset.emoji) {
-        const x = f(b.dataset.emoji);
-        const i = FRIEND_EMOJI.indexOf(x.emoji);
-        x.emoji = FRIEND_EMOJI[(i + 1) % FRIEND_EMOJI.length];
-        x.color = FRIEND_COLOR[(FRIEND_COLOR.indexOf(x.color) + 1) % FRIEND_COLOR.length];
-        save(); return api.render();
-      }
       if (b.dataset.rename) {
         const x = f(b.dataset.rename);
         const n = prompt('שם חדש:', x.name);
@@ -3818,6 +3914,7 @@ function openFriends() {
       }
       rowClick(e);
     };
+    bindAvatarPicker(body, () => api.render());
     const og = $('#onGrid', body);
     if (og) og.onchange = () => { S.prefs.friendsOnGrid = og.checked; save(); };
   });
@@ -4270,6 +4367,7 @@ const CC = (() => {
     for (const f of st.friends || []) m['f:' + f.name] = f;
     if (st.prefs && st.prefs.tent) m.tent = st.prefs.tent;
     if (st.name) m.name = st.name;
+    if (st.avatar) m.avatar = st.avatar;
     return m;
   }
   function implicitMt(key, v) { // מצבים ישנים בלי mt
@@ -4281,11 +4379,12 @@ const CC = (() => {
     const out = { ...base, picks: {}, ratings: {}, nope: {}, notes: [], friends: [], mt, tomb };
     const prefs = { ...(base.prefs || {}) }; delete prefs.tent;
     out.name = '';
+    delete out.avatar;
     for (const [key, v] of Object.entries(m)) {
       const i = key.indexOf(':'), pre = i > 0 ? key.slice(0, i) : key, id = i > 0 ? key.slice(i + 1) : '';
       if (pre === 'p') out.picks[id] = v; else if (pre === 'r') out.ratings[id] = v; else if (pre === 'x') out.nope[id] = v;
       else if (pre === 'n') out.notes.push(v); else if (pre === 'f') out.friends.push(v);
-      else if (key === 'tent') prefs.tent = v; else if (key === 'name') out.name = v;
+      else if (key === 'tent') prefs.tent = v; else if (key === 'name') out.name = v; else if (key === 'avatar') out.avatar = v;
     }
     out.notes.sort((a, b) => (a.at || 0) - (b.at || 0) || (a.id > b.id ? 1 : -1));
     out.prefs = prefs;
@@ -4387,12 +4486,14 @@ const CC = (() => {
      בלי פתקים, יומן, אוהל או 👎. רק בעל החשבון כותב; כל מי שיש לו את הקוד קורא. */
   const shareUrl = uid => `${ep.fs}/shares/${encodeURIComponent(uid)}`;
   async function publishShare(a, st) {
-    const s = canon([st.name || '', st.picks || {}]);
+    const av = st.avatar && Number.isInteger(st.avatar.i) ? st.avatar.i : -1;
+    const auto = !!(st.avatar && st.avatar.auto);
+    const s = canon([st.name || '', st.picks || {}, av, auto]);
     let h = 0;
     for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
     const pub = (await get('share')) || {};
     if (pub.uid === a.uid && pub.fp === h) return false;
-    const fields = { name: { stringValue: (st.name || '').slice(0, 24) }, picks: { stringValue: JSON.stringify(st.picks || {}) }, at: { integerValue: String(Date.now()) } };
+    const fields = { name: { stringValue: (st.name || '').slice(0, 24) }, picks: { stringValue: JSON.stringify(st.picks || {}) }, at: { integerValue: String(Date.now()) }, avatar: { integerValue: String(av) }, avAuto: { booleanValue: auto } };
     const r = await req(shareUrl(a.uid), { method: 'PATCH', headers: { Authorization: `Bearer ${a.idToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ fields }) });
     if (!r.ok) throw new Error(`שגיאה ${r.status}`);
     await set('share', { uid: a.uid, fp: h, at: Date.now() });
@@ -4404,7 +4505,8 @@ const CC = (() => {
     if (r.status === 404) return null;
     if (!r.ok) throw new Error(`שגיאה ${r.status}`);
     const f = (await r.json()).fields || {};
-    return { name: f.name ? f.name.stringValue : '', picks: JSON.parse((f.picks && f.picks.stringValue) || '{}'), at: +((f.at && f.at.integerValue) || 0) };
+    const av = f.avatar ? +f.avatar.integerValue : -1;
+    return { name: f.name ? f.name.stringValue : '', picks: JSON.parse((f.picks && f.picks.stringValue) || '{}'), at: +((f.at && f.at.integerValue) || 0), avatar: av >= 0 ? av : null, avAuto: !!(f.avAuto && f.avAuto.booleanValue) };
   }
 
   /* יומן סנכרון (לאבחון): 30 האירועים האחרונים */

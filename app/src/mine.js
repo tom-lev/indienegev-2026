@@ -1,8 +1,6 @@
 /* מסך "הלוז שלי": לשוניות – שלי / משותף (אני + החברים) / כל חבר בנפרד.
    בכל לשונית: רשימה כרונולוגית (עם קיבוץ התנגשויות והפסקות) או לפי במות. */
 
-const ME = { name: 'אני', emoji: '✦', color: '#f46f6a' };
-
 /* הלשונית הנבחרת: { kind: 'me' } | { kind: 'shared' } | { kind: 'friend', f } */
 function mineSel() {
   const v = S.prefs.mineView;
@@ -16,14 +14,14 @@ function selLv(sel) {
   if (sel.kind === 'shared') return id => Math.max(level(id), ...activeFriends().map(f => f.picks[id] || 0));
   return level;
 }
-const sharedPeople = ev => [...(level(ev.id) ? [ME] : []), ...friendsGoing(ev)];
+const sharedPeople = ev => [...(level(ev.id) ? [meLook()] : []), ...friendsGoing(ev)];
 const mineSet = (sel = mineSel()) => { const lv = selLv(sel); return BY_START.filter(e => lv(e.id)); };
 
 function mineTabs(sel) {
   if (!S.friends.length) return '';
   const on = k => sel.kind === k;
   return `<div class="who-tabs" role="tablist" aria-label="של מי הלוז">
-    <button role="tab" data-who="me" aria-selected="${on('me')}">✦ שלי</button>
+    <button role="tab" data-who="me" aria-selected="${on('me')}" style="--fc:${meLook().color}"><span class="av sm">${meLook().emoji}</span>שלי</button>
     <button role="tab" data-who="shared" aria-selected="${on('shared')}">${ICON.users}משותף</button>
     ${S.friends.map(f => `<button role="tab" data-who="${f.id}" aria-selected="${sel.f === f}" style="--fc:${f.color}"><span class="av sm">${f.emoji}</span>${esc(f.name)}</button>`).join('')}
   </div>`;
@@ -77,7 +75,7 @@ function headCard(sel) {
   if (sel.kind === 'shared') {
     const act = activeFriends(), hidden = S.friends.length - act.length;
     return `<div class="friend-head shared-head">
-      ${friendAvatars([ME, ...act], false)}
+      ${friendAvatars([meLook(), ...act], false)}
       <div><b>הלוז המשותף</b><small>אני${act.map(f => ' + ' + esc(f.name)).join('')}${hidden ? ` · ${hidden} מוסתרים (במסך החברים)` : ''}</small></div>
     </div>`;
   }
@@ -144,7 +142,7 @@ function renderMine(view) {
     const g = gridMarkup(dayId, {
       only: e => ids.has(e.id),
       lvOf: sel.kind === 'friend' ? incl : level,
-      people: sel.kind === 'shared' ? sharedPeople : sel.kind === 'friend' ? (ev => (level(ev.id) ? [ME] : [])) : null,
+      people: sel.kind === 'shared' ? sharedPeople : sel.kind === 'friend' ? (ev => (level(ev.id) ? [meLook()] : [])) : null,
     });
     view.innerHTML = `<div class="mine-split"><div class="mine-top">${top}</div><div class="gscroll scroll" id="gscroll">${g.html}</div></div>`;
     const sc = $('#gscroll');

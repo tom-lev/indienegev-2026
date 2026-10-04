@@ -102,6 +102,7 @@ const CC = (() => {
     for (const f of st.friends || []) m['f:' + f.name] = f;
     if (st.prefs && st.prefs.tent) m.tent = st.prefs.tent;
     if (st.name) m.name = st.name;
+    if (st.avatar) m.avatar = st.avatar;
     return m;
   }
   function implicitMt(key, v) { // מצבים ישנים בלי mt
@@ -113,11 +114,12 @@ const CC = (() => {
     const out = { ...base, picks: {}, ratings: {}, nope: {}, notes: [], friends: [], mt, tomb };
     const prefs = { ...(base.prefs || {}) }; delete prefs.tent;
     out.name = '';
+    delete out.avatar;
     for (const [key, v] of Object.entries(m)) {
       const i = key.indexOf(':'), pre = i > 0 ? key.slice(0, i) : key, id = i > 0 ? key.slice(i + 1) : '';
       if (pre === 'p') out.picks[id] = v; else if (pre === 'r') out.ratings[id] = v; else if (pre === 'x') out.nope[id] = v;
       else if (pre === 'n') out.notes.push(v); else if (pre === 'f') out.friends.push(v);
-      else if (key === 'tent') prefs.tent = v; else if (key === 'name') out.name = v;
+      else if (key === 'tent') prefs.tent = v; else if (key === 'name') out.name = v; else if (key === 'avatar') out.avatar = v;
     }
     out.notes.sort((a, b) => (a.at || 0) - (b.at || 0) || (a.id > b.id ? 1 : -1));
     out.prefs = prefs;
@@ -219,12 +221,14 @@ const CC = (() => {
      בלי פתקים, יומן, אוהל או 👎. רק בעל החשבון כותב; כל מי שיש לו את הקוד קורא. */
   const shareUrl = uid => `${ep.fs}/shares/${encodeURIComponent(uid)}`;
   async function publishShare(a, st) {
-    const s = canon([st.name || '', st.picks || {}]);
+    const av = st.avatar && Number.isInteger(st.avatar.i) ? st.avatar.i : -1;
+    const auto = !!(st.avatar && st.avatar.auto);
+    const s = canon([st.name || '', st.picks || {}, av, auto]);
     let h = 0;
     for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
     const pub = (await get('share')) || {};
     if (pub.uid === a.uid && pub.fp === h) return false;
-    const fields = { name: { stringValue: (st.name || '').slice(0, 24) }, picks: { stringValue: JSON.stringify(st.picks || {}) }, at: { integerValue: String(Date.now()) } };
+    const fields = { name: { stringValue: (st.name || '').slice(0, 24) }, picks: { stringValue: JSON.stringify(st.picks || {}) }, at: { integerValue: String(Date.now()) }, avatar: { integerValue: String(av) }, avAuto: { booleanValue: auto } };
     const r = await req(shareUrl(a.uid), { method: 'PATCH', headers: { Authorization: `Bearer ${a.idToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ fields }) });
     if (!r.ok) throw new Error(`שגיאה ${r.status}`);
     await set('share', { uid: a.uid, fp: h, at: Date.now() });
@@ -236,7 +240,8 @@ const CC = (() => {
     if (r.status === 404) return null;
     if (!r.ok) throw new Error(`שגיאה ${r.status}`);
     const f = (await r.json()).fields || {};
-    return { name: f.name ? f.name.stringValue : '', picks: JSON.parse((f.picks && f.picks.stringValue) || '{}'), at: +((f.at && f.at.integerValue) || 0) };
+    const av = f.avatar ? +f.avatar.integerValue : -1;
+    return { name: f.name ? f.name.stringValue : '', picks: JSON.parse((f.picks && f.picks.stringValue) || '{}'), at: +((f.at && f.at.integerValue) || 0), avatar: av >= 0 ? av : null, avAuto: !!(f.avAuto && f.avAuto.booleanValue) };
   }
 
   /* יומן סנכרון (לאבחון): 30 האירועים האחרונים */

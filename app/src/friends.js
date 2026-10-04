@@ -1,13 +1,93 @@
 /* לוז קבוצתי: רשימת חברים, הופעות משותפות */
 
+/* ───────── דמויות ─────────
+   כל משתמש בוחר לעצמו דמות (S.avatar = { i, auto }); היא עוברת לחברים בקוד/בלינק/בלוז החי.
+   אצלי – לכל אחד דמות אחרת: מי שהדמות שבחר כבר תפוסה (אצלי) מקבל לתצוגה דמות פנויה. */
+const myAvatar = () => (S.avatar && validAv(S.avatar.i) ? S.avatar.i : null);
+function meLook() {
+  const i = myAvatar();
+  return i == null ? { name: 'אני', emoji: '✦', color: '#f46f6a' } : { name: 'אני', emoji: AVATARS[i][0], color: AVATARS[i][1] };
+}
+const lookIdx = f => AVATARS.findIndex(a => a[0] === f.emoji);
+/* דמויות שתפוסות ע"י החברים שלי: אינדקס → שם */
+function takenAvatars() {
+  const t = new Map();
+  for (const f of S.friends) { const i = lookIdx(f); if (i >= 0 && !t.has(i)) t.set(i, f.name); }
+  return t;
+}
+const freeAvatar = used => { for (let i = 0; i < AVATARS.length; i++) if (!used.has(i)) return i; return null; };
+/* לכל אחד דמות ייחודית אצלי. מחזיר true אם משהו השתנה */
+function resolveAvatars() {
+  const used = new Set();
+  const mine = myAvatar();
+  if (mine != null) used.add(mine);
+  let changed = false;
+  const put = (f, i) => {
+    const [e, c] = i == null ? [f.emoji, f.color] : AVATARS[i];
+    if (f.emoji !== e || f.color !== c) { f.emoji = e; f.color = c; changed = true; }
+    if (i != null) used.add(i);
+  };
+  const later = [];
+  for (const f of S.friends) { if (validAv(f.avatar) && !used.has(f.avatar)) put(f, f.avatar); else later.push(f); }
+  for (const f of later) { const cur = lookIdx(f); put(f, cur >= 0 && !used.has(cur) ? cur : freeAvatar(used)); }
+  return changed;
+}
+/* אם עוד לא בחרתי – מקבל דמות פנויה (אפשר להחליף בכל רגע) */
+function ensureAvatar() {
+  if (myAvatar() != null) return false;
+  // מכשיר חדש שעוד לא קיבל את הנתונים מהענן – לא בוחרים, כדי לא לדרוס דמות שנבחרה במכשיר אחר
+  if (typeof cloudAuth !== 'undefined' && cloudAuth && !(cloudState && cloudState.at)) return false;
+  const i = freeAvatar(new Set(takenAvatars().keys()));
+  S.avatar = { i: i == null ? 0 : i, auto: true };
+  resolveAvatars();
+  return true;
+}
+function setMyAvatar(i) {
+  S.avatar = { i, auto: false };
+  resolveAvatars();
+  save();
+  rerender();
+}
+/* חבר נוסף/התעדכן עם דמות שכבר שלי, ואת שלי לא בחרתי בעצמי – אני עובר לדמות פנויה.
+   אם גם הוא קיבל אותה אוטומטית באותו זמן – רק אחד מאיתנו מוותר (לפי המזהה), כדי שלא נתחלף שוב ושוב */
+function yieldAvatar(av, src, theirAuto) {
+  const me = typeof cloudAuth !== 'undefined' && cloudAuth ? cloudAuth.uid : null;
+  if (theirAuto && src && me && me < src) return; // שנינו אוטומטיים – המזהה הקטן שומר
+  if (theirAuto && !src) return;
+  if (validAv(av) && S.avatar && S.avatar.auto && S.avatar.i === av) {
+    const used = new Set([av, ...S.friends.map(f => f.avatar).filter(validAv)]);
+    const i = freeAvatar(used);
+    if (i != null) S.avatar = { i, auto: true };
+  }
+}
+/* בוחר דמות: 10 אפשרויות, התפוסות (אצל החברים שלי) חסומות */
+function avatarPicker() {
+  const taken = takenAvatars(), mine = myAvatar();
+  return `<div class="av-pick" role="radiogroup" aria-label="הדמות שלך">${AVATARS.map(([e, c], i) => {
+    const by = taken.get(i);
+    return `<button type="button" role="radio" class="av-opt ${i === mine ? 'on' : ''}" style="--fc:${c}" data-av="${i}" aria-checked="${i === mine}" ${by && i !== mine ? `disabled title="תפוס: ${esc(by)}"` : ''}>
+      <span class="av">${e}</span>${by && i !== mine ? `<small>${esc(by)}</small>` : ''}</button>`;
+  }).join('')}</div>`;
+}
+function bindAvatarPicker(root, after) {
+  root.addEventListener('click', e => {
+    const b = e.target.closest('[data-av]');
+    if (!b || b.disabled) return;
+    setMyAvatar(+b.dataset.av);
+    after && after();
+  });
+}
+
 function upsertFriend(d) {
   const mine = d.src && typeof cloudAuth !== 'undefined' && cloudAuth && cloudAuth.uid === d.src;
   const src = mine ? null : d.src || null;
   const existing = (src && S.friends.find(f => f.src === src)) || S.friends.find(f => f.name === d.name);
+  if (!mine) yieldAvatar(d.avatar, src);
   if (existing) {
     existing.picks = d.picks;
     existing.importedAt = Date.now();
     if (src) existing.src = src;
+    if (validAv(d.avatar)) existing.avatar = d.avatar;
   } else {
     const i = S.friends.length;
     S.friends.push({
@@ -19,8 +99,11 @@ function upsertFriend(d) {
       importedAt: Date.now(),
       active: true,
       ...(src ? { src } : {}),
+      ...(validAv(d.avatar) ? { avatar: d.avatar } : {}),
     });
   }
+  ensureAvatar();
+  resolveAvatars();
   save();
   if (src) { friendsPulledAt = 0; refreshFriends(); }
   return existing || S.friends[S.friends.length - 1];
@@ -46,7 +129,9 @@ async function refreshFriends(force = false) {
       if (cur.liveErr) { delete cur.liveErr; ui = true; }
       const same = JSON.stringify(Object.entries(r.picks).sort()) === JSON.stringify(Object.entries(cur.picks).sort());
       if (!same) { cur.picks = r.picks; cur.importedAt = r.at || Date.now(); changed = true; }
+      if (validAv(r.avatar) && cur.avatar !== r.avatar) { yieldAvatar(r.avatar, cur.src, r.avAuto); cur.avatar = r.avatar; changed = true; }
     }
+    if (resolveAvatars()) changed = true;
   } finally { friendsPulling = false; }
   if (changed || ui) { save(); rerender(); }
 }
@@ -66,7 +151,7 @@ function ago(ms) {
 function openFriends() {
   const api = openPanel('חברים והלוז הקבוצתי', (body, api) => {
     const fr = S.friends;
-    const me = { name: 'אני', emoji: '✦', color: '#f46f6a' };
+    const me = meLook();
 
     // הופעות משותפות: לפחות 2 אנשים (כולל אותי) מבין הפעילים
     const act = activeFriends();
@@ -78,7 +163,7 @@ function openFriends() {
 
     const friendRows = fr.map(f => `
       <div class="friend-row ${f.active === false ? 'off' : ''}">
-        <button class="av" style="--fc:${f.color}" data-emoji="${f.id}" aria-label="החלפת אימוג'י">${f.emoji}</button>
+        <span class="av" style="--fc:${f.color}">${f.emoji}</span>
         <div class="info">
           <div class="n">${esc(f.name)}</div>
           <div class="m">${Object.keys(f.picks).length} הופעות · ${f.src ? (f.liveErr === 'gone' ? 'הפסיק/ה לשתף' : '🔄 מתעדכן לבד') : 'צילום מצב'} · ${ago(f.importedAt)}</div>
@@ -102,6 +187,7 @@ function openFriends() {
     }).join('');
 
     body.innerHTML = `
+      <div class="card-box"><h3>הדמות שלך</h3><p>כך החברים יראו אותך. אפשר להחליף מתי שרוצים; דמות של חבר תפוסה.</p>${avatarPicker()}</div>
       <button class="btn block" data-a="import" style="margin-bottom:14px">${ICON.import} הוספת חבר/ה (קוד או QR)</button>
       ${fr.length ? friendRows : `<div class="empty" style="padding:16px"><p>עוד אין חברים ברשימה. בקשו מהם לשתף את הלוז שלהם (בכפתור "שתף" ב"הלוז שלי") וייבאו אותו כאן.</p></div>`}
       ${fr.length ? `<label class="switch" style="margin:6px 0 4px"><input type="checkbox" id="onGrid" ${S.prefs.friendsOnGrid ? 'checked' : ''}> הצג חברים על הלוז המלא</label>
@@ -110,18 +196,12 @@ function openFriends() {
         ${sharedRows || '<p style="color:var(--ink-2)">עוד אין הופעה שלפחות שניים מכם בחרו.</p>'}` : ''}`;
 
     body.onclick = e => {
+      if (e.target.closest('[data-av]')) return; // בוחר הדמות
       const b = e.target.closest('button, [data-ev]');
       if (!b) return;
       const f = id => S.friends.find(x => x.id === id);
       if (b.dataset.a === 'import') return openImport();
       if (b.dataset.toggle) { const x = f(b.dataset.toggle); x.active = x.active === false; save(); return api.render(); }
-      if (b.dataset.emoji) {
-        const x = f(b.dataset.emoji);
-        const i = FRIEND_EMOJI.indexOf(x.emoji);
-        x.emoji = FRIEND_EMOJI[(i + 1) % FRIEND_EMOJI.length];
-        x.color = FRIEND_COLOR[(FRIEND_COLOR.indexOf(x.color) + 1) % FRIEND_COLOR.length];
-        save(); return api.render();
-      }
       if (b.dataset.rename) {
         const x = f(b.dataset.rename);
         const n = prompt('שם חדש:', x.name);
@@ -135,6 +215,7 @@ function openFriends() {
       }
       rowClick(e);
     };
+    bindAvatarPicker(body, () => api.render());
     const og = $('#onGrid', body);
     if (og) og.onchange = () => { S.prefs.friendsOnGrid = og.checked; save(); };
   });
