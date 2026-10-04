@@ -22,7 +22,7 @@ SITE = PROJECT / 'אינדינגב 2026 · 15-17 באוקטובר, מצפה גב
 
 # סדר קבצי ה-JS חשוב: data → core → ui → מסכים → main
 APP_FILES = ['data.js', 'core.js', 'ui.js', 'grid.js', 'mine.js', 'sheet.js', 'search.js',
-             'map.js', 'now.js', 'share.js', 'friends.js', 'journal.js', 'tentshare.js', 'backup.js', 'pwa.js', 'main.js']
+             'map.js', 'now.js', 'share.js', 'friends.js', 'journal.js', 'tentshare.js', 'cloud-core.js', 'backup.js', 'cloud.js', 'pwa.js', 'main.js']
 VENDOR_FILES = ['qrcode.min.js', 'jsQR.min.js']
 
 INK = (21, 63, 76)
@@ -116,11 +116,21 @@ def icon_image(s, full_bleed=False):
     return im
 
 
+def cloud_config():
+    """הגדרות Firebase (ציבוריות מטבען). אפשר להחליף קובץ בבדיקות: CLOUD_CONFIG=path"""
+    import os
+    path = Path(os.environ.get('CLOUD_CONFIG') or (ROOT / 'cloud-config.json'))
+    return json.loads(path.read_text(encoding='utf-8')) if path.exists() else {}
+
+
 def write_pwa(docs, html):
     """קבצי ההתקנה והעבודה בלי קליטה ל-GitHub Pages"""
     import hashlib
     version = hashlib.sha256(html.encode('utf-8')).hexdigest()[:12]
     sw = (SRC / 'sw.js').read_text(encoding='utf-8').replace('__VERSION__', version)
+    # מנוע הגיבוי לענן נכנס גם ל-SW (בשביל Background Sync כשהאפליקציה סגורה)
+    sw = ('const FIREBASE_CFG = ' + json.dumps(cloud_config()) + ';\n'
+          + (SRC / 'cloud-core.js').read_text(encoding='utf-8') + '\n' + sw)
     (docs / 'sw.js').write_text(sw, encoding='utf-8')
     for s in (192, 512):
         icon_image(s, full_bleed=True).save(docs / f'icon-{s}.png', optimize=True)
@@ -168,7 +178,7 @@ def main():
         '{{STYLES}}': (SRC / 'styles.css').read_text(encoding='utf-8'),
         '{{ASSETS}}': 'const ASSETS = ' + json.dumps(assets) + ';',
         '{{VENDOR}}': vendor_js,
-        '{{APP}}': app_js,
+        '{{APP}}': 'const FIREBASE_CFG = ' + json.dumps(cloud_config()) + ';\n' + app_js,
     }
     for k, v in parts.items():
         html = html.replace(k, v)

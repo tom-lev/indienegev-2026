@@ -861,6 +861,9 @@ details.journal .jm { font-size: 12.5px; font-weight: 700; color: var(--ink-2); 
 .cloud-status.warn { color: var(--danger); background: rgba(217,83,79,.08); }
 .cloud-status.off { color: var(--ink-3); }
 
+.banner.cloud-offer { border-color: var(--teal); background: rgba(59,124,163,.08); }
+.gbtn { min-height: 44px; display: flex; justify-content: center; }
+
 </style>
 </head>
 <body>
@@ -879,6 +882,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 </script>
 <script>
 'use strict';
+const FIREBASE_CFG = {"apiKey": "", "projectId": "", "googleClientId": ""};
 /* ── data.js ── */
 /* נתוני אינדינגב 2026 – מקור: indnegev-2026-lineup.pdf, דף "אדמה" ורשימת הליינאפ באתר.
    חשוב: הסדר של EVENTS קובע את האינדקס (idx) שמשמש בקודי שיתוף.
@@ -3747,17 +3751,142 @@ async function shareTentImage() {
 }
 
 
+/* ── cloud-core.js ── */
+/* מנוע הגיבוי לענן (Firebase דרך REST) – רץ גם בדף וגם ב-Service Worker.
+   בלי DOM ובלי SDK, כדי שה-Service Worker יוכל לגבות ברקע (Background Sync) גם כשהאפליקציה סגורה.
+   FIREBASE_CFG מוגדר לפני הקובץ הזה (בבנייה): { apiKey, projectId, googleClientId, endpoints? } */
+
+const CC = (() => {
+  const cfg = (typeof FIREBASE_CFG !== 'undefined' && FIREBASE_CFG) || {};
+  const on = !!(cfg.apiKey && cfg.projectId && cfg.googleClientId);
+  const ep = Object.assign({
+    token: 'https://securetoken.googleapis.com/v1/token',
+    idp: 'https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp',
+    fs: `https://firestore.googleapis.com/v1/projects/${cfg.projectId}/databases/(default)/documents`,
+  }, cfg.endpoints || {});
+
+  /* IndexedDB (אותו מסד של backup.js: 'indn26' / 'kv') */
+  let dbp = null;
+  const db = () => dbp || (dbp = new Promise((res, rej) => {
+    const r = indexedDB.open('indn26', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('kv');
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  }));
+  const run = (mode, fn) => db().then(d => new Promise((res, rej) => {
+    const t = d.transaction('kv', mode);
+    const q = fn(t.objectStore('kv'));
+    t.oncomplete = () => res(q && q.result);
+    t.onerror = () => rej(t.error);
+  }));
+  const get = k => run('readonly', s => s.get(k));
+  const set = (k, v) => run('readwrite', s => s.put(v, k));
+  const del = k => run('readwrite', s => s.delete(k));
+
+  /* טביעת אצבע של הנתונים החשובים (בלי העדפות תצוגה) – כדי לא להעלות סתם */
+  function fp(st) {
+    const s = JSON.stringify([st.picks, st.notes, st.ratings, (st.friends || []).map(f => [f.name, f.picks]),
+      (st.prefs && st.prefs.tent) || null, st.name]);
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+    return h;
+  }
+  function backupFrom(st) {
+    const clean = JSON.parse(JSON.stringify(st));
+    delete clean.backup;
+    return JSON.stringify({ app: 'indienegev-2026', kind: 'backup', v: 1, createdAt: Date.now(), dataVersion: clean.dataVersion, state: clean });
+  }
+
+  async function req(url, opts = {}, ms = 20000) {
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), ms); // קליטה חלשה – לא נתקעים
+    try { return await fetch(url, { ...opts, signal: ctl.signal, cache: 'no-store' }); }
+    finally { clearTimeout(t); }
+  }
+
+  /* טוקן תקף של Firebase (מתחדש לבד מה-refresh token, גם ב-Service Worker) */
+  async function auth() {
+    const a = await get('auth');
+    if (!a) throw new Error('לא מחובר');
+    if (a.idToken && a.exp > Date.now() + 60000) return a;
+    const r = await req(`${ep.token}?key=${cfg.apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `grant_type=refresh_token&refresh_token=${encodeURIComponent(a.refreshToken)}`,
+    });
+    if (!r.ok) throw new Error(r.status === 400 ? 'צריך להתחבר מחדש' : `שגיאה ${r.status}`);
+    const j = await r.json();
+    Object.assign(a, { idToken: j.id_token, refreshToken: j.refresh_token, exp: Date.now() + (+j.expires_in) * 1000 });
+    await set('auth', a);
+    return a;
+  }
+
+  /* כניסה: טוקן גוגל (מ-Google Identity Services) ← משתמש Firebase */
+  async function signInWithGoogleToken(googleIdToken) {
+    const r = await req(`${ep.idp}?key=${cfg.apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ postBody: `id_token=${googleIdToken}&providerId=google.com`, requestUri: (typeof location !== 'undefined' ? location.origin : 'http://localhost'), returnSecureToken: true }),
+    });
+    if (!r.ok) throw new Error(`הכניסה נכשלה (${r.status})`);
+    const j = await r.json();
+    const a = { uid: j.localId, email: j.email, name: j.displayName || j.firstName || '', idToken: j.idToken, refreshToken: j.refreshToken, exp: Date.now() + (+j.expiresIn) * 1000 };
+    await set('auth', a);
+    await del('cloud'); // משתמש חדש – מצב הגיבוי מתאפס
+    return a;
+  }
+
+  const docUrl = uid => `${ep.fs}/backups/${uid}`;
+
+  /* העלאת המצב האחרון (מהעותק ב-IndexedDB). מחזיר 'ok' / 'same' / 'empty' */
+  async function upload() {
+    const raw = await get('state');
+    if (!raw) return 'empty';
+    const st = JSON.parse(raw);
+    const f = fp(st);
+    const status = (await get('cloud')) || {};
+    if (status.fp === f) return 'same';
+    const a = await auth();
+    const body = { fields: {
+      data: { stringValue: backupFrom(st) },
+      fp: { integerValue: String(f) },
+      updatedAt: { timestampValue: new Date().toISOString() },
+    } };
+    try {
+      const r = await req(docUrl(a.uid), { method: 'PATCH', headers: { Authorization: `Bearer ${a.idToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!r.ok) throw new Error(r.status === 403 ? 'אין הרשאה (חוקי האבטחה ב-Firebase)' : `שגיאה ${r.status}`);
+      await set('cloud', { fp: f, at: Date.now(), error: null });
+      return 'ok';
+    } catch (e) {
+      await set('cloud', { ...status, error: e.name === 'AbortError' ? 'הקליטה חלשה מדי' : e.message, tried: Date.now() });
+      throw e;
+    }
+  }
+
+  /* הורדת הגיבוי מהענן: { text, updatedAt } או null אם אין */
+  async function download() {
+    const a = await auth();
+    const r = await req(docUrl(a.uid), { headers: { Authorization: `Bearer ${a.idToken}` } });
+    if (r.status === 404) return null;
+    if (!r.ok) throw new Error(`שגיאה ${r.status}`);
+    const j = await r.json();
+    return { text: j.fields.data.stringValue, updatedAt: Date.parse(j.fields.updatedAt && j.fields.updatedAt.timestampValue) || 0 };
+  }
+
+  return { on, cfg, get, set, del, fp, upload, download, signInWithGoogleToken, auth };
+})();
+
+
 /* ── backup.js ── */
 /* גיבוי ושחזור:
    1. קובץ גיבוי מלא (הכל: לוז, פתקים, דירוגים, אוהל, חברים) – נשמר מחוץ לדפדפן
    2. תזכורת כשיש שינויים שלא גובו
-   3. שליחת הקובץ לעצמך (וואטסאפ/מייל/Drive) + גיבוי אוטומטי לריפו פרטי בגיטהאב כשיש קליטה
+   3. שליחת הקובץ לעצמך + גיבוי אוטומטי לענן (cloud.js) כשיש קליטה – גם ברקע
    4. בקשת אחסון קבוע מהדפדפן
    5. עותק כפול בתוך הדפדפן (IndexedDB) לצד localStorage
    6. גרסאות קודמות במכשיר לפני כל פעולה הרסנית */
 
 const BACKUP_APP = 'indienegev-2026';
-const GH_KEY = 'indn26-gh'; // הטוקן נשמר בנפרד ולעולם לא נכנס לקובץ הגיבוי או לשיתוף
 let persistGranted = null;
 
 /* ───────── IndexedDB פשוט (מפתח → ערך) ───────── */
@@ -3785,15 +3914,10 @@ function backupInfo() {
   return S.backup;
 }
 /* טביעת אצבע של הנתונים החשובים – כדי לדעת אם יש שינויים שלא גובו */
-function dataFingerprint() {
-  const s = JSON.stringify([S.picks, S.notes, S.ratings, S.friends.map(f => [f.name, f.picks]), S.prefs.tent || null, S.name]);
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
-  return h;
-}
+const dataFingerprint = () => CC.fp(S); // אותה פונקציה גם ב-Service Worker
 const hasData = () => Object.keys(S.picks).length || S.notes.length || Object.keys(S.ratings).length || S.prefs.tent || S.friends.length;
-const lastBackupAt = () => Math.max(backupInfo().file || 0, backupInfo().gh || 0);
-const isBackedUp = () => backupInfo().fp === dataFingerprint();
+const lastBackupAt = () => Math.max(backupInfo().file || 0, (cloudAuth && cloudState.at) || 0);
+const isBackedUp = () => backupInfo().fp === dataFingerprint() || cloudBackedUp();
 const unbackedNotes = () => S.notes.filter(n => (n.edited || n.at) > lastBackupAt()).length;
 
 function markBackedUp(kind) {
@@ -3842,8 +3966,7 @@ let mirrorTimer = null;
 function mirrorSave() {
   clearTimeout(mirrorTimer);
   mirrorTimer = setTimeout(() => {
-    IDB.set('state', JSON.stringify(S)).catch(() => {});
-    scheduleGhAuto();
+    IDB.set('state', JSON.stringify(S)).catch(() => {}).then(() => scheduleCloud());
   }, 400);
 }
 /* בפתיחה: אם ה-localStorage ריק/פגום או ישן מהעותק הפנימי – משחזרים מהעותק */
@@ -3924,89 +4047,11 @@ function restoreFromFile(file) {
   r.readAsText(file);
 }
 
-/* ───────── גיטהאב (ריפו פרטי, Contents API) ───────── */
-function ghCfg() {
-  try { const c = JSON.parse(localStorage.getItem(GH_KEY)); return c && c.repo && c.token ? c : null; } catch (e) { return null; }
-}
-function ghSetCfg(c) {
-  try { if (c) localStorage.setItem(GH_KEY, JSON.stringify(c)); else localStorage.removeItem(GH_KEY); } catch (e) { /* */ }
-}
-function b64utf8(str) {
-  const bytes = new TextEncoder().encode(str);
-  let bin = '';
-  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
-  return btoa(bin);
-}
-const unb64utf8 = b64 => new TextDecoder().decode(Uint8Array.from(atob(b64.replace(/\s/g, '')), c => c.charCodeAt(0)));
-
-async function ghFetch(cfg, path, opts = {}) {
-  const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(), 20000); // קליטה חלשה – לא נתקעים לנצח
-  try {
-    return await fetch(`https://api.github.com/repos/${cfg.repo}/contents/${path}`, {
-      ...opts, signal: ctl.signal, cache: 'no-store',
-      headers: { Authorization: `Bearer ${cfg.token}`, Accept: 'application/vnd.github+json', ...(opts.body ? { 'Content-Type': 'application/json' } : {}) },
-    });
-  } finally { clearTimeout(timer); }
-}
-async function ghPut(cfg, path, text, message) {
-  let sha;
-  const g = await ghFetch(cfg, path);
-  if (g.ok) sha = (await g.json()).sha;
-  else if (g.status !== 404) throw new Error(g.status === 401 ? 'הטוקן לא תקין' : g.status === 403 ? 'אין לטוקן הרשאת כתיבה' : `שגיאה ${g.status}`);
-  const r = await ghFetch(cfg, path, { method: 'PUT', body: JSON.stringify({ message, content: b64utf8(text), sha }) });
-  if (!r.ok) throw new Error(r.status === 404 ? 'הריפו לא נמצא (או שאין גישה)' : r.status === 403 ? 'אין לטוקן הרשאת כתיבה' : `שגיאה ${r.status}`);
-}
-let ghBusy = false;
-async function ghBackup({ manual = false } = {}) {
-  const cfg = ghCfg();
-  if (!cfg || ghBusy) return false;
-  if (!manual && (!navigator.onLine || cfg.auto === false)) return false;
-  ghBusy = true;
-  try {
-    const json = backupJSON();
-    const d = new Date();
-    await ghPut(cfg, 'latest.json', json, `גיבוי ${fmtStamp(Date.now())}`);
-    await ghPut(cfg, `history/${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.json`, json, `גיבוי יומי ${fmtStamp(Date.now())}`);
-    markBackedUp('gh');
-    backupInfo().ghError = null;
-    if (manual) toast('גובה לגיטהאב ✓');
-    return true;
-  } catch (e) {
-    backupInfo().ghError = e.name === 'AbortError' ? 'הקליטה חלשה מדי' : e.message || 'אין חיבור';
-    save();
-    if (manual) toast(`הגיבוי לגיטהאב נכשל: ${backupInfo().ghError}`);
-    return false;
-  } finally { ghBusy = false; }
-}
-async function ghRestore() {
-  const cfg = ghCfg();
-  if (!cfg) return;
-  try {
-    const r = await ghFetch(cfg, 'latest.json');
-    if (!r.ok) throw new Error(r.status === 404 ? 'עוד אין גיבוי בריפו' : `שגיאה ${r.status}`);
-    const o = parseBackup(unb64utf8((await r.json()).content));
-    if (!o) throw new Error('הקובץ בריפו לא תקין');
-    if (!confirm(`לשחזר את הגיבוי מגיטהאב (${fmtStamp(o.createdAt)})?\n${backupSummary(o)}\n\nהמצב הנוכחי יישמר כגרסה קודמת.`)) return;
-    await applyState(o.state, 'לפני שחזור מגיטהאב');
-    toast('שוחזר מגיטהאב ✓');
-  } catch (e) {
-    toast(`השחזור נכשל: ${e.name === 'AbortError' ? 'הקליטה חלשה מדי' : e.message}`);
-  }
-}
-/* גיבוי אוטומטי: דקה אחרי שינוי, וכשהקליטה חוזרת */
-let ghAutoTimer = null;
-function scheduleGhAuto(delay = 60000) {
-  const cfg = ghCfg();
-  if (!cfg || cfg.auto === false || isBackedUp()) return;
-  clearTimeout(ghAutoTimer);
-  ghAutoTimer = setTimeout(() => { if (!isBackedUp()) ghBackup(); }, delay);
-}
-window.addEventListener('online', () => scheduleGhAuto(3000));
-
 /* ───────── תזכורת גיבוי ───────── */
 function backupNudge() {
   if (!hasData() || isBackedUp()) return '';
+  // עם גיבוי לענן פעיל לא מציקים בלי קליטה – רק אם הענן לא הצליח יממה
+  if (cloudAuth && cloudState.at && Date.now() - cloudState.at < 24 * HOUR) return '';
   const last = lastBackupAt();
   const notes = unbackedNotes();
   const picks = Object.keys(S.picks).length;
@@ -4022,6 +4067,7 @@ function bindNudge(root) {
     const b = e.target.closest('[data-bk]');
     if (!b) return;
     if (b.dataset.bk === 'save') { downloadBackup(); rerender(); }
+    else if (b.dataset.bk === 'dismiss') { S.prefs.cloudDismissed = true; save(); rerender(); }
     else openBackupPanel();
   });
 }
@@ -4035,24 +4081,10 @@ function agoText(ms) {
   return d === 1 ? 'אתמול' : `לפני ${d} ימים`;
 }
 
-/* שורת מצב: מתי נעשה הגיבוי האחרון לאינטרנט (גיטהאב). לחיצה פותחת את מסך הגיבוי */
-function cloudStatus() {
-  const cfg = ghCfg(), b = backupInfo();
-  let icon, text, cls = '';
-  if (!cfg) { icon = '☁️'; text = 'אין גיבוי לאינטרנט · להגדרה'; cls = 'off'; }
-  else if (b.ghError && (!b.gh || isBackedUp() === false)) {
-    icon = '⚠️'; text = `גיבוי לאינטרנט ${b.gh ? `אחרון ${agoText(b.gh)}` : 'עוד לא הצליח'} · ${b.ghError}`; cls = 'warn';
-  } else if (b.gh) {
-    icon = isBackedUp() ? '✅' : '☁️';
-    text = `גיבוי אחרון לאינטרנט: ${agoText(b.gh)}${isBackedUp() ? '' : ' · יש שינויים חדשים, יגובו כשתהיה קליטה'}`;
-  } else { icon = '☁️'; text = 'גיבוי לאינטרנט: עוד לא בוצע · יגובה כשתהיה קליטה'; }
-  return `<button class="cloud-status ${cls}" data-bk="panel">${icon} ${esc(text)}</button>`;
-}
-
 /* ───────── מסך "גיבוי ושחזור" ───────── */
 function openBackupPanel() {
-  openPanel('גיבוי ושחזור', async (body, api) => {
-    const b = backupInfo(), cfg = ghCfg();
+  const panel = openPanel('גיבוי ושחזור', async (body, api) => {
+    const b = backupInfo();
     const snaps = await getSnapshots();
     const ok = v => v ? '✓' : '✗';
     body.innerHTML = `
@@ -4061,7 +4093,7 @@ function openBackupPanel() {
         <ul class="bk-status">
           <li>${isBackedUp() ? '✅ כל השינויים מגובים' : hasData() ? `⚠️ יש שינויים שלא גובו${unbackedNotes() ? ` (${unbackedNotes()} פתקים)` : ''}` : 'אין עדיין נתונים לגבות'}</li>
           <li>💾 גיבוי לקובץ: ${b.file ? agoText(b.file) : 'עוד לא'}</li>
-          <li>🐙 גיבוי לגיטהאב: ${cfg ? (b.gh ? agoText(b.gh) : 'עוד לא') + (b.ghError ? ` · <span class="warn-t">נכשל: ${esc(b.ghError)}</span>` : '') : 'לא מוגדר'}</li>
+          <li>☁️ גיבוי לענן: ${!CC.on ? 'לא הוגדר' : !cloudAuth ? 'כבוי' : cloudState.at ? agoText(cloudState.at) : 'עוד לא'}</li>
           <li>🔒 אחסון קבוע בדפדפן: ${persistGranted == null ? 'לא נתמך' : ok(persistGranted)}</li>
           <li>📦 עותק כפול בתוך הדפדפן: ${'indexedDB' in window ? '✓' : '✗'}</li>
         </ul>
@@ -4078,25 +4110,7 @@ function openBackupPanel() {
         <label class="btn alt block" style="margin-top:10px">${ICON.import} שחזור מקובץ<input type="file" accept=".json,application/json" id="bkFile" hidden></label>
       </div>
 
-      <div class="card-box">
-        <h3>🐙 גיבוי אוטומטי לגיטהאב</h3>
-        ${cfg ? `
-          <p>ריפו: <b dir="ltr">${esc(cfg.repo)}</b>. כשיש קליטה, הגיבוי עולה אוטומטית דקה אחרי כל שינוי, וגם ברגע שהקליטה חוזרת.</p>
-          <label class="switch" style="margin-bottom:10px"><input type="checkbox" id="ghAuto" ${cfg.auto !== false ? 'checked' : ''}> גיבוי אוטומטי</label>
-          <div class="btn-row">
-            <button class="btn" data-b="gh-now">גיבוי עכשיו</button>
-            <button class="btn alt" data-b="gh-restore">שחזור מגיטהאב</button>
-          </div>
-          <button class="btn alt sm" data-b="gh-off" style="margin-top:10px">ניתוק</button>`
-        : `
-          <p>עותק מחוץ לטלפון, בריפו פרטי שלך. צריך פעם אחת: ריפו פרטי וטוקן (Fine-grained) עם הרשאת <b>Contents: Read and write</b> לריפו הזה בלבד.</p>
-          <label class="field-l" for="ghRepo">ריפו (משתמש/שם)</label>
-          <input id="ghRepo" class="text-in" dir="ltr" placeholder="tom-lev/indienegev-backup" style="margin-bottom:10px">
-          <label class="field-l" for="ghToken">טוקן</label>
-          <input id="ghToken" class="text-in" dir="ltr" type="password" placeholder="github_pat_…" autocomplete="off" style="margin-bottom:10px">
-          <button class="btn block" data-b="gh-save">שמירה ובדיקה</button>
-          <p style="margin:8px 0 0;font-size:12.5px">הטוקן נשמר רק בטלפון הזה, ולא נכלל בקובץ הגיבוי או בשיתוף עם חברים.</p>`}
-      </div>
+      ${cloudPanelSection()}
 
       <div class="card-box">
         <h3>גרסאות קודמות במכשיר</h3>
@@ -4118,19 +4132,8 @@ function openBackupPanel() {
       if (a === 'save') { downloadBackup(); api.render(); }
       if (a === 'share') { await shareBackup(); api.render(); }
       if (a === 'code') toast(await copyText(encodeShare(S.name, S.picks)) ? 'קוד הלוז הועתק' : 'לא הצלחתי להעתיק');
-      if (a === 'gh-save') {
-        const repo = $('#ghRepo', body).value.trim().replace(/^https?:\/\/github\.com\//, '').replace(/\.git$/, '');
-        const token = $('#ghToken', body).value.trim();
-        if (!/^[\w.-]+\/[\w.-]+$/.test(repo) || !token) return toast('צריך ריפו בפורמט משתמש/שם וטוקן');
-        ghSetCfg({ repo, token, auto: true });
-        toast('בודק…');
-        const ok = await ghBackup({ manual: true });
-        if (!ok) ghSetCfg(null);
-        api.render();
-      }
-      if (a === 'gh-now') { toast('מגבה…'); await ghBackup({ manual: true }); api.render(); }
-      if (a === 'gh-restore') { toast('מוריד…'); await ghRestore(); api.render(); }
-      if (a === 'gh-off' && confirm('לנתק את הגיבוי לגיטהאב? (הגיבויים בריפו נשארים)')) { ghSetCfg(null); api.render(); }
+      if (a === 'cloud-restore') { await cloudRestore(); api.render(); }
+      if (a === 'cloud-out') { await cloudSignOut(); api.render(); }
       if (x.dataset.snap != null) {
         const s = snaps[+x.dataset.snap];
         if (!confirm(`לחזור לגרסה מ-${fmtStamp(s.at)}?\nהמצב הנוכחי יישמר כגרסה קודמת.`)) return;
@@ -4141,16 +4144,205 @@ function openBackupPanel() {
     };
     const f = $('#bkFile', body);
     if (f) f.onchange = e => { if (e.target.files[0]) restoreFromFile(e.target.files[0]); setTimeout(() => api.render(), 500); };
-    const ga = $('#ghAuto', body);
-    if (ga) ga.onchange = () => { const c = ghCfg(); c.auto = ga.checked; ghSetCfg(c); if (ga.checked) scheduleGhAuto(1000); };
+    const gb = $('#gbtn', body);
+    if (gb) renderGoogleButton(gb);
   });
+  panel.isBackup = true; // מתרענן כשמגיע עדכון גיבוי מהרקע
 }
 
 /* אתחול (נקרא מ-main.js אחרי הרינדור הראשון) */
 function initBackup() {
   requestPersist();
+  loadCloud().then(() => { if (cloudAuth) { render(); scheduleCloud(2000); } });
   recoverFromMirror().then(dailySnapshot);
-  if (navigator.onLine) scheduleGhAuto(5000);
+}
+
+
+/* ── cloud.js ── */
+/* גיבוי אוטומטי לענן – צד הדף: כניסה עם Google, תזמון גיבוי, מצב ושחזור.
+   כשיש קליטה – מעלים מיד. בנוסף נרשם Background Sync, כך שאם אין קליטה
+   הדפדפן יריץ את הגיבוי ב-Service Worker ברגע שהקליטה חוזרת, גם אם האפליקציה סגורה. */
+
+let cloudAuth = null;   // { uid, email, name } אם מחובר
+let cloudState = {};    // { fp, at, error, tried } – מתעדכן גם מה-Service Worker
+
+async function loadCloud() {
+  if (!CC.on) return;
+  try {
+    const a = await CC.get('auth');
+    cloudAuth = a ? { uid: a.uid, email: a.email, name: a.name } : null;
+    cloudState = (await CC.get('cloud')) || {};
+  } catch (e) { /* אין IndexedDB */ }
+}
+const cloudBackedUp = () => !!cloudAuth && cloudState.fp === dataFingerprint();
+
+/* נקרא אחרי כל שמירה (מ-mirrorSave, אחרי שהעותק ב-IndexedDB עודכן) */
+let cloudTimer = null;
+function scheduleCloud(delay = 3000) {
+  if (!CC.on || !cloudAuth || cloudBackedUp()) return;
+  if (!navigator.onLine) return registerCloudSync(); // אין קליטה – הדפדפן יריץ ברקע כשתחזור
+  clearTimeout(cloudTimer);
+  cloudTimer = setTimeout(cloudNow, delay);
+}
+/* Background Sync: הדפדפן יריץ את הגיבוי ב-Service Worker כשתהיה קליטה, גם אם האפליקציה סגורה */
+function registerCloudSync() {
+  if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) return;
+  navigator.serviceWorker.ready.then(r => r.sync && r.sync.register('cloud-backup')).catch(() => {});
+}
+async function cloudNow() {
+  if (!CC.on || !cloudAuth) return false;
+  if (!navigator.onLine) { registerCloudSync(); return false; }
+  try {
+    await CC.upload();
+    cloudState = (await CC.get('cloud')) || {};
+    refreshCloudUi();
+    return true;
+  } catch (e) {
+    registerCloudSync(); // נכשל (קליטה חלשה) – ננסה שוב ברקע
+    cloudState = (await CC.get('cloud')) || {};
+    refreshCloudUi();
+    return false;
+  }
+}
+function refreshCloudUi() {
+  if (tab === 'mine') rerender();
+  for (const l of layers) if (l.panel && l.panel.isBackup && !l.panel.closed) l.panel.render();
+}
+window.addEventListener('online', () => scheduleCloud(1000));
+/* הודעה מה-Service Worker שגיבוי ברקע הצליח */
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', async e => {
+    if (e.data && e.data.type === 'cloud-synced') { cloudState = (await CC.get('cloud')) || {}; refreshCloudUi(); }
+  });
+}
+
+/* ───────── כניסה עם Google (Google Identity Services) ───────── */
+let gisLoaded = null;
+function loadGis() {
+  return gisLoaded || (gisLoaded = new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://accounts.google.com/gsi/client';
+    s.async = true;
+    s.onload = res;
+    s.onerror = () => { gisLoaded = null; rej(new Error('אין חיבור לגוגל')); };
+    document.head.append(s);
+  }));
+}
+/* מציג את כפתור "המשך עם Google" בתוך el */
+async function renderGoogleButton(el) {
+  if (!navigator.onLine) { el.innerHTML = '<p style="margin:0">צריך קליטה בשביל ההתחברות (פעם אחת).</p>'; return; }
+  try {
+    await loadGis();
+    google.accounts.id.initialize({ client_id: CC.cfg.googleClientId, callback: onGoogleCredential, auto_select: false, use_fedcm_for_prompt: true });
+    el.innerHTML = '';
+    google.accounts.id.renderButton(el, { theme: 'filled_blue', size: 'large', shape: 'pill', text: 'continue_with', locale: 'he', width: Math.min(320, el.clientWidth || 300) });
+  } catch (e) {
+    el.innerHTML = `<p style="margin:0">לא הצלחתי לטעון את ההתחברות: ${esc(e.message)}</p>`;
+  }
+}
+async function onGoogleCredential(resp) {
+  try {
+    toast('מתחבר…');
+    const a = await CC.signInWithGoogleToken(resp.credential);
+    cloudAuth = { uid: a.uid, email: a.email, name: a.name };
+    cloudState = {};
+    if (!S.name && a.name) { S.name = a.name.split(' ')[0]; save(); }
+    await afterSignIn();
+  } catch (e) {
+    toast(e.message);
+  }
+}
+/* אחרי כניסה: אם יש גיבוי בענן – מציעים לשחזר (בטלפון חדש זה כל השחזור) */
+async function afterSignIn() {
+  let remote = null;
+  try { remote = await CC.download(); } catch (e) { /* */ }
+  const o = remote && parseBackup(remote.text);
+  if (o) {
+    const same = CC.fp(o.state) === dataFingerprint();
+    if (!same && (!hasData() || confirm(`נמצא גיבוי בענן מ-${fmtStamp(remote.updatedAt || o.createdAt)}:\n${backupSummary(o)}\n\nלשחזר אותו? (הנתונים שבטלפון יישמרו כגרסה קודמת)\nביטול = לשמור את מה שבטלפון ולגבות אותו לענן.`))) {
+      await applyState(o.state, 'לפני שחזור מהענן');
+      await CC.set('cloud', { fp: CC.fp(o.state), at: Date.now(), error: null });
+      cloudState = await CC.get('cloud');
+      toast('הנתונים שוחזרו מהענן ✓');
+      refreshCloudUi();
+      return;
+    }
+  }
+  toast(`מחובר כ-${cloudAuth.name || cloudAuth.email} · הגיבוי האוטומטי פעיל ✓`);
+  await IDB.set('state', JSON.stringify(S)).catch(() => {});
+  await cloudNow();
+  refreshCloudUi();
+}
+async function cloudSignOut() {
+  if (!confirm('להתנתק? הגיבוי האוטומטי ייעצר. הגיבוי שכבר בענן נשאר.')) return;
+  await CC.del('auth');
+  await CC.del('cloud');
+  cloudAuth = null; cloudState = {};
+  try { google.accounts.id.disableAutoSelect(); } catch (e) { /* */ }
+  refreshCloudUi();
+}
+async function cloudRestore() {
+  try {
+    toast('מוריד…');
+    const remote = await CC.download();
+    const o = remote && parseBackup(remote.text);
+    if (!o) return toast('עוד אין גיבוי בענן');
+    if (!confirm(`לשחזר את הגיבוי מהענן (${fmtStamp(remote.updatedAt || o.createdAt)})?\n${backupSummary(o)}\n\nהמצב הנוכחי יישמר כגרסה קודמת.`)) return;
+    await applyState(o.state, 'לפני שחזור מהענן');
+    toast('שוחזר מהענן ✓');
+  } catch (e) {
+    toast(`השחזור נכשל: ${e.name === 'AbortError' ? 'הקליטה חלשה מדי' : e.message}`);
+  }
+}
+
+/* ───────── שורת מצב + הצעה להפעלה ───────── */
+function cloudStatus() {
+  if (!CC.on) return '';
+  if (!cloudAuth) {
+    if (S.prefs.cloudDismissed) return `<button class="cloud-status off" data-bk="panel">☁️ אין גיבוי אוטומטי לענן · להפעלה</button>`;
+    return `<div class="banner cloud-offer"><b>☁️ להפעיל גיבוי אוטומטי?</b><br>
+      התחברות אחת עם Google, ומאז כל השינויים מגובים לבד כשיש קליטה. בטלפון חדש – מתחברים והכל חוזר.
+      <div class="btn-row" style="margin-top:8px"><button class="btn sm" data-bk="panel">הפעלה</button>
+      <button class="btn alt sm" data-bk="dismiss">לא עכשיו</button></div></div>`;
+  }
+  let icon, text, cls = '';
+  const s = cloudState;
+  if (s.error && !cloudBackedUp()) {
+    icon = '⚠️'; cls = 'warn';
+    text = `גיבוי לענן ${s.at ? `אחרון ${agoText(s.at)}` : 'עוד לא הצליח'} · ${s.error}`;
+  } else if (s.at) {
+    icon = cloudBackedUp() ? '✅' : '☁️';
+    text = `גיבוי אחרון לענן: ${agoText(s.at)}${cloudBackedUp() ? '' : ' · שינויים חדשים יגובו כשתהיה קליטה'}`;
+  } else {
+    icon = '☁️'; text = 'גיבוי לענן: יתבצע כשתהיה קליטה';
+  }
+  return `<button class="cloud-status ${cls}" data-bk="panel">${icon} ${esc(text)}</button>`;
+}
+
+/* קטע הענן במסך "גיבוי ושחזור" */
+function cloudPanelSection() {
+  if (!CC.on) {
+    return `<div class="card-box"><h3>☁️ גיבוי אוטומטי לענן</h3>
+      <p style="margin:0">עוד לא הוגדר באפליקציה הזו.</p></div>`;
+  }
+  if (!cloudAuth) {
+    return `<div class="card-box"><h3>☁️ גיבוי אוטומטי לענן</h3>
+      <p>התחברות אחת עם Google. מאז כל שינוי מגובה לבד כשיש קליטה – גם כשהאפליקציה סגורה (ב-Chrome). בטלפון חדש: מתחברים והכל חוזר.</p>
+      <div id="gbtn" class="gbtn"></div>
+      <p style="margin:8px 0 0;font-size:12.5px">נשמר רק השם והאימייל לזיהוי. כל משתמש רואה רק את הגיבוי שלו.</p></div>`;
+  }
+  const s = cloudState;
+  return `<div class="card-box"><h3>☁️ גיבוי אוטומטי לענן</h3>
+    <p>מחובר כ-<b>${esc(cloudAuth.name || '')}</b> <span dir="ltr">${esc(cloudAuth.email || '')}</span></p>
+    <ul class="bk-status">
+      <li>${cloudBackedUp() ? '✅ מגובה' : '⏳ יש שינויים שיגובו כשתהיה קליטה'}</li>
+      <li>גיבוי אחרון: ${s.at ? agoText(s.at) : 'עוד לא'}</li>
+      ${s.error ? `<li class="warn-t">ניסיון אחרון נכשל: ${esc(s.error)}</li>` : ''}
+    </ul>
+    <div class="btn-row" style="margin-top:8px">
+      <button class="btn alt" data-b="cloud-restore">שחזור מהענן</button>
+      <button class="btn alt" data-b="cloud-out">התנתקות</button>
+    </div></div>`;
 }
 
 
