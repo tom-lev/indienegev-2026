@@ -436,9 +436,21 @@ const RICH = () => {
     const code = await I.ev(() => { const keep = JSON.stringify(S); S.notes = [{ id: 'mig', ev: 'thu-kof-2200', text: 'מהקובץ המקומי', at: Date.now(), place: 'kof' }]; const c = b64utf8(backupJSON()).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); Object.assign(S, JSON.parse(keep)); save(); return c; });
     I.answer = true;
     await I.ev(c => { location.hash = 'BK=' + c; }, code); await sleep(1500);
-    const ok = await waitSynced(I, 'uid-alice');
+    await sleep(4500); await waitSynced(I, 'uid-alice');
     const doc = (await srv()).docs['uid-alice'];
-    check('F6', 'מעבר מהקובץ המקומי (#BK=) ממשיך לעבוד עם גיבוי לענן פעיל', ok && doc.state.notes.some(n => n.text === 'מהקובץ המקומי'));
+    // המעבר מתמזג עם מה שבענן (בלי למחוק – הגנת מחיקה המונית), והפתק שהועבר נמצא בענן
+    check('F6', 'מעבר מהקובץ המקומי (#BK=) ממשיך לעבוד עם גיבוי לענן פעיל', doc.state.notes.some(n => n.text === 'מהקובץ המקומי') && doc.state.notes.length > 1);
+  });
+  await test('F8', 'מכשיר שאיבד את הנתונים המקומיים לא מוחק את הענן ולא את המכשירים האחרים', async () => {
+    const before = (await srv()).docs['uid-alice'].state.notes.length;
+    await I.ev(async () => { const d = defaults(); for (const k of Object.keys(S)) delete S[k]; Object.assign(S, d); save(); await IDB.set('state', JSON.stringify(S)); lastPull = 0; pullCloud(); });
+    await sleep(3500);
+    const after = (await srv()).docs['uid-alice'].state.notes.length, local = await I.ev(() => S.notes.length);
+    check('F8', 'מכשיר שאיבד את הנתונים המקומיים לא מוחק את הענן ולא את המכשירים האחרים', after === before && local === before, `ענן ${before}→${after}, מכשיר ${local}`);
+  });
+  await test('F9', 'גרסאות קודמות נשמרות בענן ואפשר לשחזר מהן', async () => {
+    const h = await I.ev(async () => (await CC.history()).map(v => CC.size(v.state)));
+    check('F9', 'גרסאות קודמות נשמרות בענן ואפשר לשחזר מהן', h.length >= 3, `גרסאות: ${h.join(', ')}`);
   });
   await test('F7', 'אין שגיאות JavaScript באף מכשיר', async () => {
     const errs = devs.flatMap(d => d.errors.map(e => d.label + ': ' + e));
