@@ -135,7 +135,8 @@ const CC = (() => {
         const tt = mtOf(st, key, it[key]);
         if (tt > t || (tt === t && JSON.stringify(it[key]) > JSON.stringify(v))) { t = tt; v = it[key]; }
       }
-      if (v !== undefined && t > d) { m[key] = v; if (t > 0) mt[key] = t; }
+      // אין מחיקה רשומה (d=0) → הפריט נשמר תמיד, גם בלי זמן עדכון (נתונים מגרסה קודמת)
+      if (v !== undefined && (t > d || d === 0)) { m[key] = v; if (t > 0) mt[key] = t; }
       else if (d > 0) tomb[key] = d;
     }
     const out = fromItems(a, m, mt, tomb);
@@ -291,7 +292,7 @@ const CC = (() => {
 /* Service Worker – האפליקציה נפתחת מהעותק השמור בטלפון, גם בלי קליטה.
    אסטרטגיה: מטמון קודם (פתיחה מיידית גם בקליטה חלשה). עדכון גרסה מגיע כ-SW חדש
    (הקובץ הזה משתנה בכל בנייה בגלל VERSION), שמחכה עד שהמשתמש מאשר רענון. */
-const VERSION = 'ca5a682f6b16';
+const VERSION = 'db6ee32f851d';
 const CACHE = 'indn26-' + VERSION;
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
