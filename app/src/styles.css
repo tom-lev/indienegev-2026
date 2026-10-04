@@ -281,14 +281,17 @@ main#view { overflow: hidden; position: relative; min-height: 0; }
 .gap-row { text-align: center; font-size: 12.5px; font-weight: 600; color: var(--ink-3); margin: 2px 0 10px; }
 .gap-row::before, .gap-row::after { content: ' · · · '; letter-spacing: 2px; }
 .clash {
-  border: 2px solid var(--coral);
-  border-radius: 16px;
-  padding: 8px 8px 0;
+  /* ההתנגשות מסומנת בפס בצד ובכותרת – בלי לדחוף את השורות פנימה, כדי שכפתורי הניווט יישארו באותו מקום */
+  position: relative;
   margin-bottom: 10px;
-  background: rgba(244,111,106,.07);
 }
-.clash.soft { border-style: dashed; border-color: var(--line-2); background: transparent; }
-.clash-h { font-size: 13px; font-weight: 800; margin: 0 4px 8px; display: flex; gap: 6px; align-items: center; }
+.clash::before {
+  content: ''; position: absolute; inset-inline-start: -9px; top: 26px; bottom: 8px;
+  width: 4px; border-radius: 2px; background: var(--coral);
+}
+.clash.soft::before { background: repeating-linear-gradient(to bottom, var(--line-2) 0 6px, transparent 6px 10px); }
+.clash-h { font-size: 13px; font-weight: 800; margin: 0 2px 6px; display: flex; gap: 6px; align-items: center; color: var(--danger); }
+.clash.soft .clash-h { color: var(--ink-2); }
 .clash .row { margin-bottom: 8px; }
 .row.muted { opacity: .55; }
 .going { font-size: 12px; }

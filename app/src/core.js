@@ -103,10 +103,37 @@ function load() {
   return defaults();
 }
 const S = load();
+/* editedAt = הזמן שבו המשתמש שינה נתונים במכשיר הזה (לא העדפות תצוגה, לא עדכון מהענן).
+   הסנכרון משתמש בזה כדי להבדיל בין "מחקתי" לבין "המכשיר איבד נתונים". */
+let lastDataFp = null;
+const dataFp = () => (typeof CC !== 'undefined' ? CC.fp(S) : 0);
+function markSynced() { lastDataFp = dataFp(); } // אחרי אימוץ מצב מהענן/מעותק אחר – לא נחשב עריכה
+/* כמה עותקים של האפליקציה על אותו מכשיר (לשונית + אפליקציה מותקנת) כותבים לאותו אחסון.
+   persisted = הגרסה שהעותק הזה קרא/כתב לאחרונה. אם בזמן הזה עותק אחר כתב משהו חדש יותר –
+   ממזגים (בסיס = persisted) במקום לדרוס, כך ששום שינוי של אף עותק לא הולך לאיבוד. */
+let persisted = JSON.parse(JSON.stringify(S));
+function setPersisted(st) { persisted = JSON.parse(JSON.stringify(st)); }
 function save() {
-  S.savedAt = Date.now();
+  const now = Date.now();
+  if (typeof CC !== 'undefined') {
+    // 1. רישום זמני עדכון/מחיקה לכל מה שהמשתמש שינה מאז השמירה הקודמת של העותק הזה
+    if (CC.stampEdits(persisted, S, now)) S.editedAt = now;
+    // 2. עותק אחר (לשונית/אפליקציה מותקנת) שמר בינתיים – ממזגים (האחרון גובר לכל פריט)
+    try {
+      const cur = JSON.parse(localStorage.getItem(KEY));
+      if (cur && cur.v === 1 && (cur.savedAt || 0) > (persisted.savedAt || 0)) {
+        const keepBackup = S.backup || cur.backup;
+        const m = CC.lww(S, cur);
+        for (const k of Object.keys(S)) delete S[k];
+        Object.assign(S, m, { backup: keepBackup });
+        if (typeof syncTent === 'function') syncTent();
+      }
+    } catch (e) { /* */ }
+  }
+  S.savedAt = Math.max(now, ((persisted && persisted.savedAt) || 0) + 1);
   try { localStorage.setItem(KEY, JSON.stringify(S)); }
   catch (e) { storageOK = false; }
+  setPersisted(S);
   if (typeof mirrorSave === 'function') mirrorSave(); // עותק כפול ב-IndexedDB (backup.js)
 }
 

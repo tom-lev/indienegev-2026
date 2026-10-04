@@ -73,8 +73,10 @@ async function applyState(st, reason) {
   await takeSnapshot(reason || 'לפני שחזור');
   const keepBackup = S.backup;
   const d = defaults();
+  const replaced = CC.replaceStamped({ ...d, ...JSON.parse(JSON.stringify(S)) }, { ...d, ...st }, Date.now());
   for (const k of Object.keys(S)) delete S[k];
-  Object.assign(S, d, st, { prefs: { ...d.prefs, ...(st.prefs || {}) }, backup: keepBackup });
+  Object.assign(S, replaced, { backup: keepBackup });
+  setPersisted(S);
   save();
   syncTent();
   viewDay = null;
@@ -82,28 +84,54 @@ async function applyState(st, reason) {
 }
 
 /* ───────── עותק כפול ב-IndexedDB ───────── */
-let mirrorTimer = null;
+/* העותק ב-IndexedDB נכתב מיד בכל שמירה (בלי השהיה), כדי ששני מקומות האחסון יהיו תמיד מתואמים */
 function mirrorSave() {
-  clearTimeout(mirrorTimer);
-  mirrorTimer = setTimeout(() => {
-    IDB.set('state', JSON.stringify(S)).catch(() => {}).then(() => scheduleCloud());
-  }, 400);
+  IDB.set('state', JSON.stringify(S)).catch(() => {}).then(() => scheduleCloud());
 }
 /* בפתיחה: אם ה-localStorage ריק/פגום או ישן מהעותק הפנימי – משחזרים מהעותק */
 async function recoverFromMirror() {
   try {
     const raw = await IDB.get('state');
     if (!raw) { mirrorSave(); return; }
-    const m = JSON.parse(raw);
-    if (m && m.v === 1 && (m.savedAt || 0) > (S.savedAt || 0) + 1000) {
-      const d = defaults();
-      for (const k of Object.keys(S)) delete S[k];
-      Object.assign(S, d, m, { prefs: { ...d.prefs, ...(m.prefs || {}) } });
-      save(); syncTent(); render();
-      toast('הנתונים שוחזרו מהעותק הפנימי');
+    const before = CC.size(S);
+    if (adoptState(JSON.parse(raw))) {
+      render();
+      if (CC.size(S) > before) toast('הנתונים שוחזרו מהעותק הפנימי');
     }
   } catch (e) { /* אין IndexedDB – ממשיכים עם localStorage */ }
 }
+
+/* ───────── כמה עותקים פתוחים של האפליקציה (לשונית + אפליקציה מותקנת וכו') ─────────
+   כל עותק מחזיק את הנתונים בזיכרון. לפני כל סנכרון/שמירה משמעותית ובכל חזרה לאפליקציה
+   מאמצים את הגרסה השמורה החדשה ביותר (localStorage / IndexedDB), כדי שעותק ישן לא ידרוס עדכון. */
+/* אימוץ גרסה ששמר עותק אחר / שנמצאת באחסון: תמיד *מיזוג* תלת-כיווני (בסיס = מה שהעותק הזה ראה לאחרונה),
+   אף פעם לא החלפה – כך ששום עריכה של אף עותק לא נדרסת. מחזיר true אם משהו השתנה. */
+function adoptState(m) {
+  if (!m || m.v !== 1) return false;
+  // מיזוג "האחרון גובר" – בטוח בכל סדר: גרסה ישנה לא מוחקת ולא מחזירה כלום
+  const before = CC.fp(S);
+  const keepBackup = S.backup || m.backup;
+  const merged = CC.lww(S, m);
+  for (const k of Object.keys(S)) delete S[k];
+  Object.assign(S, merged, { backup: keepBackup });
+  syncTent();
+  if (CC.fp(S) !== CC.fp(m)) { setPersisted(m); save(); } // יש במיזוג משהו שעוד לא באחסון
+  else { S.savedAt = Math.max(S.savedAt || 0, m.savedAt || 0); setPersisted(S); }
+  return CC.fp(S) !== before;
+}
+async function freshen() {
+  let changed = false;
+  try { changed = adoptState(JSON.parse(localStorage.getItem(KEY))) || changed; } catch (e) { /* */ }
+  try { const raw = await IDB.get('state'); if (raw) changed = adoptState(JSON.parse(raw)) || changed; } catch (e) { /* */ }
+  if (changed) { rerender(); if (typeof refreshSheet === 'function') refreshSheet(); }
+  return changed;
+}
+/* לשונית אחרת שמרה – מתעדכנים מיד (מיזוג) */
+window.addEventListener('storage', e => {
+  if (e.key !== KEY || !e.newValue) return;
+  try { if (adoptState(JSON.parse(e.newValue))) { rerender(); if (typeof refreshSheet === 'function') refreshSheet(); } } catch (err) { /* */ }
+});
+document.addEventListener('visibilitychange', () => { if (!document.hidden) freshen(); });
 
 /* ───────── גרסאות קודמות במכשיר ───────── */
 async function takeSnapshot(reason) {
@@ -278,8 +306,14 @@ function openBackupPanel() {
 }
 
 /* אתחול (נקרא מ-main.js אחרי הרינדור הראשון) */
-function initBackup() {
+async function initBackup() {
+  markSynced();
   requestPersist();
-  loadCloud().then(() => { renderHeader(); if (cloudAuth) pullCloud(); else maybeShowWelcome(); });
-  recoverFromMirror().then(dailySnapshot);
+  // קודם טוענים את הנתונים המקומיים העדכניים ביותר, ורק אחר כך מסנכרנים עם הענן
+  await recoverFromMirror();
+  await freshen();
+  dailySnapshot();
+  await loadCloud();
+  renderHeader();
+  if (cloudAuth) pullCloud(); else maybeShowWelcome();
 }

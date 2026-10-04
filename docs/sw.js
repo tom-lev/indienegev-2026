@@ -36,8 +36,7 @@ const CC = (() => {
     : v && typeof v === 'object' ? '{' + Object.keys(v).sort().filter(k => v[k] !== undefined).map(k => JSON.stringify(k) + ':' + canon(v[k])).join(',') + '}'
     : JSON.stringify(v === undefined ? null : v);
   function fp(st) {
-    const s = canon([st.picks || {}, [...(st.notes || [])].sort((a, b) => (a.id > b.id ? 1 : -1)), st.ratings || {}, st.nope || {},
-      (st.friends || []).map(f => [f.name, f.picks]).sort(), (st.prefs && st.prefs.tent) || null, st.name || '']);
+    const s = canon([items(st), st.tomb || {}]);
     let h = 0;
     for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
     return h;
@@ -89,44 +88,89 @@ const CC = (() => {
   const docUrl = uid => `${ep.fs}/backups/${uid}`;
   const errText = e => e.name === 'AbortError' ? 'הקליטה חלשה מדי' : e.message || 'אין חיבור';
 
-  /* ───────── מיזוג תלת-כיווני (בסיס = המצב שסונכרן לאחרונה) ─────────
-     לכל פריט: מי ששינה אותו מאז הבסיס – גובר. שניהם שינו → הגרסה החדשה יותר (או המקומית).
-     מחיקה מכובדת רק אם הצד השני לא שינה את הפריט בינתיים – כך לא מאבדים נתונים. */
-  const eq = (x, y) => JSON.stringify(x) === JSON.stringify(y);
-  const stamp = v => (v && (v.edited || v.at || v.importedAt)) || 0;
-  function m3map(b = {}, l = {}, r = {}) {
-    const out = {};
-    for (const k of new Set([...Object.keys(b), ...Object.keys(l), ...Object.keys(r)])) {
-      const bv = b[k], lv = l[k], rv = r[k];
-      let v;
-      if (eq(lv, bv)) v = rv;
-      else if (eq(rv, bv)) v = lv;
-      else if (lv === undefined) v = rv;              // נמחק כאן, שונה שם → שומרים
-      else if (rv === undefined) v = lv;
-      else v = stamp(rv) > stamp(lv) ? rv : lv;        // שניהם שינו
-      if (v !== undefined) out[k] = v;
+  /* ───────── מיזוג בין עותקים: "האחרון גובר" לכל פריט + רישום מחיקות מפורש ─────────
+     לכל פריט (הופעה, דירוג, 👎, פתק, חבר, אוהל, שם) נשמר זמן עדכון (mt), ולכל מחיקה – זמן מחיקה (tomb).
+     מיזוג של שני מצבים: לכל פריט – הגרסה עם זמן העדכון המאוחר; אם יש מחיקה מאוחרת יותר – הפריט נמחק.
+     • פריט חסר אף פעם לא נחשב "נמחק" – רק מחיקה רשומה מוחקת. לכן מכשיר ריק/ישן/חלקי לא מוחק כלום.
+     • המיזוג נותן אותה תוצאה בכל סדר ובכל מספר עותקים (חילופי, קיבוצי, אידמפוטנטי) – כל המכשירים מתכנסים. */
+  const KINDS = [['p', 'picks'], ['r', 'ratings'], ['x', 'nope']];
+  function items(st) { // מפתח → ערך
+    const m = {};
+    for (const [pre, k] of KINDS) for (const [id, v] of Object.entries(st[k] || {})) m[pre + ':' + id] = v;
+    for (const n of st.notes || []) m['n:' + n.id] = n;
+    for (const f of st.friends || []) m['f:' + f.name] = f;
+    if (st.prefs && st.prefs.tent) m.tent = st.prefs.tent;
+    if (st.name) m.name = st.name;
+    return m;
+  }
+  function implicitMt(key, v) { // מצבים ישנים בלי mt
+    if (!v || typeof v !== 'object') return 0;
+    return v.edited || v.at || v.importedAt || 0;
+  }
+  const mtOf = (st, key, v) => ((st.mt && st.mt[key]) || implicitMt(key, v));
+  function fromItems(base, m, mt, tomb) { // בונה מצב מהפריטים (שאר השדות – מ-base)
+    const out = { ...base, picks: {}, ratings: {}, nope: {}, notes: [], friends: [], mt, tomb };
+    const prefs = { ...(base.prefs || {}) }; delete prefs.tent;
+    out.name = '';
+    for (const [key, v] of Object.entries(m)) {
+      const i = key.indexOf(':'), pre = i > 0 ? key.slice(0, i) : key, id = i > 0 ? key.slice(i + 1) : '';
+      if (pre === 'p') out.picks[id] = v; else if (pre === 'r') out.ratings[id] = v; else if (pre === 'x') out.nope[id] = v;
+      else if (pre === 'n') out.notes.push(v); else if (pre === 'f') out.friends.push(v);
+      else if (key === 'tent') prefs.tent = v; else if (key === 'name') out.name = v;
     }
+    out.notes.sort((a, b) => (a.at || 0) - (b.at || 0) || (a.id > b.id ? 1 : -1));
+    out.prefs = prefs;
     return out;
   }
-  const m3val = (b, l, r) => eq(l, b) ? r : l;
-  const byKey = (arr, key) => Object.fromEntries((arr || []).map(x => [x[key], x]));
-  function merge3(base, local, remote) {
-    base = base || {};
-    const lp = local.prefs || {}, rp = remote.prefs || {}, bp = base.prefs || {};
-    const notes = Object.values(m3map(byKey(base.notes, 'id'), byKey(local.notes, 'id'), byKey(remote.notes, 'id'))).sort((a, b) => a.at - b.at);
-    const friends = Object.values(m3map(byKey(base.friends, 'name'), byKey(local.friends, 'name'), byKey(remote.friends, 'name')));
-    const tent = m3val(bp.tent, lp.tent, rp.tent);
-    const prefs = { ...lp };
-    if (tent) prefs.tent = tent; else delete prefs.tent;
-    return {
-      ...local,
-      name: m3val(base.name, local.name, remote.name) || local.name || remote.name || '',
-      picks: m3map(base.picks, local.picks, remote.picks),
-      ratings: m3map(base.ratings, local.ratings, remote.ratings),
-      nope: m3map(base.nope, local.nope, remote.nope),
-      notes, friends, prefs,
-    };
+  /* מיזוג a + b. שדות שאינם נתונים (העדפות תצוגה וכו') – מ-a */
+  function lww(a, b) {
+    if (!b) return a;
+    const ia = items(a), ib = items(b), mt = {}, tomb = {}, m = {};
+    const ta = a.tomb || {}, tb = b.tomb || {};
+    for (const key of new Set([...Object.keys(ia), ...Object.keys(ib), ...Object.keys(ta), ...Object.keys(tb)])) {
+      const d = Math.max(ta[key] || 0, tb[key] || 0);
+      let v, t = -1;
+      for (const [st, it] of [[a, ia], [b, ib]]) {
+        if (!(key in it)) continue;
+        const tt = mtOf(st, key, it[key]);
+        if (tt > t || (tt === t && JSON.stringify(it[key]) > JSON.stringify(v))) { t = tt; v = it[key]; }
+      }
+      if (v !== undefined && t > d) { m[key] = v; if (t > 0) mt[key] = t; }
+      else if (d > 0) tomb[key] = d;
+    }
+    const out = fromItems(a, m, mt, tomb);
+    out.prefs = { ...(b.prefs || {}), ...(a.prefs || {}), ...(m.tent ? { tent: m.tent } : {}) };
+    if (!m.tent) delete out.prefs.tent;
+    out.editedAt = Math.max(a.editedAt || 0, b.editedAt || 0);
+    return out;
   }
+  /* רישום זמני עדכון/מחיקה לשינויים שהמשתמש עשה מאז prev (נקרא בכל שמירה). מחזיר true אם היה שינוי בנתונים */
+  function stampEdits(prev, next, now) {
+    const ip = items(prev || {}), inx = items(next);
+    next.mt = { ...(next.mt || {}) }; next.tomb = { ...(next.tomb || {}) };
+    const pmt = (prev && prev.mt) || {}, ptomb = (prev && prev.tomb) || {};
+    let changed = false;
+    for (const key of Object.keys(inx)) {
+      const same = key in ip && JSON.stringify(ip[key]) === JSON.stringify(inx[key]);
+      if (!same && (next.mt[key] || 0) === (pmt[key] || 0)) { next.mt[key] = now; changed = true; } // עריכה/הוספה של המשתמש
+      if ((next.tomb[key] || 0) >= (next.mt[key] || implicitMt(key, inx[key]))) {               // נוסף מחדש אחרי מחיקה
+        if (!same) next.mt[key] = Math.max(now, (next.tomb[key] || 0) + 1);
+        delete next.tomb[key];
+      }
+    }
+    for (const key of Object.keys(ip)) {
+      if (!(key in inx) && (next.tomb[key] || 0) <= (ptomb[key] || 0)) { next.tomb[key] = Math.max(now, (next.mt[key] || 0) + 1); delete next.mt[key]; changed = true; }
+    }
+    return changed;
+  }
+  /* החלפת כל הנתונים במצב אחר (שחזור גרסה): הכל "חדש עכשיו", ומה שלא קיים בו – נמחק */
+  function replaceStamped(cur, st, now) {
+    const icur = items(cur), inew = items(st), mt = {}, tomb = { ...(cur.tomb || {}) };
+    for (const key of Object.keys(inew)) { mt[key] = now; delete tomb[key]; }
+    for (const key of Object.keys(icur)) if (!(key in inew)) tomb[key] = now;
+    return fromItems({ ...cur, ...st, prefs: { ...(cur.prefs || {}) } }, inew, mt, tomb);
+  }
+
   const clean = st => { const c = JSON.parse(JSON.stringify(st)); delete c.backup; return c; };
 
   /* מצב הענן: { state, fp, updateTime } או null */
@@ -185,16 +229,8 @@ const CC = (() => {
       const local = JSON.parse(raw);
       const a = await auth();
       const remote = await getRemote(a);
-      const base = await get('base');
-      let merged = local, guard = '';
-      if (remote && remote.fp !== fp(local)) {
-        // הענן לא השתנה מאז הסנכרון האחרון → המקומי פשוט חדש יותר. אחרת – ממזגים.
-        merged = (base && remote.fp === status.fp) ? local : merge3(base, local, remote.state);
-        // הגנה: סנכרון לעולם לא מוחק בבת אחת הרבה נתונים (מכשיר ריק, מצב מקומי שנמחק או ישן).
-        // אם התוצאה מאבדת יותר מ-3 פריטים ויותר מ-30% – מאחדים במקום (שום דבר לא נמחק).
-        const most = Math.max(size(local), size(remote.state)), lost = most - size(merged);
-        if (lost > 3 && lost > most * 0.3) { merged = merge3(null, local, remote.state); guard = `blocked mass delete (${lost}/${most})`; }
-      }
+      // מיזוג "האחרון גובר" + מחיקות רשומות: שום פריט לא נמחק בגלל שהוא חסר במקומי או בענן
+      const merged = remote ? lww(local, remote.state) : local, guard = '';
       const mfp = fp(merged);
       let result = 'same', updateTime = remote && remote.updateTime;
       if (!remote || remote.fp !== mfp) {
@@ -209,17 +245,21 @@ const CC = (() => {
         updateTime = (await r.json()).updateTime;
         result = 'pushed';
       }
-      await set('base', clean(merged));
       await set('cloud', { fp: mfp, at: Date.now(), error: null, updateTime });
       await set('owner', a.uid);
-      const changed = mfp !== fp(local);
-      await logSync({ result: changed ? (result === 'pushed' ? 'merged' : 'pulled') : result, local: size(local), remote: remote ? size(remote.state) : -1, merged: size(merged), base: base ? size(base) : -1, guard });
+      // אם בזמן הסנכרון נשמר במכשיר משהו חדש (עריכה תוך כדי בקשה) – ממזגים אותו, לא דורסים
+      let out = merged, again = false;
+      const latestRaw = await get('state');
+      const latest = latestRaw && JSON.parse(latestRaw);
+      if (latest && (latest.savedAt || 0) !== (local.savedAt || 0)) { out = lww(latest, merged); again = fp(out) !== mfp; }
+      const changed = fp(out) !== fp(latest || local);
+      await logSync({ result: changed ? (result === 'pushed' ? 'merged' : 'pulled') : result, local: size(local), remote: remote ? size(remote.state) : -1, merged: size(merged), guard: guard + (again ? ' +edits during sync' : '') });
       if (changed) {
-        merged.savedAt = Date.now();
-        await set('state', JSON.stringify(merged)); // כדי שגם פתיחה הבאה (או ה-SW) יראו את המצב הממוזג
-        return { result: result === 'pushed' ? 'merged' : 'pulled', state: merged };
+        out.savedAt = Math.max(Date.now(), ((latest && latest.savedAt) || 0) + 1);
+        await set('state', JSON.stringify(out)); // כדי שגם פתיחה הבאה (או ה-SW) יראו את המצב הממוזג
+        return { result: result === 'pushed' ? 'merged' : 'pulled', state: out, again };
       }
-      return { result };
+      return { result, again };
     } catch (e) {
       await set('cloud', { ...status, error: errText(e), tried: Date.now() });
       await logSync({ result: 'error', error: errText(e) }).catch(() => {});
@@ -245,13 +285,13 @@ const CC = (() => {
     return { text: JSON.stringify({ app: 'indienegev-2026', kind: 'backup', v: 1, createdAt: remote.updatedAt, state: remote.state }), updatedAt: remote.updatedAt };
   }
 
-  return { on, cfg, get, set, del, fp, sync, upload, download, history, size, signInWithGoogleToken, auth, buildUpload, merge3, clean };
+  return { on, cfg, get, set, del, fp, sync, upload, download, history, size, signInWithGoogleToken, auth, buildUpload, lww, stampEdits, replaceStamped, items, clean };
 })();
 
 /* Service Worker – האפליקציה נפתחת מהעותק השמור בטלפון, גם בלי קליטה.
    אסטרטגיה: מטמון קודם (פתיחה מיידית גם בקליטה חלשה). עדכון גרסה מגיע כ-SW חדש
    (הקובץ הזה משתנה בכל בנייה בגלל VERSION), שמחכה עד שהמשתמש מאשר רענון. */
-const VERSION = '582a0be08152';
+const VERSION = 'ca5a682f6b16';
 const CACHE = 'indn26-' + VERSION;
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 

@@ -443,7 +443,10 @@ const RICH = () => {
   });
   await test('F8', 'מכשיר שאיבד את הנתונים המקומיים לא מוחק את הענן ולא את המכשירים האחרים', async () => {
     const before = (await srv()).docs['uid-alice'].state.notes.length;
-    await I.ev(async () => { const d = defaults(); for (const k of Object.keys(S)) delete S[k]; Object.assign(S, d); save(); await IDB.set('state', JSON.stringify(S)); lastPull = 0; pullCloud(); });
+    // מחיקה אמיתית של האחסון (בלי עריכה של המשתמש), ופתיחה מחדש של האפליקציה
+    await I.ev(async () => { localStorage.removeItem('indn26'); await IDB.set('state', JSON.stringify(defaults())); });
+    await I.page.reload({ waitUntil: 'load' }); await sleep(1200);
+    await I.ev(() => { lastPull = 0; pullCloud(); });
     await sleep(3500);
     const after = (await srv()).docs['uid-alice'].state.notes.length, local = await I.ev(() => S.notes.length);
     check('F8', 'מכשיר שאיבד את הנתונים המקומיים לא מוחק את הענן ולא את המכשירים האחרים', after === before && local === before, `ענן ${before}→${after}, מכשיר ${local}`);

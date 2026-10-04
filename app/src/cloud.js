@@ -29,6 +29,7 @@ function applyCloudState(st) {
   const d = defaults();
   for (const k of Object.keys(S)) delete S[k];
   Object.assign(S, d, st, { prefs: { ...d.prefs, ...(st.prefs || {}) }, backup: keepBackup });
+  setPersisted(S); // המצב מהענן כבר מכיל זמני עדכון – אינו עריכה חדשה
   save();
   syncTent();
   rerender();
@@ -53,13 +54,22 @@ async function cloudNow() {
   if (syncing) return syncing;
   syncing = (async () => {
     try {
+      await freshen(); // עותק אחר של האפליקציה (לשונית/אפליקציה מותקנת) אולי שמר משהו חדש יותר
+      const sent = CC.clean(S);
       await IDB.set('state', JSON.stringify(S)); // לסנכרן את המצב העדכני ביותר
       const res = await CC.sync();
       cloudState = (await CC.get('cloud')) || {};
+      let again = res.again;
       if (res.state) {
-        applyCloudState(res.state);
-        if (res.result === 'pulled' || res.result === 'merged') toast('עודכן מהענן ↻');
-      }
+        // עריכות שנעשו בזמן הבקשה (אחרי ששלחנו) נשמרות: מיזוג תלת-כיווני מול מה שנשלח
+        // מיזוג עם מה שבמכשיר עכשיו (כולל עריכות שנעשו בזמן הבקשה)
+        const st = CC.lww(S, res.state);
+        if (CC.fp(st) !== CC.fp(res.state)) again = true;
+        const before = CC.fp(S);
+        applyCloudState(st);
+        if ((res.result === 'pulled' || res.result === 'merged') && CC.fp(S) !== before) toast('עודכן מהענן ↻');
+      } else if (CC.fp(S) !== CC.fp(sent)) again = true;
+      if (again) setTimeout(() => scheduleCloud(800), 0);
       return true;
     } catch (e) {
       registerCloudSync();
@@ -100,6 +110,10 @@ let flushedFp = null;
 function flushOnHide() {
   if (!CC.on || !cloudAuth || !navigator.onLine || cloudBackedUp() || !cloudState.updateTime) return registerCloudSync();
   if (!hasData()) return; // לעולם לא שולחים מצב ריק בלי מיזוג
+  try { // עותק ישן של האפליקציה לא שולח מצב שלשונית אחרת כבר עדכנה
+    const ls = JSON.parse(localStorage.getItem(KEY));
+    if (ls && (ls.savedAt || 0) > (S.savedAt || 0)) return registerCloudSync();
+  } catch (e) { /* */ }
   const a = authCache;
   if (!a || a.exp < Date.now() + 30000) return registerCloudSync();
   const st = CC.clean(S);
@@ -111,9 +125,8 @@ function flushOnHide() {
   fetch(u.url, { ...u.init, keepalive: true }).then(async r => {
     if (!r.ok) throw new Error(r.status);
     const j = await r.json();
-    cloudState = { fp: u.fp, at: Date.now(), error: null, updateTime: j.updateTime };
+    cloudState = { fp: u.fp, at: Date.now(), error: null, updateTime: j.updateTime, edit: S.editedAt || 0 };
     await CC.set('cloud', cloudState);
-    await CC.set('base', st);
   }).catch(() => { flushedFp = null; });
   registerCloudSync();
 }
@@ -183,9 +196,8 @@ async function afterSignIn(a) {
     for (const k of Object.keys(S)) delete S[k];
     Object.assign(S, d, { prefs: { ...d.prefs, ...keepPrefs }, backup: {} });
     save(); syncTent();
-    await CC.del('base'); await CC.del('cloud');
+    await CC.del('cloud');
   } else if (!owner) {
-    await CC.del('base'); // אין בסיס משותף – מיזוג "איחוד" בלי מחיקות
     if (hasData()) await takeSnapshot('לפני סנכרון ראשון');
   }
   cloudState = (await CC.get('cloud')) || {};

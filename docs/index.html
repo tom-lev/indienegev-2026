@@ -296,14 +296,17 @@ main#view { overflow: hidden; position: relative; min-height: 0; }
 .gap-row { text-align: center; font-size: 12.5px; font-weight: 600; color: var(--ink-3); margin: 2px 0 10px; }
 .gap-row::before, .gap-row::after { content: ' · · · '; letter-spacing: 2px; }
 .clash {
-  border: 2px solid var(--coral);
-  border-radius: 16px;
-  padding: 8px 8px 0;
+  /* ההתנגשות מסומנת בפס בצד ובכותרת – בלי לדחוף את השורות פנימה, כדי שכפתורי הניווט יישארו באותו מקום */
+  position: relative;
   margin-bottom: 10px;
-  background: rgba(244,111,106,.07);
 }
-.clash.soft { border-style: dashed; border-color: var(--line-2); background: transparent; }
-.clash-h { font-size: 13px; font-weight: 800; margin: 0 4px 8px; display: flex; gap: 6px; align-items: center; }
+.clash::before {
+  content: ''; position: absolute; inset-inline-start: -9px; top: 26px; bottom: 8px;
+  width: 4px; border-radius: 2px; background: var(--coral);
+}
+.clash.soft::before { background: repeating-linear-gradient(to bottom, var(--line-2) 0 6px, transparent 6px 10px); }
+.clash-h { font-size: 13px; font-weight: 800; margin: 0 2px 6px; display: flex; gap: 6px; align-items: center; color: var(--danger); }
+.clash.soft .clash-h { color: var(--ink-2); }
 .clash .row { margin-bottom: 8px; }
 .row.muted { opacity: .55; }
 .going { font-size: 12px; }
@@ -1293,10 +1296,37 @@ function load() {
   return defaults();
 }
 const S = load();
+/* editedAt = הזמן שבו המשתמש שינה נתונים במכשיר הזה (לא העדפות תצוגה, לא עדכון מהענן).
+   הסנכרון משתמש בזה כדי להבדיל בין "מחקתי" לבין "המכשיר איבד נתונים". */
+let lastDataFp = null;
+const dataFp = () => (typeof CC !== 'undefined' ? CC.fp(S) : 0);
+function markSynced() { lastDataFp = dataFp(); } // אחרי אימוץ מצב מהענן/מעותק אחר – לא נחשב עריכה
+/* כמה עותקים של האפליקציה על אותו מכשיר (לשונית + אפליקציה מותקנת) כותבים לאותו אחסון.
+   persisted = הגרסה שהעותק הזה קרא/כתב לאחרונה. אם בזמן הזה עותק אחר כתב משהו חדש יותר –
+   ממזגים (בסיס = persisted) במקום לדרוס, כך ששום שינוי של אף עותק לא הולך לאיבוד. */
+let persisted = JSON.parse(JSON.stringify(S));
+function setPersisted(st) { persisted = JSON.parse(JSON.stringify(st)); }
 function save() {
-  S.savedAt = Date.now();
+  const now = Date.now();
+  if (typeof CC !== 'undefined') {
+    // 1. רישום זמני עדכון/מחיקה לכל מה שהמשתמש שינה מאז השמירה הקודמת של העותק הזה
+    if (CC.stampEdits(persisted, S, now)) S.editedAt = now;
+    // 2. עותק אחר (לשונית/אפליקציה מותקנת) שמר בינתיים – ממזגים (האחרון גובר לכל פריט)
+    try {
+      const cur = JSON.parse(localStorage.getItem(KEY));
+      if (cur && cur.v === 1 && (cur.savedAt || 0) > (persisted.savedAt || 0)) {
+        const keepBackup = S.backup || cur.backup;
+        const m = CC.lww(S, cur);
+        for (const k of Object.keys(S)) delete S[k];
+        Object.assign(S, m, { backup: keepBackup });
+        if (typeof syncTent === 'function') syncTent();
+      }
+    } catch (e) { /* */ }
+  }
+  S.savedAt = Math.max(now, ((persisted && persisted.savedAt) || 0) + 1);
   try { localStorage.setItem(KEY, JSON.stringify(S)); }
   catch (e) { storageOK = false; }
+  setPersisted(S);
   if (typeof mirrorSave === 'function') mirrorSave(); // עותק כפול ב-IndexedDB (backup.js)
 }
 
@@ -3891,8 +3921,7 @@ const CC = (() => {
     : v && typeof v === 'object' ? '{' + Object.keys(v).sort().filter(k => v[k] !== undefined).map(k => JSON.stringify(k) + ':' + canon(v[k])).join(',') + '}'
     : JSON.stringify(v === undefined ? null : v);
   function fp(st) {
-    const s = canon([st.picks || {}, [...(st.notes || [])].sort((a, b) => (a.id > b.id ? 1 : -1)), st.ratings || {}, st.nope || {},
-      (st.friends || []).map(f => [f.name, f.picks]).sort(), (st.prefs && st.prefs.tent) || null, st.name || '']);
+    const s = canon([items(st), st.tomb || {}]);
     let h = 0;
     for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
     return h;
@@ -3944,44 +3973,89 @@ const CC = (() => {
   const docUrl = uid => `${ep.fs}/backups/${uid}`;
   const errText = e => e.name === 'AbortError' ? 'הקליטה חלשה מדי' : e.message || 'אין חיבור';
 
-  /* ───────── מיזוג תלת-כיווני (בסיס = המצב שסונכרן לאחרונה) ─────────
-     לכל פריט: מי ששינה אותו מאז הבסיס – גובר. שניהם שינו → הגרסה החדשה יותר (או המקומית).
-     מחיקה מכובדת רק אם הצד השני לא שינה את הפריט בינתיים – כך לא מאבדים נתונים. */
-  const eq = (x, y) => JSON.stringify(x) === JSON.stringify(y);
-  const stamp = v => (v && (v.edited || v.at || v.importedAt)) || 0;
-  function m3map(b = {}, l = {}, r = {}) {
-    const out = {};
-    for (const k of new Set([...Object.keys(b), ...Object.keys(l), ...Object.keys(r)])) {
-      const bv = b[k], lv = l[k], rv = r[k];
-      let v;
-      if (eq(lv, bv)) v = rv;
-      else if (eq(rv, bv)) v = lv;
-      else if (lv === undefined) v = rv;              // נמחק כאן, שונה שם → שומרים
-      else if (rv === undefined) v = lv;
-      else v = stamp(rv) > stamp(lv) ? rv : lv;        // שניהם שינו
-      if (v !== undefined) out[k] = v;
+  /* ───────── מיזוג בין עותקים: "האחרון גובר" לכל פריט + רישום מחיקות מפורש ─────────
+     לכל פריט (הופעה, דירוג, 👎, פתק, חבר, אוהל, שם) נשמר זמן עדכון (mt), ולכל מחיקה – זמן מחיקה (tomb).
+     מיזוג של שני מצבים: לכל פריט – הגרסה עם זמן העדכון המאוחר; אם יש מחיקה מאוחרת יותר – הפריט נמחק.
+     • פריט חסר אף פעם לא נחשב "נמחק" – רק מחיקה רשומה מוחקת. לכן מכשיר ריק/ישן/חלקי לא מוחק כלום.
+     • המיזוג נותן אותה תוצאה בכל סדר ובכל מספר עותקים (חילופי, קיבוצי, אידמפוטנטי) – כל המכשירים מתכנסים. */
+  const KINDS = [['p', 'picks'], ['r', 'ratings'], ['x', 'nope']];
+  function items(st) { // מפתח → ערך
+    const m = {};
+    for (const [pre, k] of KINDS) for (const [id, v] of Object.entries(st[k] || {})) m[pre + ':' + id] = v;
+    for (const n of st.notes || []) m['n:' + n.id] = n;
+    for (const f of st.friends || []) m['f:' + f.name] = f;
+    if (st.prefs && st.prefs.tent) m.tent = st.prefs.tent;
+    if (st.name) m.name = st.name;
+    return m;
+  }
+  function implicitMt(key, v) { // מצבים ישנים בלי mt
+    if (!v || typeof v !== 'object') return 0;
+    return v.edited || v.at || v.importedAt || 0;
+  }
+  const mtOf = (st, key, v) => ((st.mt && st.mt[key]) || implicitMt(key, v));
+  function fromItems(base, m, mt, tomb) { // בונה מצב מהפריטים (שאר השדות – מ-base)
+    const out = { ...base, picks: {}, ratings: {}, nope: {}, notes: [], friends: [], mt, tomb };
+    const prefs = { ...(base.prefs || {}) }; delete prefs.tent;
+    out.name = '';
+    for (const [key, v] of Object.entries(m)) {
+      const i = key.indexOf(':'), pre = i > 0 ? key.slice(0, i) : key, id = i > 0 ? key.slice(i + 1) : '';
+      if (pre === 'p') out.picks[id] = v; else if (pre === 'r') out.ratings[id] = v; else if (pre === 'x') out.nope[id] = v;
+      else if (pre === 'n') out.notes.push(v); else if (pre === 'f') out.friends.push(v);
+      else if (key === 'tent') prefs.tent = v; else if (key === 'name') out.name = v;
     }
+    out.notes.sort((a, b) => (a.at || 0) - (b.at || 0) || (a.id > b.id ? 1 : -1));
+    out.prefs = prefs;
     return out;
   }
-  const m3val = (b, l, r) => eq(l, b) ? r : l;
-  const byKey = (arr, key) => Object.fromEntries((arr || []).map(x => [x[key], x]));
-  function merge3(base, local, remote) {
-    base = base || {};
-    const lp = local.prefs || {}, rp = remote.prefs || {}, bp = base.prefs || {};
-    const notes = Object.values(m3map(byKey(base.notes, 'id'), byKey(local.notes, 'id'), byKey(remote.notes, 'id'))).sort((a, b) => a.at - b.at);
-    const friends = Object.values(m3map(byKey(base.friends, 'name'), byKey(local.friends, 'name'), byKey(remote.friends, 'name')));
-    const tent = m3val(bp.tent, lp.tent, rp.tent);
-    const prefs = { ...lp };
-    if (tent) prefs.tent = tent; else delete prefs.tent;
-    return {
-      ...local,
-      name: m3val(base.name, local.name, remote.name) || local.name || remote.name || '',
-      picks: m3map(base.picks, local.picks, remote.picks),
-      ratings: m3map(base.ratings, local.ratings, remote.ratings),
-      nope: m3map(base.nope, local.nope, remote.nope),
-      notes, friends, prefs,
-    };
+  /* מיזוג a + b. שדות שאינם נתונים (העדפות תצוגה וכו') – מ-a */
+  function lww(a, b) {
+    if (!b) return a;
+    const ia = items(a), ib = items(b), mt = {}, tomb = {}, m = {};
+    const ta = a.tomb || {}, tb = b.tomb || {};
+    for (const key of new Set([...Object.keys(ia), ...Object.keys(ib), ...Object.keys(ta), ...Object.keys(tb)])) {
+      const d = Math.max(ta[key] || 0, tb[key] || 0);
+      let v, t = -1;
+      for (const [st, it] of [[a, ia], [b, ib]]) {
+        if (!(key in it)) continue;
+        const tt = mtOf(st, key, it[key]);
+        if (tt > t || (tt === t && JSON.stringify(it[key]) > JSON.stringify(v))) { t = tt; v = it[key]; }
+      }
+      if (v !== undefined && t > d) { m[key] = v; if (t > 0) mt[key] = t; }
+      else if (d > 0) tomb[key] = d;
+    }
+    const out = fromItems(a, m, mt, tomb);
+    out.prefs = { ...(b.prefs || {}), ...(a.prefs || {}), ...(m.tent ? { tent: m.tent } : {}) };
+    if (!m.tent) delete out.prefs.tent;
+    out.editedAt = Math.max(a.editedAt || 0, b.editedAt || 0);
+    return out;
   }
+  /* רישום זמני עדכון/מחיקה לשינויים שהמשתמש עשה מאז prev (נקרא בכל שמירה). מחזיר true אם היה שינוי בנתונים */
+  function stampEdits(prev, next, now) {
+    const ip = items(prev || {}), inx = items(next);
+    next.mt = { ...(next.mt || {}) }; next.tomb = { ...(next.tomb || {}) };
+    const pmt = (prev && prev.mt) || {}, ptomb = (prev && prev.tomb) || {};
+    let changed = false;
+    for (const key of Object.keys(inx)) {
+      const same = key in ip && JSON.stringify(ip[key]) === JSON.stringify(inx[key]);
+      if (!same && (next.mt[key] || 0) === (pmt[key] || 0)) { next.mt[key] = now; changed = true; } // עריכה/הוספה של המשתמש
+      if ((next.tomb[key] || 0) >= (next.mt[key] || implicitMt(key, inx[key]))) {               // נוסף מחדש אחרי מחיקה
+        if (!same) next.mt[key] = Math.max(now, (next.tomb[key] || 0) + 1);
+        delete next.tomb[key];
+      }
+    }
+    for (const key of Object.keys(ip)) {
+      if (!(key in inx) && (next.tomb[key] || 0) <= (ptomb[key] || 0)) { next.tomb[key] = Math.max(now, (next.mt[key] || 0) + 1); delete next.mt[key]; changed = true; }
+    }
+    return changed;
+  }
+  /* החלפת כל הנתונים במצב אחר (שחזור גרסה): הכל "חדש עכשיו", ומה שלא קיים בו – נמחק */
+  function replaceStamped(cur, st, now) {
+    const icur = items(cur), inew = items(st), mt = {}, tomb = { ...(cur.tomb || {}) };
+    for (const key of Object.keys(inew)) { mt[key] = now; delete tomb[key]; }
+    for (const key of Object.keys(icur)) if (!(key in inew)) tomb[key] = now;
+    return fromItems({ ...cur, ...st, prefs: { ...(cur.prefs || {}) } }, inew, mt, tomb);
+  }
+
   const clean = st => { const c = JSON.parse(JSON.stringify(st)); delete c.backup; return c; };
 
   /* מצב הענן: { state, fp, updateTime } או null */
@@ -4040,16 +4114,8 @@ const CC = (() => {
       const local = JSON.parse(raw);
       const a = await auth();
       const remote = await getRemote(a);
-      const base = await get('base');
-      let merged = local, guard = '';
-      if (remote && remote.fp !== fp(local)) {
-        // הענן לא השתנה מאז הסנכרון האחרון → המקומי פשוט חדש יותר. אחרת – ממזגים.
-        merged = (base && remote.fp === status.fp) ? local : merge3(base, local, remote.state);
-        // הגנה: סנכרון לעולם לא מוחק בבת אחת הרבה נתונים (מכשיר ריק, מצב מקומי שנמחק או ישן).
-        // אם התוצאה מאבדת יותר מ-3 פריטים ויותר מ-30% – מאחדים במקום (שום דבר לא נמחק).
-        const most = Math.max(size(local), size(remote.state)), lost = most - size(merged);
-        if (lost > 3 && lost > most * 0.3) { merged = merge3(null, local, remote.state); guard = `blocked mass delete (${lost}/${most})`; }
-      }
+      // מיזוג "האחרון גובר" + מחיקות רשומות: שום פריט לא נמחק בגלל שהוא חסר במקומי או בענן
+      const merged = remote ? lww(local, remote.state) : local, guard = '';
       const mfp = fp(merged);
       let result = 'same', updateTime = remote && remote.updateTime;
       if (!remote || remote.fp !== mfp) {
@@ -4064,17 +4130,21 @@ const CC = (() => {
         updateTime = (await r.json()).updateTime;
         result = 'pushed';
       }
-      await set('base', clean(merged));
       await set('cloud', { fp: mfp, at: Date.now(), error: null, updateTime });
       await set('owner', a.uid);
-      const changed = mfp !== fp(local);
-      await logSync({ result: changed ? (result === 'pushed' ? 'merged' : 'pulled') : result, local: size(local), remote: remote ? size(remote.state) : -1, merged: size(merged), base: base ? size(base) : -1, guard });
+      // אם בזמן הסנכרון נשמר במכשיר משהו חדש (עריכה תוך כדי בקשה) – ממזגים אותו, לא דורסים
+      let out = merged, again = false;
+      const latestRaw = await get('state');
+      const latest = latestRaw && JSON.parse(latestRaw);
+      if (latest && (latest.savedAt || 0) !== (local.savedAt || 0)) { out = lww(latest, merged); again = fp(out) !== mfp; }
+      const changed = fp(out) !== fp(latest || local);
+      await logSync({ result: changed ? (result === 'pushed' ? 'merged' : 'pulled') : result, local: size(local), remote: remote ? size(remote.state) : -1, merged: size(merged), guard: guard + (again ? ' +edits during sync' : '') });
       if (changed) {
-        merged.savedAt = Date.now();
-        await set('state', JSON.stringify(merged)); // כדי שגם פתיחה הבאה (או ה-SW) יראו את המצב הממוזג
-        return { result: result === 'pushed' ? 'merged' : 'pulled', state: merged };
+        out.savedAt = Math.max(Date.now(), ((latest && latest.savedAt) || 0) + 1);
+        await set('state', JSON.stringify(out)); // כדי שגם פתיחה הבאה (או ה-SW) יראו את המצב הממוזג
+        return { result: result === 'pushed' ? 'merged' : 'pulled', state: out, again };
       }
-      return { result };
+      return { result, again };
     } catch (e) {
       await set('cloud', { ...status, error: errText(e), tried: Date.now() });
       await logSync({ result: 'error', error: errText(e) }).catch(() => {});
@@ -4100,7 +4170,7 @@ const CC = (() => {
     return { text: JSON.stringify({ app: 'indienegev-2026', kind: 'backup', v: 1, createdAt: remote.updatedAt, state: remote.state }), updatedAt: remote.updatedAt };
   }
 
-  return { on, cfg, get, set, del, fp, sync, upload, download, history, size, signInWithGoogleToken, auth, buildUpload, merge3, clean };
+  return { on, cfg, get, set, del, fp, sync, upload, download, history, size, signInWithGoogleToken, auth, buildUpload, lww, stampEdits, replaceStamped, items, clean };
 })();
 
 
@@ -4180,8 +4250,10 @@ async function applyState(st, reason) {
   await takeSnapshot(reason || 'לפני שחזור');
   const keepBackup = S.backup;
   const d = defaults();
+  const replaced = CC.replaceStamped({ ...d, ...JSON.parse(JSON.stringify(S)) }, { ...d, ...st }, Date.now());
   for (const k of Object.keys(S)) delete S[k];
-  Object.assign(S, d, st, { prefs: { ...d.prefs, ...(st.prefs || {}) }, backup: keepBackup });
+  Object.assign(S, replaced, { backup: keepBackup });
+  setPersisted(S);
   save();
   syncTent();
   viewDay = null;
@@ -4189,28 +4261,54 @@ async function applyState(st, reason) {
 }
 
 /* ───────── עותק כפול ב-IndexedDB ───────── */
-let mirrorTimer = null;
+/* העותק ב-IndexedDB נכתב מיד בכל שמירה (בלי השהיה), כדי ששני מקומות האחסון יהיו תמיד מתואמים */
 function mirrorSave() {
-  clearTimeout(mirrorTimer);
-  mirrorTimer = setTimeout(() => {
-    IDB.set('state', JSON.stringify(S)).catch(() => {}).then(() => scheduleCloud());
-  }, 400);
+  IDB.set('state', JSON.stringify(S)).catch(() => {}).then(() => scheduleCloud());
 }
 /* בפתיחה: אם ה-localStorage ריק/פגום או ישן מהעותק הפנימי – משחזרים מהעותק */
 async function recoverFromMirror() {
   try {
     const raw = await IDB.get('state');
     if (!raw) { mirrorSave(); return; }
-    const m = JSON.parse(raw);
-    if (m && m.v === 1 && (m.savedAt || 0) > (S.savedAt || 0) + 1000) {
-      const d = defaults();
-      for (const k of Object.keys(S)) delete S[k];
-      Object.assign(S, d, m, { prefs: { ...d.prefs, ...(m.prefs || {}) } });
-      save(); syncTent(); render();
-      toast('הנתונים שוחזרו מהעותק הפנימי');
+    const before = CC.size(S);
+    if (adoptState(JSON.parse(raw))) {
+      render();
+      if (CC.size(S) > before) toast('הנתונים שוחזרו מהעותק הפנימי');
     }
   } catch (e) { /* אין IndexedDB – ממשיכים עם localStorage */ }
 }
+
+/* ───────── כמה עותקים פתוחים של האפליקציה (לשונית + אפליקציה מותקנת וכו') ─────────
+   כל עותק מחזיק את הנתונים בזיכרון. לפני כל סנכרון/שמירה משמעותית ובכל חזרה לאפליקציה
+   מאמצים את הגרסה השמורה החדשה ביותר (localStorage / IndexedDB), כדי שעותק ישן לא ידרוס עדכון. */
+/* אימוץ גרסה ששמר עותק אחר / שנמצאת באחסון: תמיד *מיזוג* תלת-כיווני (בסיס = מה שהעותק הזה ראה לאחרונה),
+   אף פעם לא החלפה – כך ששום עריכה של אף עותק לא נדרסת. מחזיר true אם משהו השתנה. */
+function adoptState(m) {
+  if (!m || m.v !== 1) return false;
+  // מיזוג "האחרון גובר" – בטוח בכל סדר: גרסה ישנה לא מוחקת ולא מחזירה כלום
+  const before = CC.fp(S);
+  const keepBackup = S.backup || m.backup;
+  const merged = CC.lww(S, m);
+  for (const k of Object.keys(S)) delete S[k];
+  Object.assign(S, merged, { backup: keepBackup });
+  syncTent();
+  if (CC.fp(S) !== CC.fp(m)) { setPersisted(m); save(); } // יש במיזוג משהו שעוד לא באחסון
+  else { S.savedAt = Math.max(S.savedAt || 0, m.savedAt || 0); setPersisted(S); }
+  return CC.fp(S) !== before;
+}
+async function freshen() {
+  let changed = false;
+  try { changed = adoptState(JSON.parse(localStorage.getItem(KEY))) || changed; } catch (e) { /* */ }
+  try { const raw = await IDB.get('state'); if (raw) changed = adoptState(JSON.parse(raw)) || changed; } catch (e) { /* */ }
+  if (changed) { rerender(); if (typeof refreshSheet === 'function') refreshSheet(); }
+  return changed;
+}
+/* לשונית אחרת שמרה – מתעדכנים מיד (מיזוג) */
+window.addEventListener('storage', e => {
+  if (e.key !== KEY || !e.newValue) return;
+  try { if (adoptState(JSON.parse(e.newValue))) { rerender(); if (typeof refreshSheet === 'function') refreshSheet(); } } catch (err) { /* */ }
+});
+document.addEventListener('visibilitychange', () => { if (!document.hidden) freshen(); });
 
 /* ───────── גרסאות קודמות במכשיר ───────── */
 async function takeSnapshot(reason) {
@@ -4385,10 +4483,16 @@ function openBackupPanel() {
 }
 
 /* אתחול (נקרא מ-main.js אחרי הרינדור הראשון) */
-function initBackup() {
+async function initBackup() {
+  markSynced();
   requestPersist();
-  loadCloud().then(() => { renderHeader(); if (cloudAuth) pullCloud(); else maybeShowWelcome(); });
-  recoverFromMirror().then(dailySnapshot);
+  // קודם טוענים את הנתונים המקומיים העדכניים ביותר, ורק אחר כך מסנכרנים עם הענן
+  await recoverFromMirror();
+  await freshen();
+  dailySnapshot();
+  await loadCloud();
+  renderHeader();
+  if (cloudAuth) pullCloud(); else maybeShowWelcome();
 }
 
 
@@ -4424,6 +4528,7 @@ function applyCloudState(st) {
   const d = defaults();
   for (const k of Object.keys(S)) delete S[k];
   Object.assign(S, d, st, { prefs: { ...d.prefs, ...(st.prefs || {}) }, backup: keepBackup });
+  setPersisted(S); // המצב מהענן כבר מכיל זמני עדכון – אינו עריכה חדשה
   save();
   syncTent();
   rerender();
@@ -4448,13 +4553,22 @@ async function cloudNow() {
   if (syncing) return syncing;
   syncing = (async () => {
     try {
+      await freshen(); // עותק אחר של האפליקציה (לשונית/אפליקציה מותקנת) אולי שמר משהו חדש יותר
+      const sent = CC.clean(S);
       await IDB.set('state', JSON.stringify(S)); // לסנכרן את המצב העדכני ביותר
       const res = await CC.sync();
       cloudState = (await CC.get('cloud')) || {};
+      let again = res.again;
       if (res.state) {
-        applyCloudState(res.state);
-        if (res.result === 'pulled' || res.result === 'merged') toast('עודכן מהענן ↻');
-      }
+        // עריכות שנעשו בזמן הבקשה (אחרי ששלחנו) נשמרות: מיזוג תלת-כיווני מול מה שנשלח
+        // מיזוג עם מה שבמכשיר עכשיו (כולל עריכות שנעשו בזמן הבקשה)
+        const st = CC.lww(S, res.state);
+        if (CC.fp(st) !== CC.fp(res.state)) again = true;
+        const before = CC.fp(S);
+        applyCloudState(st);
+        if ((res.result === 'pulled' || res.result === 'merged') && CC.fp(S) !== before) toast('עודכן מהענן ↻');
+      } else if (CC.fp(S) !== CC.fp(sent)) again = true;
+      if (again) setTimeout(() => scheduleCloud(800), 0);
       return true;
     } catch (e) {
       registerCloudSync();
@@ -4495,6 +4609,10 @@ let flushedFp = null;
 function flushOnHide() {
   if (!CC.on || !cloudAuth || !navigator.onLine || cloudBackedUp() || !cloudState.updateTime) return registerCloudSync();
   if (!hasData()) return; // לעולם לא שולחים מצב ריק בלי מיזוג
+  try { // עותק ישן של האפליקציה לא שולח מצב שלשונית אחרת כבר עדכנה
+    const ls = JSON.parse(localStorage.getItem(KEY));
+    if (ls && (ls.savedAt || 0) > (S.savedAt || 0)) return registerCloudSync();
+  } catch (e) { /* */ }
   const a = authCache;
   if (!a || a.exp < Date.now() + 30000) return registerCloudSync();
   const st = CC.clean(S);
@@ -4506,9 +4624,8 @@ function flushOnHide() {
   fetch(u.url, { ...u.init, keepalive: true }).then(async r => {
     if (!r.ok) throw new Error(r.status);
     const j = await r.json();
-    cloudState = { fp: u.fp, at: Date.now(), error: null, updateTime: j.updateTime };
+    cloudState = { fp: u.fp, at: Date.now(), error: null, updateTime: j.updateTime, edit: S.editedAt || 0 };
     await CC.set('cloud', cloudState);
-    await CC.set('base', st);
   }).catch(() => { flushedFp = null; });
   registerCloudSync();
 }
@@ -4578,9 +4695,8 @@ async function afterSignIn(a) {
     for (const k of Object.keys(S)) delete S[k];
     Object.assign(S, d, { prefs: { ...d.prefs, ...keepPrefs }, backup: {} });
     save(); syncTent();
-    await CC.del('base'); await CC.del('cloud');
+    await CC.del('cloud');
   } else if (!owner) {
-    await CC.del('base'); // אין בסיס משותף – מיזוג "איחוד" בלי מחיקות
     if (hasData()) await takeSnapshot('לפני סנכרון ראשון');
   }
   cloudState = (await CC.get('cloud')) || {};
@@ -4756,7 +4872,11 @@ async function importFromHash() {
       ? `להעביר לכאן את הנתונים מהקובץ המקומי?\n${backupSummary(o)}\n\nהנתונים שכבר באתר יישמרו כגרסה קודמת.`
       : `להעביר לכאן את הנתונים מהקובץ המקומי?\n${backupSummary(o)}`;
     if (!confirm(msg)) return true;
-    await applyState(o.state, 'לפני מעבר מהקובץ המקומי');
+    // מיזוג (לא החלפה): מה שכבר באתר/בענן לא נמחק, ומה שהגיע מהקובץ מתווסף
+    await takeSnapshot('לפני מעבר מהקובץ המקומי');
+    const merged = CC.lww(S, o.state);
+    Object.assign(S, merged, { prefs: { ...S.prefs, ...(o.state.prefs || {}), ...(merged.prefs && merged.prefs.tent ? { tent: merged.prefs.tent } : {}) } });
+    save(); syncTent(); render();
     toast('כל הנתונים הועברו ✓');
   } catch (e) {
     toast('לא הצלחתי לקרוא את הנתונים שהועברו');

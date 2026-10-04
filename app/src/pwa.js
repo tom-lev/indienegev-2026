@@ -81,7 +81,11 @@ async function importFromHash() {
       ? `להעביר לכאן את הנתונים מהקובץ המקומי?\n${backupSummary(o)}\n\nהנתונים שכבר באתר יישמרו כגרסה קודמת.`
       : `להעביר לכאן את הנתונים מהקובץ המקומי?\n${backupSummary(o)}`;
     if (!confirm(msg)) return true;
-    await applyState(o.state, 'לפני מעבר מהקובץ המקומי');
+    // מיזוג (לא החלפה): מה שכבר באתר/בענן לא נמחק, ומה שהגיע מהקובץ מתווסף
+    await takeSnapshot('לפני מעבר מהקובץ המקומי');
+    const merged = CC.lww(S, o.state);
+    Object.assign(S, merged, { prefs: { ...S.prefs, ...(o.state.prefs || {}), ...(merged.prefs && merged.prefs.tent ? { tent: merged.prefs.tent } : {}) } });
+    save(); syncTent(); render();
     toast('כל הנתונים הועברו ✓');
   } catch (e) {
     toast('לא הצלחתי לקרוא את הנתונים שהועברו');
