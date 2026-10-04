@@ -754,3 +754,52 @@ textarea.text-in { min-height: 84px; resize: vertical; direction: ltr; font-fami
   font-size: 13px; font-weight: 800;
 }
 .map-ui .lg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+
+/* ───────── יומן סיקור ───────── */
+.journal .meter { display: grid; grid-template-columns: 74px auto 1fr; align-items: center; gap: 8px; margin-bottom: 8px; }
+.journal .ml { font-size: 14px; font-weight: 800; }
+.journal .mw { font-size: 13px; font-weight: 700; color: var(--ink-2); }
+.journal .dots { display: flex; gap: 6px; }
+.journal .dots button {
+  width: 30px; height: 30px; border-radius: 50%;
+  border: 2px solid var(--ink); background: transparent;
+}
+.journal .dots button.on { background: var(--coral); }
+.journal .notes { margin: 10px 0 8px; }
+.note { background: var(--cream); border-radius: 12px; padding: 8px 10px; margin-bottom: 6px; }
+.nm { font-size: 12px; font-weight: 700; color: var(--ink-2); }
+.nt { font-size: 15px; margin: 3px 0 2px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.note .na { display: flex; gap: 14px; }
+.note .na button { font-size: 12.5px; font-weight: 700; color: var(--ink-2); text-decoration: underline; padding: 4px 0; }
+.note-in {
+  width: 100%; padding: 10px 12px; border-radius: 12px; border: 2px solid var(--ink);
+  background: #fffaf0; font-size: 16px; resize: vertical; margin-bottom: 8px;
+}
+.tl-item { display: grid; grid-template-columns: 48px 1fr; gap: 8px; margin-bottom: 10px; }
+.tl-t { font-weight: 900; font-size: 14px; direction: ltr; text-align: center; padding-top: 8px; }
+.tl-b { background: var(--cream); border-radius: 14px; padding: 8px 10px; }
+.tl-ev { display: block; width: 100%; text-align: start; border-inline-start: 4px solid var(--c); padding-inline-start: 8px; margin-bottom: 4px; }
+.tl-ev b { display: block; font-size: 14.5px; }
+.tl-ev small { font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.tl-text { font-size: 15px; white-space: pre-wrap; overflow-wrap: anywhere; margin-bottom: 2px; }
+.tl-rate { font-size: 14px; font-weight: 700; }
+.sumtbl .srow { display: grid; grid-template-columns: minmax(0, 76px) 18px minmax(0, 1fr) 26px 18px minmax(0, 1fr) 26px; align-items: center; gap: 5px; padding: 6px 0; font-size: 13px; }
+.sumtbl .stag { overflow: hidden; text-overflow: ellipsis; }
+.mbar { display: block; }
+.sumtbl .srow + .srow { border-top: 1px dashed var(--line-2); }
+.sumtbl .sk { font-size: 13px; }
+.sumtbl small { color: var(--ink-3); font-weight: 700; }
+.mbar { height: 8px; background: rgba(21,63,76,.12); border-radius: 4px; overflow: hidden; }
+.mbar i { display: block; height: 100%; background: var(--coral); }
+
+/* טוסט בלי כפתור לא חוסם לחיצות על מה שמתחתיו */
+.toast.show:not(:has(button)) { pointer-events: none; }
+
+/* כותרת צפופה בטלפון צר (שלושה כפתורים ב"הלוז שלי") */
+.top h1 { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 420px) {
+  .top h1 { font-size: 24px; }
+  .top-row { gap: 6px; }
+  .top-row .icon-btn { width: 38px; height: 38px; }
+  .logo-btn, .logo-btn img { height: 24px; }
+}

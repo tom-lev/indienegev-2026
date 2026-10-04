@@ -41,7 +41,8 @@ function renderHeader() {
     </div>`;
   }
   const mineBtns = tab === 'mine'
-    ? `<button class="icon-btn" data-act="friends" aria-label="חברים">${ICON.users}</button>
+    ? `<button class="icon-btn" data-act="journal" aria-label="יומן סיקור">${ICON.note}</button>
+       <button class="icon-btn" data-act="friends" aria-label="חברים">${ICON.users}</button>
        <button class="icon-btn solid" data-act="share" aria-label="שיתוף">${ICON.share}</button>` : '';
   $('#top').innerHTML = `
     <div class="top-row">
@@ -109,6 +110,7 @@ $('#top').addEventListener('click', e => {
   if (!a) return;
   if (a.dataset.act === 'share') openShare();
   if (a.dataset.act === 'friends') openFriends();
+  if (a.dataset.act === 'journal') openTimeline();
   if (a.dataset.act === 'settings') openSettings();
 });
 

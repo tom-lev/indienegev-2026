@@ -82,7 +82,7 @@ const FRIEND_COLOR = ['#ef8d83', '#c5cc69', '#9c9ab9', '#5f8eaa', '#96a96a', '#f
 
 function defaults() {
   return {
-    v: 1, dataVersion: DATA_VERSION, name: '', picks: {}, friends: [],
+    v: 1, dataVersion: DATA_VERSION, name: '', picks: {}, friends: [], notes: [], ratings: {},
     prefs: { day: null, view: 'grid', filter: 'all', showMaybe: true, friendsOnGrid: true },
   };
 }

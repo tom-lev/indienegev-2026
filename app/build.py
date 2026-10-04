@@ -22,7 +22,7 @@ SITE = PROJECT / 'אינדינגב 2026 · 15-17 באוקטובר, מצפה גב
 
 # סדר קבצי ה-JS חשוב: data → core → ui → מסכים → main
 APP_FILES = ['data.js', 'core.js', 'ui.js', 'grid.js', 'mine.js', 'sheet.js', 'search.js',
-             'map.js', 'now.js', 'share.js', 'friends.js', 'main.js']
+             'map.js', 'now.js', 'share.js', 'friends.js', 'journal.js', 'main.js']
 VENDOR_FILES = ['qrcode.min.js', 'jsQR.min.js']
 
 INK = (21, 63, 76)

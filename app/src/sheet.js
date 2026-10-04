@@ -50,6 +50,7 @@ function renderEventSheet(body, ev) {
     </div>
     ${going.length ? `<div class="going-line">גם הולכים: ${going.map(f => `<span class="av sm" style="--fc:${f.color}">${f.emoji}</span>${esc(f.name)} <span style="opacity:.6">(${LV_LABEL[f.picks[ev.id]]})</span>`).join(' ')}</div>` : ''}
     <button class="btn block" data-navgo>${ICON.pin} ניווט ל${esc(st.name)}</button>
+    ${journalSection(ev)}
 
     ${mineClash.length ? `<div class="sec"><h3>מתנגש בלוז שלך <span class="chip warn">${mineClash.length}</span></h3>
       ${mineClash.map(o => ovRow(o, 'mine')).join('')}</div>` : ''}
@@ -62,6 +63,7 @@ function renderEventSheet(body, ev) {
   body.onclick = e => {
     const b = e.target.closest('button');
     if (!b) return;
+    if (journalClick(b, ev)) return;
     if (b.dataset.lv != null) {
       const nl = +b.dataset.lv;
       setLevel(ev.id, nl === lv && nl ? 0 : nl);
