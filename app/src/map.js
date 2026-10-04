@@ -301,6 +301,7 @@ function openTentSheet() {
       <h2 class="ev-name">האוהל שלי</h2>
       <p class="ev-meta">המיקום נשמר רק בטלפון הזה</p>
       <button class="btn block" data-t="go" style="margin-top:14px">${ICON.pin} ניווט לאוהל</button>
+      <button class="btn coral block" data-t="share" style="margin-top:10px">${ICON.image} שליחת מפה עם האוהל לחברים</button>
       <div class="btn-row" style="margin-top:10px">
         <button class="btn alt" data-t="move">${ICON.edit} הזזה</button>
         <button class="btn alt" data-t="del">${ICON.trash} הסרה</button>
@@ -310,6 +311,7 @@ function openTentSheet() {
       if (!b) return;
       const a = b.dataset.t;
       if (a === 'go') goTo('tent');
+      if (a === 'share') shareTentImage();
       if (a === 'move') closeAllLayers().then(() => { picking = 'tent'; updateRoute(null); });
       if (a === 'del' && confirm('להסיר את האוהל מהמפה?')) {
         delete S.prefs.tent;
