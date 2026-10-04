@@ -52,7 +52,8 @@ async function device(label) {
   const tabs = await B.ev(() => [...document.querySelectorAll('.who-tabs [data-who]')].map(b => b.textContent.trim()));
   check('יש לשוניות: שלי + משותף + אליס', tabs.length === 3 && /שלי/.test(tabs[0]) && /משותף/.test(tabs[1]) && /אליס/.test(tabs[2]), tabs.join(' | '));
   const meRows = await B.ev(() => ({ ids: [...document.querySelectorAll('#mscroll .row[data-ev]')].map(r => r.dataset.ev), avs: document.querySelectorAll('#mscroll .avs').length }));
-  check('בלשונית שלי – רק ההופעות שלי, בלי אווטארים של חברים', meRows.avs === 0 && !meRows.ids.includes(await B.ev(() => BY_START[0].id)), JSON.stringify(meRows));
+  check('בלשונית שלי – רק ההופעות שלי', !meRows.ids.includes(await B.ev(() => BY_START[0].id)), JSON.stringify(meRows));
+  check('בלשונית שלי – אייקון של חבר שהולך גם הוא', meRows.avs === (await B.ev(() => BY_START[5].day === viewDay) ? 1 : 0), meRows.avs);
 
   await B.page.click('.who-tabs [data-who^="f"]'); await sleep(400);
   const fv = await B.ev(() => ({

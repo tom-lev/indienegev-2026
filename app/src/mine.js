@@ -144,7 +144,7 @@ function renderMine(view) {
     const g = gridMarkup(dayId, {
       only: e => ids.has(e.id),
       lvOf: sel.kind === 'friend' ? incl : level,
-      people: sel.kind === 'shared' ? sharedPeople : sel.kind === 'friend' ? (ev => (level(ev.id) ? [meLook()] : [])) : null,
+      people: sel.kind === 'shared' ? sharedPeople : sel.kind === 'friend' ? (ev => (level(ev.id) ? [meLook()] : [])) : friendsGoing,
     });
     view.innerHTML = `<div class="mine-split"><div class="mine-top">${top}</div><div class="gscroll scroll" id="gscroll">${g.html}</div></div>`;
     const sc = $('#gscroll');
@@ -156,7 +156,7 @@ function renderMine(view) {
     let body = empty;
     if (!body) {
       body = sel.kind === 'shared' ? sharedList(dayEvs)
-        : dayList(dayEvs, incl, e => ({ nav: true, levelChip: true, noFriends: true, ...(sel.kind === 'friend' ? { lv: incl(e.id) } : {}) }));
+        : dayList(dayEvs, incl, e => ({ nav: true, levelChip: true, ...(sel.kind === 'friend' ? { lv: incl(e.id), noFriends: true } : {}) })); // בלוז שלי – מי מהחברים הולך
     }
     view.innerHTML = `<div class="scroll" id="mscroll"><div class="pad">${top}${body}</div></div>`;
     root = $('#mscroll');
