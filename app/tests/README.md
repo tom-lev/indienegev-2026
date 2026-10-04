@@ -10,6 +10,7 @@ python app/tests/fakebase.py                       # Firebase מדומה על 87
 python -m http.server 8765 --bind 127.0.0.1 -d docs  # האפליקציה על 8765
 # 3. הרצה (צריך puppeteer-core ו-Chrome)
 node app/tests/suite.js
+node app/tests/redirect.js      # כניסה בהפניה (אייפון)
 # 4. חשוב: לבנות מחדש את הגרסה האמיתית לפני push
 python app/build.py
 ```

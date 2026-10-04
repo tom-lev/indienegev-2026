@@ -315,5 +315,6 @@ async function initBackup() {
   dailySnapshot();
   await loadCloud();
   renderHeader();
+  if (CC.on && await finishGoogleRedirect()) { if (!cloudAuth) maybeShowWelcome(); return; }
   if (cloudAuth) pullCloud(); else maybeShowWelcome();
 }

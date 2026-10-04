@@ -72,12 +72,14 @@ const CC = (() => {
   }
 
   /* כניסה: טוקן גוגל (מ-Google Identity Services) ← משתמש Firebase */
-  async function signInWithGoogleToken(googleIdToken) {
-    const r = await req(`${ep.idp}?key=${cfg.apiKey}`, {
+  async function signInWithGoogleToken(googleIdToken, nonce) {
+    const call = withNonce => req(`${ep.idp}?key=${cfg.apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ postBody: `id_token=${googleIdToken}&providerId=google.com`, requestUri: (typeof location !== 'undefined' ? location.origin : 'http://localhost'), returnSecureToken: true }),
+      body: JSON.stringify({ postBody: `id_token=${googleIdToken}&providerId=google.com${withNonce ? `&nonce=${nonce}` : ''}`, requestUri: (typeof location !== 'undefined' ? location.origin : 'http://localhost'), returnSecureToken: true }),
     });
+    let r = await call(!!nonce);
+    if (!r.ok && nonce && r.status === 400) r = await call(false); // כניסה בהפניה: אם השרת לא מקבל את ה-nonce – בלעדיו
     if (!r.ok) throw new Error(`הכניסה נכשלה (${r.status})`);
     const j = await r.json();
     const a = { uid: j.localId, email: j.email, name: j.displayName || j.firstName || '', idToken: j.idToken, refreshToken: j.refreshToken, exp: Date.now() + (+j.expiresIn) * 1000 };
@@ -292,7 +294,7 @@ const CC = (() => {
 /* Service Worker – האפליקציה נפתחת מהעותק השמור בטלפון, גם בלי קליטה.
    אסטרטגיה: מטמון קודם (פתיחה מיידית גם בקליטה חלשה). עדכון גרסה מגיע כ-SW חדש
    (הקובץ הזה משתנה בכל בנייה בגלל VERSION), שמחכה עד שהמשתמש מאשר רענון. */
-const VERSION = 'db6ee32f851d';
+const VERSION = '6fc038735910';
 const CACHE = 'indn26-' + VERSION;
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 

@@ -157,24 +157,62 @@ function loadGis() {
     document.head.append(s);
   }));
 }
+/* באייפון/אייפד (ספארי וכל דפדפן אחר שם) חלון ההתחברות הקופץ של Google חוזר בלי תשובה (חסימת עוגיות של ספארי).
+   לכן שם עוברים לדף של Google וחוזרים לאתר עם האישור בכתובת (#id_token=...). בשאר המכשירים – הכפתור הרגיל + קישור גיבוי לאותה דרך. */
+const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const GKEY = 'indienegev-gsignin';
+const hex = buf => [...new Uint8Array(buf)].map(x => x.toString(16).padStart(2, '0')).join('');
+async function googleRedirect() {
+  if (!navigator.onLine) { toast('צריך קליטה בשביל ההתחברות'); return; }
+  const nonce = hex(crypto.getRandomValues(new Uint8Array(16))), state = hex(crypto.getRandomValues(new Uint8Array(16)));
+  try { localStorage.setItem(GKEY, JSON.stringify({ nonce, state, at: Date.now() })); } catch (e) { /* */ }
+  const p = new URLSearchParams({
+    client_id: CC.cfg.googleClientId, redirect_uri: location.origin + location.pathname,
+    response_type: 'id_token', scope: 'openid email profile', prompt: 'select_account', state,
+    nonce: hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(nonce))),
+  });
+  location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + p;
+}
+/* חזרה מדף ההתחברות של Google. מחזיר true אם הכתובת הייתה חזרה כזו */
+async function finishGoogleRedirect() {
+  const h = location.hash;
+  if (!/^#(.*&)?(id_token|error)=/.test(h)) return false;
+  history.replaceState(null, '', location.pathname + location.search);
+  const q = new URLSearchParams(h.slice(1));
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(GKEY)); localStorage.removeItem(GKEY); } catch (e) { /* */ }
+  if (q.get('error')) { if (q.get('error') !== 'access_denied') toast(`הכניסה לא הושלמה (${q.get('error')})`); return true; }
+  if (!saved || saved.state !== q.get('state')) { toast('הכניסה לא הושלמה – נסו שוב'); return true; }
+  await onGoogleCredential({ credential: q.get('id_token') }, saved.nonce);
+  return true;
+}
+function redirectButton(el) {
+  el.innerHTML = `<button type="button" class="g-redirect"><svg viewBox="0 0 48 48" width="20" height="20" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.2l7.9 6.2C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.4c-.5 2.9-2.2 5.3-4.6 6.9l7.4 5.8c4.3-4 6.9-9.9 6.9-17.2z"/><path fill="#FBBC05" d="M10.6 28.6c-.5-1.4-.8-2.9-.8-4.6s.3-3.2.8-4.6l-7.9-6.2C1 16.6 0 20.2 0 24s1 7.4 2.7 10.8l7.9-6.2z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.8-5.8l-7.4-5.8c-2.1 1.4-4.8 2.3-8.4 2.3-6.2 0-11.5-4.1-13.4-9.9l-7.9 6.2C6.6 42.6 14.6 48 24 48z"/></svg><span>המשך עם Google</span></button>`;
+  el.querySelector('button').onclick = googleRedirect;
+}
 async function renderGoogleButton(el) {
   if (!navigator.onLine) { el.innerHTML = '<p class="g-note">צריך קליטה בשביל ההתחברות (פעם אחת).</p>'; return; }
+  if (isIOS()) { redirectButton(el); return; }
   try {
     await loadGis();
     google.accounts.id.initialize({ client_id: CC.cfg.googleClientId, callback: onGoogleCredential, auto_select: false, use_fedcm_for_prompt: true });
     el.innerHTML = '';
     google.accounts.id.renderButton(el, { theme: 'filled_blue', size: 'large', shape: 'pill', text: 'continue_with', locale: 'he', width: Math.min(320, el.clientWidth || 300) });
+    const alt = document.createElement('button');
+    alt.type = 'button'; alt.className = 'g-alt'; alt.textContent = 'הכפתור לא עובד? כניסה דרך דף של Google';
+    alt.onclick = googleRedirect;
+    el.after(alt);
   } catch (e) {
-    el.innerHTML = `<p class="g-note">לא הצלחתי לטעון את ההתחברות (${esc(e.message)}). ננסה שוב כשתהיה קליטה.</p>`;
+    redirectButton(el); // הספרייה של Google לא נטענה – הדרך החלופית לא צריכה אותה
   }
 }
 let signingIn = false;
-async function onGoogleCredential(resp) {
+async function onGoogleCredential(resp, nonce) {
   if (signingIn) return;
   signingIn = true;
   try {
     toast('מתחבר…');
-    const a = await CC.signInWithGoogleToken(resp.credential);
+    const a = await CC.signInWithGoogleToken(resp.credential, nonce);
     cloudAuth = { uid: a.uid, email: a.email, name: a.name };
     authCache = a;
     await afterSignIn(a);
@@ -235,7 +273,7 @@ function maybeShowWelcome() {
   const btn = $('#wgbtn', welcomeEl);
   renderGoogleButton(btn).then(() => {
     // בלי קליטה אי אפשר להתחבר – מאפשרים להמשיך, והמסך יחזור כשתהיה קליטה
-    if (!navigator.onLine || !btn.querySelector('iframe, div[role=button]')) $('[data-wlater]', welcomeEl).classList.remove('hidden');
+    if (!navigator.onLine || !btn.querySelector('iframe, div[role=button], button')) $('[data-wlater]', welcomeEl).classList.remove('hidden');
   });
   welcomeEl.querySelector('[data-wlater]').onclick = () => {
     closeWelcome();
