@@ -152,76 +152,53 @@ function ago(ms) {
   return d === 1 ? 'אתמול' : `לפני ${d} ימים`;
 }
 
+/* מעבר לרשימת החברים (בלשונית "פרופיל") */
 function openFriends() {
-  const api = openPanel('חברים והלוז הקבוצתי', (body, api) => {
-    const fr = S.friends;
-    const me = meLook();
-
-    // הופעות משותפות: לפחות 2 אנשים (כולל אותי) מבין הפעילים
-    const act = activeFriends();
-    const shared = BY_START.map(ev => {
-      const people = act.filter(f => f.picks[ev.id]);
-      if (level(ev.id)) people.unshift(me);
-      return { ev, people };
-    }).filter(x => x.people.length >= 2);
-
-    const friendRows = fr.map(f => `
-      <div class="friend-row ${f.active === false ? 'off' : ''}">
-        <span class="av" style="--fc:${f.color}">${f.emoji}</span>
-        <div class="info">
-          <div class="n">${esc(f.name)}</div>
-          <div class="m">${Object.keys(f.picks).length} הופעות · ${f.src ? (f.liveErr === 'gone' ? 'הפסיק/ה לשתף' : '🔄 מתעדכן לבד') : 'צילום מצב'} · ${ago(f.importedAt)}</div>
-        </div>
-        <button class="icon-btn" data-toggle="${f.id}" aria-label="${f.active === false ? 'הצג' : 'הסתר'}">${f.active === false ? ICON.eyeOff : ICON.eye}</button>
-        <button class="icon-btn" data-rename="${f.id}" aria-label="שינוי שם">${ICON.edit}</button>
-        <button class="icon-btn" data-del="${f.id}" aria-label="מחיקה">${ICON.trash}</button>
-      </div>`).join('');
-
-    let lastDay = null;
-    const sharedRows = shared.map(({ ev, people }) => {
-      const sep = ev.day !== lastDay ? `<div class="hour-sep">${dayLabel(ev.day)}</div>` : '';
-      lastDay = ev.day;
-      const st = STAGE[ev.stage];
-      return sep + `<div class="row lv${level(ev.id)}" style="${stageVars(ev.stage)}" data-ev="${ev.id}" role="button" tabindex="0">
-        <div class="t">${ev.s}<small>${ev.e}</small></div>
-        <div><div class="n">${esc(ev.name)}</div>
-          <div class="sub"><span class="stag">${esc(st.short)}</span>${friendAvatars(people)}<span>${people.length} הולכים</span></div></div>
-        <button class="nav-btn" data-nav="${ev.id}" aria-label="ניווט">${ICON.pin}</button>
-      </div>`;
-    }).join('');
-
-    body.innerHTML = `
-      <div class="card-box"><h3>הדמות שלך</h3><p>כך החברים יראו אותך. אפשר להחליף מתי שרוצים; דמות של חבר תפוסה.</p>${avatarPicker()}</div>
-      <button class="btn block" data-a="import" style="margin-bottom:14px">${ICON.import} הוספת חבר/ה (קוד או QR)</button>
-      ${fr.length ? friendRows : `<div class="empty" style="padding:16px"><p>עוד אין חברים ברשימה. בקשו מהם לשתף את הלוז שלהם (בכפתור "שתף" ב"הלוז שלי") וייבאו אותו כאן.</p></div>`}
-      ${fr.length ? `<label class="switch" style="margin:6px 0 4px"><input type="checkbox" id="onGrid" ${S.prefs.friendsOnGrid ? 'checked' : ''}> הצג חברים על הלוז המלא</label>
-        <p style="font-size:12.5px;color:var(--ink-2);margin:6px 0 0">🔄 = הלוז מתעדכן לבד כשיש אינטרנט. "צילום מצב" = קוד ישן – לעדכון מבקשים מהם קוד חדש. הלוז של כל חבר מופיע כלשונית נפרדת ב"הלוז שלי".</p>` : ''}
-      ${fr.length ? `<h3 class="section-t">הופעות משותפות <span class="chip soft">${shared.length}</span></h3>
-        ${sharedRows || '<p style="color:var(--ink-2)">עוד אין הופעה שלפחות שניים מכם בחרו.</p>'}` : ''}`;
-
-    body.onclick = e => {
-      if (e.target.closest('[data-av]')) return; // בוחר הדמות
-      const b = e.target.closest('button, [data-ev]');
-      if (!b) return;
-      const f = id => S.friends.find(x => x.id === id);
-      if (b.dataset.a === 'import') return openImport();
-      if (b.dataset.toggle) { const x = f(b.dataset.toggle); x.active = x.active === false; save(); return api.render(); }
-      if (b.dataset.rename) {
-        const x = f(b.dataset.rename);
-        const n = prompt('שם חדש:', x.name);
-        if (n && n.trim()) { x.name = n.trim().slice(0, 24); save(); api.render(); }
-        return;
-      }
-      if (b.dataset.del) {
-        const x = f(b.dataset.del);
-        if (confirm(`למחוק את ${x.name} מרשימת החברים?`)) { S.friends = S.friends.filter(y => y !== x); if (S.prefs.mineView === x.id) S.prefs.mineView = 'me'; save(); api.render(); }
-        return;
-      }
-      rowClick(e);
-    };
-    bindAvatarPicker(body, () => api.render());
-    const og = $('#onGrid', body);
-    if (og) og.onchange = () => { S.prefs.friendsOnGrid = og.checked; save(); };
+  closeAllLayers().then(() => {
+    setTab('profile');
+    const el = $('#friends');
+    if (el) el.scrollIntoView({ block: 'start' });
   });
-  api.live = true; // מתעדכן כשמשנים בחירות מתוך גיליון שנפתח מעליו
+}
+
+/* רשימת החברים – חלק מלשונית "פרופיל" */
+function friendsBlock() {
+  const fr = S.friends;
+  const rows = fr.map(f => `
+    <div class="friend-row ${f.active === false ? 'off' : ''}">
+      <span class="av" style="--fc:${f.color}">${f.emoji}</span>
+      <div class="info">
+        <div class="n">${esc(f.name)}</div>
+        <div class="m">${Object.keys(f.picks).length} הופעות · ${f.src ? (f.liveErr === 'gone' ? 'הפסיק/ה לשתף' : '🔄 מתעדכן לבד') : 'צילום מצב'} · ${ago(f.importedAt)}</div>
+      </div>
+      <button class="icon-btn" data-toggle="${f.id}" aria-label="${f.active === false ? 'הצג' : 'הסתר'}">${f.active === false ? ICON.eyeOff : ICON.eye}</button>
+      <button class="icon-btn" data-rename="${f.id}" aria-label="שינוי שם">${ICON.edit}</button>
+      <button class="icon-btn" data-del="${f.id}" aria-label="מחיקה">${ICON.trash}</button>
+    </div>`).join('');
+  return `
+    <button class="btn block" data-fa="import" style="margin-bottom:14px">${ICON.import} הוספת חבר/ה (לינק, קוד או QR)</button>
+    ${fr.length ? rows : `<div class="empty" style="padding:16px"><p>עוד אין חברים ברשימה. בקשו מהם לשלוח לינק לשיתוף הלוז (בפרופיל ← "שיתוף הלוז שלי").</p></div>`}
+    ${fr.length ? `<label class="switch" style="margin:6px 0 4px"><input type="checkbox" id="onGrid" ${S.prefs.friendsOnGrid ? 'checked' : ''}> הצג חברים על הלוז המלא</label>
+      <p style="font-size:12.5px;color:var(--ink-2);margin:6px 0 14px">🔄 = הלוז מתעדכן לבד כשיש אינטרנט. "צילום מצב" = קוד ישן – לעדכון מבקשים מהם לינק חדש. 👁 = מוסתר/ת מ"משותף" ומהאייקונים. הלוז של כל חבר – לשונית נפרדת ב"הלוז שלי".</p>` : ''}`;
+}
+function bindFriends(root, refresh) {
+  root.addEventListener('click', e => {
+    const b = e.target.closest('[data-fa], [data-toggle], [data-rename], [data-del]');
+    if (!b) return;
+    const f = id => S.friends.find(x => x.id === id);
+    if (b.dataset.fa === 'import') return openImport();
+    if (b.dataset.toggle) { const x = f(b.dataset.toggle); x.active = x.active === false; save(); return refresh(); }
+    if (b.dataset.rename) {
+      const x = f(b.dataset.rename);
+      const n = prompt('שם חדש:', x.name);
+      if (n && n.trim()) { x.name = n.trim().slice(0, 24); save(); refresh(); }
+      return;
+    }
+    if (b.dataset.del) {
+      const x = f(b.dataset.del);
+      if (confirm(`למחוק את ${x.name} מרשימת החברים?`)) { S.friends = S.friends.filter(y => y !== x); if (S.prefs.mineView === x.id) S.prefs.mineView = 'me'; save(); refresh(); }
+    }
+  });
+  const og = $('#onGrid', root);
+  if (og) og.onchange = () => { S.prefs.friendsOnGrid = og.checked; save(); };
 }

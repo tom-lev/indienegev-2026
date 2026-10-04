@@ -299,6 +299,21 @@ main#view { overflow: hidden; position: relative; min-height: 0; }
 .av-opt.on { border-color: var(--ink); background: color-mix(in srgb, var(--fc) 22%, transparent); }
 .av-opt:disabled { opacity: .38; }
 .av-opt small { font-size: 10.5px; font-weight: 700; color: var(--ink-2); max-width: 64px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* חיפוש קבוע בכותרת */
+.gsearch { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.gsearch .field { flex: 1; display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 12px; border-radius: 999px; background: var(--cream); border: 1.5px solid rgba(21,63,76,.18); }
+.gsearch .field svg { width: 18px; height: 18px; flex: none; opacity: .7; }
+.gsearch input { flex: 1; min-width: 0; border: 0; background: transparent; font: inherit; font-size: 15px; font-weight: 600; color: var(--ink); outline: none; padding: 8px 0; }
+.gsearch input::-webkit-search-cancel-button { -webkit-appearance: none; }
+.gs-x { display: none; font-size: 14px; font-weight: 800; color: var(--ink); padding: 8px 4px; }
+#top.searching .gs-x { display: block; }
+#top.searching .gsearch .field { border-color: var(--ink); }
+#top.searching .days, #top.searching .toolbar, #top.searching .cloud-status { display: none; }
+/* לשונית פרופיל */
+.prof-card { display: flex; align-items: center; gap: 14px; padding: 14px; margin-bottom: 14px; border-radius: 18px; background: color-mix(in srgb, var(--fc) 18%, var(--cream)); }
+.prof-card .av.big { width: 64px; height: 64px; font-size: 34px; flex: none; border-width: 3px; }
+.prof-name { flex: 1; min-width: 0; }
+.prof-name .text-in { margin: 4px 0 0; }
 .who-tabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 0 -14px 12px; padding: 2px 14px; }
 .who-tabs::-webkit-scrollbar { display: none; }
 .who-tabs button {

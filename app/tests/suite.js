@@ -120,7 +120,7 @@ const RICH = () => {
     check('A6', 'רצף שינויים מהיר → העלאה אחת (debounce)', d === 1, `${d} uploads`);
   });
   await test('A7', 'שורת "גיבוי אחרון לענן" מופיעה בכל חמשת המסכים', async () => {
-    const r = await A.ev(async () => { const out = []; for (const t of ['now', 'grid', 'mine', 'search', 'map']) { setTab(t); await new Promise(r => setTimeout(r, 150)); const e = document.querySelector('.top .cloud-status'); out.push(t + ':' + (e && !document.querySelector('#top').classList.contains('hidden') && /גיבוי אחרון לענן/.test(e.textContent) ? 'ok' : 'missing')); } setTab('mine'); return out; });
+    const r = await A.ev(async () => { const out = []; for (const t of ['now', 'grid', 'mine', 'map', 'profile']) { setTab(t); await new Promise(r => setTimeout(r, 150)); const e = document.querySelector('.top .cloud-status'); out.push(t + ':' + (e && !document.querySelector('#top').classList.contains('hidden') && /גיבוי אחרון לענן/.test(e.textContent) ? 'ok' : 'missing')); } setTab('mine'); return out; });
     check('A7', 'שורת "גיבוי אחרון לענן" מופיעה בכל חמשת המסכים', r.every(x => x.endsWith('ok')), r.join(' '));
   });
   await test('A8', 'פתק עם HTML לא מריץ קוד (XSS)', async () => {

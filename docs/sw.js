@@ -170,6 +170,8 @@ const CC = (() => {
   }
   /* החלפת כל הנתונים במצב אחר (שחזור גרסה): הכל "חדש עכשיו", ומה שלא קיים בו – נמחק */
   function replaceStamped(cur, st, now) {
+    // השחזור תמיד מאוחר מכל עריכה/מחיקה קיימת – גם אם קרו באותה אלפית שנייה
+    for (const t of [...Object.values(cur.tomb || {}), ...Object.values(cur.mt || {})]) if (t >= now) now = t + 1;
     const icur = items(cur), inew = items(st), mt = {}, tomb = { ...(cur.tomb || {}) };
     for (const key of Object.keys(inew)) { mt[key] = now; delete tomb[key]; }
     for (const key of Object.keys(icur)) if (!(key in inew)) tomb[key] = now;
@@ -325,7 +327,7 @@ const CC = (() => {
 /* Service Worker – האפליקציה נפתחת מהעותק השמור בטלפון, גם בלי קליטה.
    אסטרטגיה: מטמון קודם (פתיחה מיידית גם בקליטה חלשה). עדכון גרסה מגיע כ-SW חדש
    (הקובץ הזה משתנה בכל בנייה בגלל VERSION), שמחכה עד שהמשתמש מאשר רענון. */
-const VERSION = '55c400d2ef0b';
+const VERSION = 'b4feb2c4be36';
 const CACHE = 'indn26-' + VERSION;
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 

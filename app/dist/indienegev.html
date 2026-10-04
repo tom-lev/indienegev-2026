@@ -314,6 +314,21 @@ main#view { overflow: hidden; position: relative; min-height: 0; }
 .av-opt.on { border-color: var(--ink); background: color-mix(in srgb, var(--fc) 22%, transparent); }
 .av-opt:disabled { opacity: .38; }
 .av-opt small { font-size: 10.5px; font-weight: 700; color: var(--ink-2); max-width: 64px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* חיפוש קבוע בכותרת */
+.gsearch { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.gsearch .field { flex: 1; display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 12px; border-radius: 999px; background: var(--cream); border: 1.5px solid rgba(21,63,76,.18); }
+.gsearch .field svg { width: 18px; height: 18px; flex: none; opacity: .7; }
+.gsearch input { flex: 1; min-width: 0; border: 0; background: transparent; font: inherit; font-size: 15px; font-weight: 600; color: var(--ink); outline: none; padding: 8px 0; }
+.gsearch input::-webkit-search-cancel-button { -webkit-appearance: none; }
+.gs-x { display: none; font-size: 14px; font-weight: 800; color: var(--ink); padding: 8px 4px; }
+#top.searching .gs-x { display: block; }
+#top.searching .gsearch .field { border-color: var(--ink); }
+#top.searching .days, #top.searching .toolbar, #top.searching .cloud-status { display: none; }
+/* לשונית פרופיל */
+.prof-card { display: flex; align-items: center; gap: 14px; padding: 14px; margin-bottom: 14px; border-radius: 18px; background: color-mix(in srgb, var(--fc) 18%, var(--cream)); }
+.prof-card .av.big { width: 64px; height: 64px; font-size: 34px; flex: none; border-width: 3px; }
+.prof-name { flex: 1; min-width: 0; }
+.prof-name .text-in { margin: 4px 0 0; }
 .who-tabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 0 -14px 12px; padding: 2px 14px; }
 .who-tabs::-webkit-scrollbar { display: none; }
 .who-tabs button {
@@ -1528,6 +1543,7 @@ const ICON = {
   grid: svg('<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M9 4v17M15 4v17"/>'),
   mine: svg('<path d="m12 3 2.6 5.6 6 .7-4.4 4.1 1.2 6L12 16.4 6.6 19.4l1.2-6L3.4 9.3l6-.7z"/>'),
   search: svg('<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>'),
+  user: svg('<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/>'),
   map: svg('<path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"/><path d="M9 4v14M15 6v14"/>'),
   pin: svg('<path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>'),
   share: svg('<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/>'),
@@ -2219,17 +2235,30 @@ function openStage(stageId) {
 
 
 /* ── search.js ── */
-/* מסך חיפוש: לפי שם אמן, תעתיק, משתתפים ותוכן אירועי אדמה */
+/* חיפוש – שדה קבוע בכותרת בכל המסכים: לפי שם אמן, תעתיק, משתתפים ותוכן אירועי אדמה.
+   הקלדה/לחיצה על השדה פותחת את התוצאות במקום המסך הנוכחי; "ביטול" או "חזרה" מחזירים אליו. */
 
 const searchState = { q: '', kind: 'all' };
 let searchRefresh = null; // רענון תוצאות בלבד, כדי לא לאבד פוקוס בשדה
+let searchOn = false, searchLayer = null;
+
+function enterSearch() {
+  if (searchOn) return;
+  searchOn = true;
+  searchLayer = pushLayer(() => {
+    searchOn = false; searchLayer = null; searchState.q = '';
+    const i = $('#gq');
+    if (i) { i.value = ''; i.blur(); }
+    render();
+  });
+  $('#top').classList.add('searching');
+  renderSearch($('#view'));
+}
+function exitSearch() { if (searchOn) popLayer(); }
 
 function renderSearch(view) {
   view.innerHTML = `<div class="scroll" id="sscroll">
     <div class="search-box">
-      <label class="field">${ICON.search}<span class="sr">חיפוש</span>
-        <input id="q" type="search" placeholder="שם אמן, להקה או משתתף…" autocomplete="off" enterkeyhint="search" value="${esc(searchState.q)}">
-      </label>
       <div class="chips" role="group" aria-label="סינון">
         ${[['all', 'הכל'], ['music', 'הופעות'], ['adama', 'מתחם אדמה']].map(([k, l]) =>
           `<button data-kind="${k}" aria-pressed="${searchState.kind === k}">${l}</button>`).join('')}
@@ -2237,7 +2266,6 @@ function renderSearch(view) {
     </div>
     <div class="pad" id="results" style="padding-top:4px"></div>
   </div>`;
-  const input = $('#q');
   const results = $('#results');
   const draw = () => {
     const res = search(searchState.q, searchState.kind);
@@ -2248,7 +2276,6 @@ function renderSearch(view) {
       ? `<div class="result-meta">${head}</div>` + res.map(r => eventRow(r.ev, { hl: r.hl, hint: r.hint, showDay: true })).join('')
       : `<div class="empty"><h2>לא מצאנו</h2><p>אין אמן או אירוע בשם "${esc(searchState.q)}".<br>אפשר לנסות חלק מהשם, בעברית או באנגלית.</p></div>`;
   };
-  input.addEventListener('input', () => { searchState.q = input.value; draw(); });
   $('.chips', view).addEventListener('click', e => {
     const b = e.target.closest('[data-kind]');
     if (!b) return;
@@ -2258,8 +2285,7 @@ function renderSearch(view) {
   });
   bindRows(results);
   draw();
-  searchRefresh = () => { const st = $('#sscroll').scrollTop; draw(); $('#sscroll').scrollTop = st; };
-  if (!searchState.q) setTimeout(() => input.focus({ preventScroll: true }), 60);
+  searchRefresh = () => { const sc = $('#sscroll'); if (!sc) return; const st = sc.scrollTop; draw(); sc.scrollTop = st; };
 }
 
 
@@ -3854,78 +3880,139 @@ function ago(ms) {
   return d === 1 ? 'אתמול' : `לפני ${d} ימים`;
 }
 
+/* מעבר לרשימת החברים (בלשונית "פרופיל") */
 function openFriends() {
-  const api = openPanel('חברים והלוז הקבוצתי', (body, api) => {
-    const fr = S.friends;
-    const me = meLook();
-
-    // הופעות משותפות: לפחות 2 אנשים (כולל אותי) מבין הפעילים
-    const act = activeFriends();
-    const shared = BY_START.map(ev => {
-      const people = act.filter(f => f.picks[ev.id]);
-      if (level(ev.id)) people.unshift(me);
-      return { ev, people };
-    }).filter(x => x.people.length >= 2);
-
-    const friendRows = fr.map(f => `
-      <div class="friend-row ${f.active === false ? 'off' : ''}">
-        <span class="av" style="--fc:${f.color}">${f.emoji}</span>
-        <div class="info">
-          <div class="n">${esc(f.name)}</div>
-          <div class="m">${Object.keys(f.picks).length} הופעות · ${f.src ? (f.liveErr === 'gone' ? 'הפסיק/ה לשתף' : '🔄 מתעדכן לבד') : 'צילום מצב'} · ${ago(f.importedAt)}</div>
-        </div>
-        <button class="icon-btn" data-toggle="${f.id}" aria-label="${f.active === false ? 'הצג' : 'הסתר'}">${f.active === false ? ICON.eyeOff : ICON.eye}</button>
-        <button class="icon-btn" data-rename="${f.id}" aria-label="שינוי שם">${ICON.edit}</button>
-        <button class="icon-btn" data-del="${f.id}" aria-label="מחיקה">${ICON.trash}</button>
-      </div>`).join('');
-
-    let lastDay = null;
-    const sharedRows = shared.map(({ ev, people }) => {
-      const sep = ev.day !== lastDay ? `<div class="hour-sep">${dayLabel(ev.day)}</div>` : '';
-      lastDay = ev.day;
-      const st = STAGE[ev.stage];
-      return sep + `<div class="row lv${level(ev.id)}" style="${stageVars(ev.stage)}" data-ev="${ev.id}" role="button" tabindex="0">
-        <div class="t">${ev.s}<small>${ev.e}</small></div>
-        <div><div class="n">${esc(ev.name)}</div>
-          <div class="sub"><span class="stag">${esc(st.short)}</span>${friendAvatars(people)}<span>${people.length} הולכים</span></div></div>
-        <button class="nav-btn" data-nav="${ev.id}" aria-label="ניווט">${ICON.pin}</button>
-      </div>`;
-    }).join('');
-
-    body.innerHTML = `
-      <div class="card-box"><h3>הדמות שלך</h3><p>כך החברים יראו אותך. אפשר להחליף מתי שרוצים; דמות של חבר תפוסה.</p>${avatarPicker()}</div>
-      <button class="btn block" data-a="import" style="margin-bottom:14px">${ICON.import} הוספת חבר/ה (קוד או QR)</button>
-      ${fr.length ? friendRows : `<div class="empty" style="padding:16px"><p>עוד אין חברים ברשימה. בקשו מהם לשתף את הלוז שלהם (בכפתור "שתף" ב"הלוז שלי") וייבאו אותו כאן.</p></div>`}
-      ${fr.length ? `<label class="switch" style="margin:6px 0 4px"><input type="checkbox" id="onGrid" ${S.prefs.friendsOnGrid ? 'checked' : ''}> הצג חברים על הלוז המלא</label>
-        <p style="font-size:12.5px;color:var(--ink-2);margin:6px 0 0">🔄 = הלוז מתעדכן לבד כשיש אינטרנט. "צילום מצב" = קוד ישן – לעדכון מבקשים מהם קוד חדש. הלוז של כל חבר מופיע כלשונית נפרדת ב"הלוז שלי".</p>` : ''}
-      ${fr.length ? `<h3 class="section-t">הופעות משותפות <span class="chip soft">${shared.length}</span></h3>
-        ${sharedRows || '<p style="color:var(--ink-2)">עוד אין הופעה שלפחות שניים מכם בחרו.</p>'}` : ''}`;
-
-    body.onclick = e => {
-      if (e.target.closest('[data-av]')) return; // בוחר הדמות
-      const b = e.target.closest('button, [data-ev]');
-      if (!b) return;
-      const f = id => S.friends.find(x => x.id === id);
-      if (b.dataset.a === 'import') return openImport();
-      if (b.dataset.toggle) { const x = f(b.dataset.toggle); x.active = x.active === false; save(); return api.render(); }
-      if (b.dataset.rename) {
-        const x = f(b.dataset.rename);
-        const n = prompt('שם חדש:', x.name);
-        if (n && n.trim()) { x.name = n.trim().slice(0, 24); save(); api.render(); }
-        return;
-      }
-      if (b.dataset.del) {
-        const x = f(b.dataset.del);
-        if (confirm(`למחוק את ${x.name} מרשימת החברים?`)) { S.friends = S.friends.filter(y => y !== x); if (S.prefs.mineView === x.id) S.prefs.mineView = 'me'; save(); api.render(); }
-        return;
-      }
-      rowClick(e);
-    };
-    bindAvatarPicker(body, () => api.render());
-    const og = $('#onGrid', body);
-    if (og) og.onchange = () => { S.prefs.friendsOnGrid = og.checked; save(); };
+  closeAllLayers().then(() => {
+    setTab('profile');
+    const el = $('#friends');
+    if (el) el.scrollIntoView({ block: 'start' });
   });
-  api.live = true; // מתעדכן כשמשנים בחירות מתוך גיליון שנפתח מעליו
+}
+
+/* רשימת החברים – חלק מלשונית "פרופיל" */
+function friendsBlock() {
+  const fr = S.friends;
+  const rows = fr.map(f => `
+    <div class="friend-row ${f.active === false ? 'off' : ''}">
+      <span class="av" style="--fc:${f.color}">${f.emoji}</span>
+      <div class="info">
+        <div class="n">${esc(f.name)}</div>
+        <div class="m">${Object.keys(f.picks).length} הופעות · ${f.src ? (f.liveErr === 'gone' ? 'הפסיק/ה לשתף' : '🔄 מתעדכן לבד') : 'צילום מצב'} · ${ago(f.importedAt)}</div>
+      </div>
+      <button class="icon-btn" data-toggle="${f.id}" aria-label="${f.active === false ? 'הצג' : 'הסתר'}">${f.active === false ? ICON.eyeOff : ICON.eye}</button>
+      <button class="icon-btn" data-rename="${f.id}" aria-label="שינוי שם">${ICON.edit}</button>
+      <button class="icon-btn" data-del="${f.id}" aria-label="מחיקה">${ICON.trash}</button>
+    </div>`).join('');
+  return `
+    <button class="btn block" data-fa="import" style="margin-bottom:14px">${ICON.import} הוספת חבר/ה (לינק, קוד או QR)</button>
+    ${fr.length ? rows : `<div class="empty" style="padding:16px"><p>עוד אין חברים ברשימה. בקשו מהם לשלוח לינק לשיתוף הלוז (בפרופיל ← "שיתוף הלוז שלי").</p></div>`}
+    ${fr.length ? `<label class="switch" style="margin:6px 0 4px"><input type="checkbox" id="onGrid" ${S.prefs.friendsOnGrid ? 'checked' : ''}> הצג חברים על הלוז המלא</label>
+      <p style="font-size:12.5px;color:var(--ink-2);margin:6px 0 14px">🔄 = הלוז מתעדכן לבד כשיש אינטרנט. "צילום מצב" = קוד ישן – לעדכון מבקשים מהם לינק חדש. 👁 = מוסתר/ת מ"משותף" ומהאייקונים. הלוז של כל חבר – לשונית נפרדת ב"הלוז שלי".</p>` : ''}`;
+}
+function bindFriends(root, refresh) {
+  root.addEventListener('click', e => {
+    const b = e.target.closest('[data-fa], [data-toggle], [data-rename], [data-del]');
+    if (!b) return;
+    const f = id => S.friends.find(x => x.id === id);
+    if (b.dataset.fa === 'import') return openImport();
+    if (b.dataset.toggle) { const x = f(b.dataset.toggle); x.active = x.active === false; save(); return refresh(); }
+    if (b.dataset.rename) {
+      const x = f(b.dataset.rename);
+      const n = prompt('שם חדש:', x.name);
+      if (n && n.trim()) { x.name = n.trim().slice(0, 24); save(); refresh(); }
+      return;
+    }
+    if (b.dataset.del) {
+      const x = f(b.dataset.del);
+      if (confirm(`למחוק את ${x.name} מרשימת החברים?`)) { S.friends = S.friends.filter(y => y !== x); if (S.prefs.mineView === x.id) S.prefs.mineView = 'me'; save(); refresh(); }
+    }
+  });
+  const og = $('#onGrid', root);
+  if (og) og.onchange = () => { S.prefs.friendsOnGrid = og.checked; save(); };
+}
+
+
+/* ── profile.js ── */
+/* לשונית "פרופיל": השם, הדמות, שיתוף, חברים, חשבון וגיבוי, בלי קליטה, עזרה ואיפוס */
+
+function renderProfile(view) {
+  const me = meLook();
+  const n = Object.keys(S.picks).length;
+  const acct = typeof cloudAuth !== 'undefined' && cloudAuth
+    ? `מחובר/ת כ-<b>${esc(cloudAuth.name || cloudAuth.email || '')}</b>${cloudAuth.email ? ` <span dir="ltr">(${esc(cloudAuth.email)})</span>` : ''}`
+    : CC.on ? '<b>לא מחובר/ת</b> – בלי חשבון אין גיבוי לענן' : '';
+  view.innerHTML = `<div class="scroll" id="pscroll"><div class="pad">
+    <div class="prof-card" style="--fc:${me.color}">
+      <span class="av big">${me.emoji}</span>
+      <div class="prof-name">
+        <label class="field-l" for="pName">השם שלך (כך החברים רואים אותך)</label>
+        <input id="pName" class="text-in" value="${esc(S.name)}" maxlength="24" placeholder="השם שלך">
+      </div>
+    </div>
+
+    <div class="card-box"><h3>הדמות שלך</h3><p>אפשר להחליף מתי שרוצים. דמות שחבר/ה כבר קיבל/ה – תפוסה.</p>${avatarPicker()}</div>
+
+    <div class="card-box">
+      <h3>שיתוף הלוז שלי</h3>
+      <p>לינק, QR (בלי קליטה) או קוד. אצל החברים הלוז מתעדכן לבד.</p>
+      <button class="btn block" data-a="share">${ICON.share} שיתוף הלוז שלי</button>
+    </div>
+
+    <h3 class="section-t" id="friends">חברים ${S.friends.length ? `<span class="chip soft">${S.friends.length}</span>` : ''}</h3>
+    ${friendsBlock()}
+
+    <h3 class="section-t">חשבון וגיבוי</h3>
+    <div class="card-box">
+      ${acct ? `<p style="margin:0 0 6px">${acct}</p>` : ''}
+      ${CC.on && !(typeof cloudAuth !== 'undefined' && cloudAuth) ? '<div class="gbtn" id="pgbtn" style="margin:6px 0 10px"></div>' : ''}
+      <p style="margin:0 0 10px;font-size:14px;color:var(--ink-2)">${storageOK ? '' : '<b>בדפדפן הזה השמירה לא עובדת!</b> '}${isBackedUp() ? '✅ כל השינויים מגובים' : hasData() ? '⚠️ יש שינויים שלא גובו' : 'אין עדיין נתונים'}${lastBackupAt() ? ` · גיבוי אחרון ${agoText(lastBackupAt())}` : ''}</p>
+      <div class="btn-row">
+        <button class="btn sm" data-a="bkpanel">💾 גיבוי ושחזור</button>
+        <button class="btn alt sm" data-a="restore">${ICON.import} ייבוא לוז</button>
+      </div>
+    </div>
+
+    <div class="card-box">
+      <h3>בלי קליטה</h3>
+      <p style="margin:0">${IS_FILE ? 'זה הקובץ המקומי. מומלץ לעבור לאתר (ב"הלוז שלי").' : !IS_SITE ? '' : offlineReady ? '✓ מוכן לשימוש בלי קליטה' : '⏳ עדיין לא נשמר לשימוש בלי קליטה – פתחו פעם אחת עם קליטה'}${navigator.onLine ? '' : ' · עכשיו אין קליטה'}</p>
+    </div>
+
+    <div class="card-box">
+      <h3>איך משתמשים</h3>
+      <ul style="margin:0;padding-inline-start:20px;font-size:14px;line-height:1.6">
+        <li>חיפוש: השדה למעלה, בכל מסך.</li>
+        <li>לחיצה על הופעה: פרטים, חייב/אולי, ומה מתנגש.</li>
+        <li>לחיצה ארוכה בלוז המלא: הוספה מהירה כ"חייב".</li>
+        <li>"ניווט": פותח את המפה עם סימון הבמה.</li>
+        <li>הלוז של כל חבר – לשונית נפרדת ב"הלוז שלי", וגם "משותף".</li>
+      </ul>
+    </div>
+
+    <div class="card-box">
+      <h3>איפוס</h3>
+      <button class="btn alt sm" data-a="reset" style="border-color:var(--danger);color:var(--danger)">${ICON.trash} מחיקת כל הבחירות והחברים</button>
+    </div>
+    <p style="font-size:12px;color:var(--ink-3);margin:10px 0 0">${n} בחירות · נתונים v${DATA_VERSION} · לוז מתוך indnegev.co.il · אפליקציה אישית לא רשמית · ⁦15–17.10.2026⁩ מצפה גבולות</p>
+  </div></div>`;
+
+  const sc = $('#pscroll');
+  const g = $('#pgbtn', sc);
+  if (g) renderGoogleButton(g);
+  $('#pName', sc).onchange = e => { S.name = e.target.value.trim().slice(0, 24); save(); };
+  bindAvatarPicker(sc, () => rerender());
+  bindFriends(sc, () => rerender());
+  sc.addEventListener('click', async e => {
+    const b = e.target.closest('[data-a]');
+    if (!b) return;
+    const a = b.dataset.a;
+    if (a === 'share') openShare();
+    if (a === 'restore') openImport();
+    if (a === 'bkpanel') openBackupPanel();
+    if (a === 'reset' && confirm('למחוק את כל הבחירות והחברים? (נשמרת גרסה קודמת בגיבוי ושחזור)')) {
+      await takeSnapshot('לפני איפוס');
+      S.picks = {}; S.friends = []; S.prefs.mineView = 'me'; save(); render(); toast('הכל נמחק');
+    }
+  });
 }
 
 
@@ -4441,6 +4528,8 @@ const CC = (() => {
   }
   /* החלפת כל הנתונים במצב אחר (שחזור גרסה): הכל "חדש עכשיו", ומה שלא קיים בו – נמחק */
   function replaceStamped(cur, st, now) {
+    // השחזור תמיד מאוחר מכל עריכה/מחיקה קיימת – גם אם קרו באותה אלפית שנייה
+    for (const t of [...Object.values(cur.tomb || {}), ...Object.values(cur.mt || {})]) if (t >= now) now = t + 1;
     const icur = items(cur), inew = items(st), mt = {}, tomb = { ...(cur.tomb || {}) };
     for (const key of Object.keys(inew)) { mt[key] = now; delete tomb[key]; }
     for (const key of Object.keys(icur)) if (!(key in inew)) tomb[key] = now;
@@ -5353,8 +5442,8 @@ const TABS = [
   { id: 'now', label: 'עכשיו', title: 'עכשיו', icon: ICON.now },
   { id: 'grid', label: 'לוז מלא', title: 'ליינאפ!', icon: ICON.grid },
   { id: 'mine', label: 'הלוז שלי', title: 'הלוז שלי', icon: ICON.mine },
-  { id: 'search', label: 'חיפוש', title: 'חיפוש', icon: ICON.search },
   { id: 'map', label: 'מפה', title: 'מפה', icon: ICON.map },
+  { id: 'profile', label: 'פרופיל', title: 'פרופיל', icon: ICON.user },
 ];
 let tab = 'mine'; // פתיחת האפליקציה – תמיד "הלוז שלי", בלשונית "שלי"
 let viewDay = null;
@@ -5392,13 +5481,20 @@ function renderHeader() {
   }
   const mineBtns = tab === 'mine'
     ? `<button class="icon-btn" data-act="journal" aria-label="יומן סיקור">${ICON.note}</button>
-       <button class="icon-btn" data-act="friends" aria-label="חברים">${ICON.users}</button>
        <button class="icon-btn solid" data-act="share" aria-label="שיתוף">${ICON.share}</button>` : '';
+  // שדה החיפוש נשמר (ערך, פוקוס, מיקום הסמן) גם כשהכותרת מתרעננת
+  const gq = $('#gq'), focused = gq && document.activeElement === gq, sel = focused ? [gq.selectionStart, gq.selectionEnd] : null;
   $('#top').innerHTML = `
     <div class="top-row">
       <h1>${t.title}</h1>${netPill()}
       ${mineBtns}
-      <button class="logo-btn" data-act="settings" aria-label="הגדרות ומידע"><img src="${ASSETS.wordmark}" alt="inDnegev"></button>
+      <button class="logo-btn" data-act="profile" aria-label="פרופיל והגדרות"><img src="${ASSETS.wordmark}" alt="inDnegev"></button>
+    </div>
+    <div class="gsearch">
+      <label class="field">${ICON.search}<span class="sr">חיפוש</span>
+        <input id="gq" type="search" placeholder="חיפוש אמן, להקה או משתתף…" autocomplete="off" enterkeyhint="search" value="${esc(searchState.q)}">
+      </label>
+      <button class="gs-x" data-act="search-close">ביטול</button>
     </div>
     ${withDays ? `<div class="days" role="group" aria-label="בחירת יום">${DAYS.map(x => `
       <button class="day-pill" data-day="${x.id}" style="--day:${x.color}" aria-pressed="${x.id === d}">
@@ -5406,7 +5502,9 @@ function renderHeader() {
       </button>`).join('')}</div>` : ''}
     ${tools}
     ${cloudStatus()}`;
-  $('#top').classList.toggle('hidden', tab === 'map' && !!mapFocus);
+  $('#top').classList.toggle('hidden', tab === 'map' && !!mapFocus && !searchOn);
+  $('#top').classList.toggle('searching', searchOn);
+  if (focused) { const i = $('#gq'); i.focus({ preventScroll: true }); try { i.setSelectionRange(sel[0], sel[1]); } catch (e) { /* */ } }
 }
 
 function render() {
@@ -5414,9 +5512,10 @@ function render() {
   renderTabs();
   renderHeader();
   const view = $('#view');
-  if (tab === 'grid') renderSchedule(view);
+  if (searchOn) renderSearch(view);
+  else if (tab === 'grid') renderSchedule(view);
   else if (tab === 'mine') renderMine(view);
-  else if (tab === 'search') renderSearch(view);
+  else if (tab === 'profile') renderProfile(view);
   else if (tab === 'map') renderMap(view);
   else renderNow(view);
 }
@@ -5424,14 +5523,15 @@ function render() {
 /* רענון אחרי שינוי מצב – שומר על גלילה, לא נוגע במפה ובשדה החיפוש */
 function rerender() {
   for (const l of layers) if (l.panel && l.panel.live && !l.panel.closed) l.panel.render();
+  if (searchOn) { renderHeader(); if (searchRefresh) searchRefresh(); return; }
   if (tab === 'map') { renderHeader(); return; }
-  if (tab === 'search' && searchRefresh) { searchRefresh(); return; }
   const sc = $('#view .scroll');
   const st = sc ? sc.scrollTop : 0;
   renderHeader();
   const view = $('#view');
   if (tab === 'grid') renderSchedule(view);
   else if (tab === 'mine') renderMine(view);
+  else if (tab === 'profile') renderProfile(view);
   else if (tab === 'now') renderNow(view);
   const sc2 = $('#view .scroll');
   if (sc2 && tab !== 'grid') sc2.scrollTop = st;
@@ -5446,6 +5546,7 @@ function setTab(id) {
 $('#tabs').addEventListener('click', e => {
   const b = e.target.closest('[data-tab]');
   if (!b) return;
+  if (searchOn) { closeAllLayers().then(() => setTab(b.dataset.tab)); return; } // לשונית סוגרת את החיפוש
   if (b.dataset.tab === tab && tab !== 'map') { const sc = $('#view .scroll, #view .gscroll'); if (sc) sc.scrollTo({ top: 0, behavior: 'smooth' }); return; }
   setTab(b.dataset.tab);
 });
@@ -5461,62 +5562,17 @@ $('#top').addEventListener('click', e => {
   const a = e.target.closest('[data-act]');
   if (!a) return;
   if (a.dataset.act === 'share') openShare();
-  if (a.dataset.act === 'friends') openFriends();
   if (a.dataset.act === 'journal') openTimeline();
-  if (a.dataset.act === 'settings') openSettings();
+  if (a.dataset.act === 'profile') { if (searchOn) closeAllLayers().then(() => setTab('profile')); else setTab('profile'); }
+  if (a.dataset.act === 'search-close') exitSearch();
 });
-
-function openSettings() {
-  openSheet(body => {
-    const n = Object.keys(S.picks).length;
-    body.innerHTML = `
-      <img src="${ASSETS.wordmark}" alt="inDnegev" style="height:46px;width:auto;margin:4px 0 10px">
-      <h2 class="ev-name" style="font-size:22px">הלוז שלי · אינדינגב 2026</h2>
-      <p class="ev-meta">⁦15–17.10.2026⁩ · מצפה גבולות</p>
-      <div class="sec">
-        <h3>השם שלך</h3>
-        <input id="setName" class="text-in" value="${esc(S.name)}" maxlength="24" placeholder="יופיע בשיתוף">
-      </div>
-      <div class="sec">
-        <h3>גיבוי ושחזור</h3>
-        <p style="margin:0 0 8px;font-size:14px;color:var(--ink-2)">${storageOK ? '' : '<b>בדפדפן הזה השמירה לא עובדת!</b> '}${isBackedUp() ? '✅ כל השינויים מגובים' : hasData() ? '⚠️ יש שינויים שלא גובו' : 'אין עדיין נתונים'}${lastBackupAt() ? ` · גיבוי אחרון ${agoText(lastBackupAt())}` : ''}</p>
-        <div class="btn-row">
-          <button class="btn sm" data-a="bkpanel">💾 גיבוי ושחזור</button>
-          <button class="btn alt sm" data-a="restore">${ICON.import} ייבוא לוז</button>
-        </div>
-      </div>
-      <div class="sec">
-        <h3>בלי קליטה</h3>
-        <p style="margin:0;font-size:14px;color:var(--ink-2)">${IS_FILE ? 'זה הקובץ המקומי. מומלץ לעבור לאתר (ב"הלוז שלי").' : !IS_SITE ? '' : offlineReady ? '✓ מוכן לשימוש בלי קליטה' : '⏳ עדיין לא נשמר לשימוש בלי קליטה – פתחו פעם אחת עם קליטה'}${navigator.onLine ? '' : ' · עכשיו אין קליטה'}</p>
-      </div>
-      <div class="sec">
-        <h3>איך משתמשים</h3>
-        <ul style="margin:0;padding-inline-start:20px;font-size:14px;line-height:1.6">
-          <li>לחיצה על הופעה: פרטים, חייב/אולי, ומה מתנגש.</li>
-          <li>לחיצה ארוכה בלוז המלא: הוספה מהירה כ"חייב".</li>
-          <li>"ניווט": פותח את המפה עם סימון הבמה.</li>
-          <li>"הלוז שלי" ← שיתוף: QR, קוד או תמונה, בלי אינטרנט.</li>
-        </ul>
-      </div>
-      <div class="sec">
-        <h3>איפוס</h3>
-        <button class="btn alt sm" data-a="reset" style="border-color:var(--danger);color:var(--danger)">${ICON.trash} מחיקת כל הבחירות והחברים</button>
-      </div>
-      <p style="font-size:12px;color:var(--ink-3);margin-top:18px">${n} בחירות · נתונים v${DATA_VERSION} · לוז מתוך indnegev.co.il · אפליקציה אישית לא רשמית.</p>`;
-    $('#setName', body).onchange = e => { S.name = e.target.value.trim().slice(0, 24); save(); };
-    body.onclick = async e => {
-      const b = e.target.closest('[data-a]');
-      if (!b) return;
-      if (b.dataset.a === 'backup') toast(await copyText(encodeShare(S.name, S.picks)) ? 'קוד הגיבוי הועתק' : 'לא הצלחתי להעתיק');
-      if (b.dataset.a === 'restore') { await closeAllLayers(); openImport(); }
-      if (b.dataset.a === 'bkpanel') { await closeAllLayers(); openBackupPanel(); }
-      if (b.dataset.a === 'reset' && confirm('למחוק את כל הבחירות והחברים? (נשמרת גרסה קודמת בגיבוי ושחזור)')) {
-        await takeSnapshot('לפני איפוס');
-        S.picks = {}; S.friends = []; save(); closeSheet(); render(); toast('הכל נמחק');
-      }
-    };
-  });
-}
+$('#top').addEventListener('input', e => {
+  if (e.target.id !== 'gq') return;
+  searchState.q = e.target.value;
+  if (!searchOn) enterSearch(); else if (searchRefresh) searchRefresh();
+});
+$('#top').addEventListener('focusin', e => { if (e.target.id === 'gq') enterSearch(); });
+$('#top').addEventListener('keydown', e => { if (e.target.id === 'gq' && e.key === 'Enter') e.target.blur(); }); // "חפש" במקלדת – סוגר את המקלדת
 
 /* עדכון שוטף: מסך "עכשיו" וקו הזמן בגריד */
 setInterval(() => {
@@ -5552,7 +5608,7 @@ if (/INDN1\./.test(decodeURIComponent(location.hash))) {
 /* מקלדת פתוחה (הגובה הנראה קטן משמעותית מגובה המסך) – מסתירים את הטאבים */
 if (window.visualViewport) {
   const kb = () => {
-    const typing = document.activeElement && document.activeElement.matches('#view input') &&
+    const typing = document.activeElement && document.activeElement.matches('#view input, #gq') &&
       visualViewport.height < screen.height * 0.62;
     $('#app').classList.toggle('typing', !!typing);
   };

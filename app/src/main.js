@@ -4,8 +4,8 @@ const TABS = [
   { id: 'now', label: 'עכשיו', title: 'עכשיו', icon: ICON.now },
   { id: 'grid', label: 'לוז מלא', title: 'ליינאפ!', icon: ICON.grid },
   { id: 'mine', label: 'הלוז שלי', title: 'הלוז שלי', icon: ICON.mine },
-  { id: 'search', label: 'חיפוש', title: 'חיפוש', icon: ICON.search },
   { id: 'map', label: 'מפה', title: 'מפה', icon: ICON.map },
+  { id: 'profile', label: 'פרופיל', title: 'פרופיל', icon: ICON.user },
 ];
 let tab = 'mine'; // פתיחת האפליקציה – תמיד "הלוז שלי", בלשונית "שלי"
 let viewDay = null;
@@ -43,13 +43,20 @@ function renderHeader() {
   }
   const mineBtns = tab === 'mine'
     ? `<button class="icon-btn" data-act="journal" aria-label="יומן סיקור">${ICON.note}</button>
-       <button class="icon-btn" data-act="friends" aria-label="חברים">${ICON.users}</button>
        <button class="icon-btn solid" data-act="share" aria-label="שיתוף">${ICON.share}</button>` : '';
+  // שדה החיפוש נשמר (ערך, פוקוס, מיקום הסמן) גם כשהכותרת מתרעננת
+  const gq = $('#gq'), focused = gq && document.activeElement === gq, sel = focused ? [gq.selectionStart, gq.selectionEnd] : null;
   $('#top').innerHTML = `
     <div class="top-row">
       <h1>${t.title}</h1>${netPill()}
       ${mineBtns}
-      <button class="logo-btn" data-act="settings" aria-label="הגדרות ומידע"><img src="${ASSETS.wordmark}" alt="inDnegev"></button>
+      <button class="logo-btn" data-act="profile" aria-label="פרופיל והגדרות"><img src="${ASSETS.wordmark}" alt="inDnegev"></button>
+    </div>
+    <div class="gsearch">
+      <label class="field">${ICON.search}<span class="sr">חיפוש</span>
+        <input id="gq" type="search" placeholder="חיפוש אמן, להקה או משתתף…" autocomplete="off" enterkeyhint="search" value="${esc(searchState.q)}">
+      </label>
+      <button class="gs-x" data-act="search-close">ביטול</button>
     </div>
     ${withDays ? `<div class="days" role="group" aria-label="בחירת יום">${DAYS.map(x => `
       <button class="day-pill" data-day="${x.id}" style="--day:${x.color}" aria-pressed="${x.id === d}">
@@ -57,7 +64,9 @@ function renderHeader() {
       </button>`).join('')}</div>` : ''}
     ${tools}
     ${cloudStatus()}`;
-  $('#top').classList.toggle('hidden', tab === 'map' && !!mapFocus);
+  $('#top').classList.toggle('hidden', tab === 'map' && !!mapFocus && !searchOn);
+  $('#top').classList.toggle('searching', searchOn);
+  if (focused) { const i = $('#gq'); i.focus({ preventScroll: true }); try { i.setSelectionRange(sel[0], sel[1]); } catch (e) { /* */ } }
 }
 
 function render() {
@@ -65,9 +74,10 @@ function render() {
   renderTabs();
   renderHeader();
   const view = $('#view');
-  if (tab === 'grid') renderSchedule(view);
+  if (searchOn) renderSearch(view);
+  else if (tab === 'grid') renderSchedule(view);
   else if (tab === 'mine') renderMine(view);
-  else if (tab === 'search') renderSearch(view);
+  else if (tab === 'profile') renderProfile(view);
   else if (tab === 'map') renderMap(view);
   else renderNow(view);
 }
@@ -75,14 +85,15 @@ function render() {
 /* רענון אחרי שינוי מצב – שומר על גלילה, לא נוגע במפה ובשדה החיפוש */
 function rerender() {
   for (const l of layers) if (l.panel && l.panel.live && !l.panel.closed) l.panel.render();
+  if (searchOn) { renderHeader(); if (searchRefresh) searchRefresh(); return; }
   if (tab === 'map') { renderHeader(); return; }
-  if (tab === 'search' && searchRefresh) { searchRefresh(); return; }
   const sc = $('#view .scroll');
   const st = sc ? sc.scrollTop : 0;
   renderHeader();
   const view = $('#view');
   if (tab === 'grid') renderSchedule(view);
   else if (tab === 'mine') renderMine(view);
+  else if (tab === 'profile') renderProfile(view);
   else if (tab === 'now') renderNow(view);
   const sc2 = $('#view .scroll');
   if (sc2 && tab !== 'grid') sc2.scrollTop = st;
@@ -97,6 +108,7 @@ function setTab(id) {
 $('#tabs').addEventListener('click', e => {
   const b = e.target.closest('[data-tab]');
   if (!b) return;
+  if (searchOn) { closeAllLayers().then(() => setTab(b.dataset.tab)); return; } // לשונית סוגרת את החיפוש
   if (b.dataset.tab === tab && tab !== 'map') { const sc = $('#view .scroll, #view .gscroll'); if (sc) sc.scrollTo({ top: 0, behavior: 'smooth' }); return; }
   setTab(b.dataset.tab);
 });
@@ -112,62 +124,17 @@ $('#top').addEventListener('click', e => {
   const a = e.target.closest('[data-act]');
   if (!a) return;
   if (a.dataset.act === 'share') openShare();
-  if (a.dataset.act === 'friends') openFriends();
   if (a.dataset.act === 'journal') openTimeline();
-  if (a.dataset.act === 'settings') openSettings();
+  if (a.dataset.act === 'profile') { if (searchOn) closeAllLayers().then(() => setTab('profile')); else setTab('profile'); }
+  if (a.dataset.act === 'search-close') exitSearch();
 });
-
-function openSettings() {
-  openSheet(body => {
-    const n = Object.keys(S.picks).length;
-    body.innerHTML = `
-      <img src="${ASSETS.wordmark}" alt="inDnegev" style="height:46px;width:auto;margin:4px 0 10px">
-      <h2 class="ev-name" style="font-size:22px">הלוז שלי · אינדינגב 2026</h2>
-      <p class="ev-meta">⁦15–17.10.2026⁩ · מצפה גבולות</p>
-      <div class="sec">
-        <h3>השם שלך</h3>
-        <input id="setName" class="text-in" value="${esc(S.name)}" maxlength="24" placeholder="יופיע בשיתוף">
-      </div>
-      <div class="sec">
-        <h3>גיבוי ושחזור</h3>
-        <p style="margin:0 0 8px;font-size:14px;color:var(--ink-2)">${storageOK ? '' : '<b>בדפדפן הזה השמירה לא עובדת!</b> '}${isBackedUp() ? '✅ כל השינויים מגובים' : hasData() ? '⚠️ יש שינויים שלא גובו' : 'אין עדיין נתונים'}${lastBackupAt() ? ` · גיבוי אחרון ${agoText(lastBackupAt())}` : ''}</p>
-        <div class="btn-row">
-          <button class="btn sm" data-a="bkpanel">💾 גיבוי ושחזור</button>
-          <button class="btn alt sm" data-a="restore">${ICON.import} ייבוא לוז</button>
-        </div>
-      </div>
-      <div class="sec">
-        <h3>בלי קליטה</h3>
-        <p style="margin:0;font-size:14px;color:var(--ink-2)">${IS_FILE ? 'זה הקובץ המקומי. מומלץ לעבור לאתר (ב"הלוז שלי").' : !IS_SITE ? '' : offlineReady ? '✓ מוכן לשימוש בלי קליטה' : '⏳ עדיין לא נשמר לשימוש בלי קליטה – פתחו פעם אחת עם קליטה'}${navigator.onLine ? '' : ' · עכשיו אין קליטה'}</p>
-      </div>
-      <div class="sec">
-        <h3>איך משתמשים</h3>
-        <ul style="margin:0;padding-inline-start:20px;font-size:14px;line-height:1.6">
-          <li>לחיצה על הופעה: פרטים, חייב/אולי, ומה מתנגש.</li>
-          <li>לחיצה ארוכה בלוז המלא: הוספה מהירה כ"חייב".</li>
-          <li>"ניווט": פותח את המפה עם סימון הבמה.</li>
-          <li>"הלוז שלי" ← שיתוף: QR, קוד או תמונה, בלי אינטרנט.</li>
-        </ul>
-      </div>
-      <div class="sec">
-        <h3>איפוס</h3>
-        <button class="btn alt sm" data-a="reset" style="border-color:var(--danger);color:var(--danger)">${ICON.trash} מחיקת כל הבחירות והחברים</button>
-      </div>
-      <p style="font-size:12px;color:var(--ink-3);margin-top:18px">${n} בחירות · נתונים v${DATA_VERSION} · לוז מתוך indnegev.co.il · אפליקציה אישית לא רשמית.</p>`;
-    $('#setName', body).onchange = e => { S.name = e.target.value.trim().slice(0, 24); save(); };
-    body.onclick = async e => {
-      const b = e.target.closest('[data-a]');
-      if (!b) return;
-      if (b.dataset.a === 'backup') toast(await copyText(encodeShare(S.name, S.picks)) ? 'קוד הגיבוי הועתק' : 'לא הצלחתי להעתיק');
-      if (b.dataset.a === 'restore') { await closeAllLayers(); openImport(); }
-      if (b.dataset.a === 'bkpanel') { await closeAllLayers(); openBackupPanel(); }
-      if (b.dataset.a === 'reset' && confirm('למחוק את כל הבחירות והחברים? (נשמרת גרסה קודמת בגיבוי ושחזור)')) {
-        await takeSnapshot('לפני איפוס');
-        S.picks = {}; S.friends = []; save(); closeSheet(); render(); toast('הכל נמחק');
-      }
-    };
-  });
-}
+$('#top').addEventListener('input', e => {
+  if (e.target.id !== 'gq') return;
+  searchState.q = e.target.value;
+  if (!searchOn) enterSearch(); else if (searchRefresh) searchRefresh();
+});
+$('#top').addEventListener('focusin', e => { if (e.target.id === 'gq') enterSearch(); });
+$('#top').addEventListener('keydown', e => { if (e.target.id === 'gq' && e.key === 'Enter') e.target.blur(); }); // "חפש" במקלדת – סוגר את המקלדת
 
 /* עדכון שוטף: מסך "עכשיו" וקו הזמן בגריד */
 setInterval(() => {
@@ -203,7 +170,7 @@ if (/INDN1\./.test(decodeURIComponent(location.hash))) {
 /* מקלדת פתוחה (הגובה הנראה קטן משמעותית מגובה המסך) – מסתירים את הטאבים */
 if (window.visualViewport) {
   const kb = () => {
-    const typing = document.activeElement && document.activeElement.matches('#view input') &&
+    const typing = document.activeElement && document.activeElement.matches('#view input, #gq') &&
       visualViewport.height < screen.height * 0.62;
     $('#app').classList.toggle('typing', !!typing);
   };
