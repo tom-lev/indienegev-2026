@@ -176,6 +176,9 @@ setInterval(() => {
 }, 30000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && tab === 'now') rerender(); });
 
+/* יציאה מהאפליקציה באמצע הקלדה: שומרים את הטיוטה מיד */
+document.addEventListener('visibilitychange', () => { if (document.hidden && draft) finishDraft(false); });
+
 /* אתחול */
 render();
 initBackup();

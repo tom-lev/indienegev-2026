@@ -106,6 +106,7 @@ function refreshSheet(resetScroll) {
 }
 function destroySheet() {
   if (!sheetEl) return;
+  if (typeof finishDraft === 'function') finishDraft(false);
   const { bd, sh } = sheetEl;
   bd.classList.remove('show');
   sh.classList.remove('show');

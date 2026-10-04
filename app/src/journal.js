@@ -1,19 +1,11 @@
-/* יומן סיקור: פתקים על הופעות (עם חותמת זמן ומיקום), מונה קהל ואווירה, ציר זמן וייצוא */
+/* יומן סיקור: פתקים על הופעות (עם חותמת זמן, נשמרים אוטומטית), מונה קהל ואווירה, ציר זמן וייצוא */
 
 const CROWD_WORDS = ['', 'כמעט ריק', 'דליל', 'בינוני', 'מלא', 'מפוצץ'];
 const VIBE_WORDS = ['', 'רדום', 'רגוע', 'טוב', 'חזק', 'מטורף'];
 
 const notesFor = id => S.notes.filter(n => n.ev === id).sort((a, b) => a.at - b.at);
 const ratingFor = id => S.ratings[id] || {};
-const placeName = id => (typeof PLACE !== 'undefined' && PLACE[id] && PLACE[id].name) || (STAGE[id] && STAGE[id].name) || '';
 const fmtStamp = ms => { const d = new Date(ms); return `${pad(d.getDate())}.${pad(d.getMonth() + 1)} ${fmtT(ms)}`; };
-
-/* מיקום לפתק: "איפה אני" האחרון אם עודכן בשעתיים האחרונות, אחרת הבמה של ההופעה */
-function notePlace(ev) {
-  const h = S.prefs.here;
-  if (h && Date.now() - h.at < 2 * HOUR && placeName(h.id)) return h.id;
-  return ev.stage;
-}
 
 /* ───────── בתוך גיליון ההופעה ───────── */
 function meterRow(kind, label, words, value) {
@@ -26,12 +18,60 @@ function meterRow(kind, label, words, value) {
 /* הופעות שהיומן שלהן פתוח כרגע (נשמר רק בסשן, כדי שרענון הגיליון לא יסגור אותו) */
 const journalOpen = new Set();
 
+/* ───────── שמירה אוטומטית של פתק תוך כדי הקלדה ─────────
+   הפתק נוצר כבר באות הראשונה ומתעדכן בכל הקלדה (בלי כפתור "שמירה").
+   בזמן ההקלדה הוא "טיוטה": נשאר בתיבת הטקסט ולא מוצג ברשימה. כשיוצאים מהתיבה
+   (או סוגרים את הגיליון) הוא עובר לרשימה והתיבה מתפנה לפתק הבא. טקסט ריק = הפתק נמחק. */
+let draft = null; // { id, ev }
+let draftTimer = null;
+const draftNote = () => draft && S.notes.find(n => n.id === draft.id);
+
+function draftInput(ev, text) {
+  clearTimeout(draftTimer);
+  draftTimer = setTimeout(() => {
+    text = text.trim();
+    let n = draft && draft.ev === ev.id ? draftNote() : null;
+    if (!n && !text) return;
+    if (!n) {
+      n = { id: 'n' + Date.now().toString(36), ev: ev.id, text, at: Date.now() };
+      S.notes.push(n);
+      draft = { id: n.id, ev: ev.id };
+    } else if (!text) {
+      S.notes = S.notes.filter(x => x !== n);
+      draft = null;
+    } else {
+      n.text = text;
+      n.edited = Date.now();
+    }
+    save();
+    rerender(); // מונה 📝 ברשימות
+    const st = $('#noteSaved');
+    if (st) st.textContent = text ? '✓ נשמר' : '';
+  }, 400);
+}
+/* סיום הטיוטה: נכנסת לרשימה, התיבה מתרוקנת */
+function finishDraft(refresh = true) {
+  if (!draft) return;
+  clearTimeout(draftTimer);
+  const ta = $('#noteIn');
+  if (ta && ta.dataset.ev === draft.ev) {
+    // שומרים מיד את מה שהוקלד ב-400ms האחרונים
+    const n = draftNote(), text = ta.value.trim();
+    if (n && text) { n.text = text; save(); }
+    if (n && !text) { S.notes = S.notes.filter(x => x !== n); save(); }
+  }
+  draft = null;
+  if (refresh) { refreshSheet(); rerender(); }
+}
+
 function journalSection(ev) {
   const r = ratingFor(ev.id);
-  const notes = notesFor(ev.id);
+  const all = notesFor(ev.id);
+  const d = draft && draft.ev === ev.id ? draftNote() : null;
+  const notes = all.filter(n => n !== d);
   // סיכום בשורת הכותרת, כדי לראות מה כבר מולא גם כשהיומן סגור
   const meta = [
-    notes.length ? `${notes.length} ${notes.length === 1 ? 'פתק' : 'פתקים'}` : '',
+    all.length ? `${all.length} ${all.length === 1 ? 'פתק' : 'פתקים'}` : '',
     r.crowd ? `👥 ${r.crowd}` : '',
     r.vibe ? `🔥 ${r.vibe}` : '',
   ].filter(Boolean).join(' · ');
@@ -41,17 +81,22 @@ function journalSection(ev) {
     ${meterRow('crowd', '👥 קהל', CROWD_WORDS, r.crowd || 0)}
     ${meterRow('vibe', '🔥 אווירה', VIBE_WORDS, r.vibe || 0)}
     <div class="notes">${notes.map(n => `<div class="note">
-        <div class="nm">🕒 ${fmtStamp(n.at)} · 📍 ${esc(placeName(n.place))}</div>
+        <div class="nm">🕒 ${fmtStamp(n.at)}</div>
         <div class="nt">${esc(n.text)}</div>
         <div class="na"><button data-note-edit="${n.id}">עריכה</button><button data-note-del="${n.id}">מחיקה</button></div>
       </div>`).join('')}</div>
-    <textarea class="note-in" id="noteIn" rows="2" placeholder="פתק על ההופעה: ציטוט, קהל, רגע מיוחד…"></textarea>
-    <button class="btn sm block" data-note-add>${ICON.plus} שמירת פתק</button>
+    <textarea class="note-in" id="noteIn" data-ev="${ev.id}" rows="2" placeholder="פתק חדש: ציטוט, קהל, רגע מיוחד… (נשמר אוטומטית)">${d ? esc(d.text) : ''}</textarea>
+    <div class="note-saved" id="noteSaved">${d ? '✓ נשמר' : ''}</div>
   </div></details>`;
 }
 function bindJournal(body, ev) {
   const d = $('.journal', body);
   if (d) d.addEventListener('toggle', () => { if (d.open) journalOpen.add(ev.id); else journalOpen.delete(ev.id); });
+  const ta = $('#noteIn', body);
+  if (ta) {
+    ta.addEventListener('input', () => draftInput(ev, ta.value));
+    ta.addEventListener('blur', () => setTimeout(() => finishDraft(), 0));
+  }
 }
 
 /* מחזיר true אם הלחיצה טופלה */
@@ -64,15 +109,6 @@ function journalClick(b, ev) {
     r.at = Date.now();
     if (!r.crowd && !r.vibe) delete S.ratings[ev.id]; else S.ratings[ev.id] = r;
     save(); refreshSheet();
-    return true;
-  }
-  if ('noteAdd' in b.dataset) {
-    const ta = $('#noteIn');
-    const text = ta.value.trim();
-    if (!text) { ta.focus(); return true; }
-    S.notes.push({ id: 'n' + Date.now().toString(36), ev: ev.id, text, at: Date.now(), place: notePlace(ev) });
-    save(); refreshSheet(); rerender();
-    toast('הפתק נשמר');
     return true;
   }
   if (b.dataset.noteEdit) {
@@ -116,7 +152,7 @@ function openTimeline() {
       return sep + `<div class="tl-card" style="--c:${st.color}">
         <button class="tl-ev" data-ev="${ev.id}"><b>${esc(ev.name)}</b><small>${esc(st.name)} · ${timeRange(ev)}</small></button>
         ${r.crowd || r.vibe ? `<div class="tl-rate">${ratingText(r)}</div>` : ''}
-        ${notes.map(n => `<div class="tl-note"><div class="nm">🕒 ${fmtT(n.at)} · 📍 ${esc(placeName(n.place))}</div>
+        ${notes.map(n => `<div class="tl-note"><div class="nm">🕒 ${fmtT(n.at)}</div>
           <div class="tl-text">${esc(n.text)}</div></div>`).join('')}
       </div>`;
     }).join('');
@@ -150,7 +186,7 @@ function journalMarkdown() {
     if (r.crowd || r.vibe) {
       L.push(`- **קהל:** ${r.crowd ? `${CROWD_WORDS[r.crowd]} (${r.crowd}/5)` : '–'} · **אווירה:** ${r.vibe ? `${VIBE_WORDS[r.vibe]} (${r.vibe}/5)` : '–'}`);
     }
-    for (const n of notesFor(ev.id)) L.push(`- [${fmtStamp(n.at)} · ${placeName(n.place)}] ${n.text.replace(/\n+/g, ' / ')}`);
+    for (const n of notesFor(ev.id)) L.push(`- [${fmtStamp(n.at)}] ${n.text.replace(/\n+/g, ' / ')}`);
     L.push('');
   }
   return L.join('\n');
