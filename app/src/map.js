@@ -14,8 +14,22 @@ const PLACES = [
 ];
 const PLACE = Object.fromEntries(PLACES.map(p => [p.id, p]));
 let routeFrom = null; // מזהה נקודת המוצא בניווט הנוכחי
-let picking = false;  // false | 'from' (בחירת "איפה אני") | 'dest' (בחירת יעד)
+let picking = false;  // false | 'from' ("איפה אני") | 'dest' (יעד) | 'tent' (סימון האוהל)
 const placeXY = p => ({ x: p.mapX / 100 * MAP_W, y: p.mapY / 100 * MAP_H });
+const WCS = LANDMARKS.filter(l => l.type === 'wc');
+
+/* "האוהל שלי" – נקודה אישית שנשמרת במכשיר ומתנהגת כמו כל נקודה אחרת במפה */
+function syncTent() {
+  const i = PLACES.findIndex(p => p.id === 'tent');
+  if (i >= 0) PLACES.splice(i, 1);
+  delete PLACE.tent;
+  const t = S.prefs.tent;
+  if (t) {
+    PLACE.tent = { id: 'tent', name: 'האוהל שלי', icon: '⛺', mapX: t.x, mapY: t.y, color: '#f46f6a' };
+    PLACES.push(PLACE.tent);
+  }
+}
+syncTent();
 
 /* ───────── מסלול הליכה על רשת מתוך המפה ─────────
    ASSETS.walk היא מפת ביטים (walkW×walkH תאים) שנבנתה מתמונת המפה ב-walkgrid.py:
@@ -185,20 +199,18 @@ function findRoute(fromId, toId) {
   const path = astar(s, g);
   if (!path) return null;
   const pts = [a, ...simplify(path), b];
-  // אילו כניסות/מעבר המסלול עובר (לפי קרבה לתאים במסלול)
-  const near = ([px, py], r) => path.some(c => {
-    const x = (c % WALK.GW + 0.5) * WALK.cell, y = (((c / WALK.GW) | 0) + 0.5) * WALK.cell;
-    return Math.hypot(x - px / 100 * MAP_W, y - py / 100 * MAP_H) < r;
-  });
-  const gates = [];
-  const seen = path.map(c => c); // לשמירת הסדר: לפי המיקום הראשון במסלול
+  // אילו כניסות/מעבר המסלול עובר, לפי סדר המעבר בהם (המקום הראשון במסלול שקרוב אליהם)
+  const firstNear = ([px, py], r) => path.findIndex(c => Math.hypot(
+    (c % WALK.GW + 0.5) * WALK.cell - px / 100 * MAP_W, (((c / WALK.GW) | 0) + 0.5) * WALK.cell - py / 100 * MAP_H) < r);
+  const via = [];
   for (const [gid, gp] of Object.entries(GATE_POINTS)) {
-    const gx = gp[0] / 100 * MAP_W, gy = gp[1] / 100 * MAP_H;
-    const idx = seen.findIndex(c => Math.hypot((c % WALK.GW + 0.5) * WALK.cell - gx, (((c / WALK.GW) | 0) + 0.5) * WALK.cell - gy) < 40);
-    if (idx >= 0 && gid !== fromId && gid !== toId) gates.push([idx, gid]);
+    const idx = firstNear(gp, 40);
+    if (idx >= 0 && gid !== fromId && gid !== toId) via.push([idx, gid]);
   }
-  gates.sort((x, y) => x[0] - y[0]);
-  return { pts, gates: gates.map(x => x[1]), viaPass: near(PASS_POINT, 45) };
+  const passIdx = firstNear(PASS_POINT, 45);
+  if (passIdx >= 0) via.push([passIdx, 'pass']);
+  via.sort((x, y) => x[0] - y[0]);
+  return { pts, via: via.map(x => x[1]) }; // 'pass' = המעבר בין הבמות
 }
 
 /* קו שבור עם פינות מעוגלות */
@@ -225,7 +237,7 @@ function navigateTo(target, opts = {}) {
   closeAllLayers().then(() => {
     leavingMap = false;
     mapPrevTab = fromTab;
-    mapFocus = target.stage ? { ev: target } : { dest: target.dest };
+    mapFocus = target.stage ? { ev: target } : target.nearest ? { nearest: target.nearest } : { dest: target.dest };
     routeFrom = keepFrom;
     picking = opts.pick || false;
     setTab('map');
@@ -245,7 +257,55 @@ function dropMapFocus() {
   popLayer();
 }
 
-const destPlace = () => !mapFocus ? null : mapFocus.ev ? PLACE[mapFocus.ev.stage] : PLACE[mapFocus.dest];
+const destPlace = () => !mapFocus ? null : mapFocus.ev ? PLACE[mapFocus.ev.stage] : PLACE[mapFocus.dest] || null;
+
+/* ניווט לנקודה. בניווט פעיל שומרים את נקודת המוצא; אחרת שואלים "איפה אני" */
+function goTo(id) {
+  const keep = !!mapFocus && !!routeFrom && routeFrom !== id;
+  if (!keep) routeFrom = null;
+  navigateTo({ dest: id }, { keepFrom: keep, pick: keep ? false : 'from' });
+}
+
+/* השירותים הקרובים ביותר לפי אורך מסלול ההליכה (לא בקו אווירי) */
+function nearestWc(fromId) {
+  let best = null, bestLen = Infinity;
+  for (const w of WCS) {
+    if (w.id === fromId) return w.id;
+    const r = findRoute(fromId, w.id);
+    if (!r) continue;
+    let len = 0;
+    for (let i = 1; i < r.pts.length; i++) len += Math.hypot(r.pts[i].x - r.pts[i - 1].x, r.pts[i].y - r.pts[i - 1].y);
+    if (len < bestLen) { bestLen = len; best = w.id; }
+  }
+  return best;
+}
+
+function openTentSheet() {
+  openSheet(body => {
+    body.innerHTML = `<div class="ev-tags"><span class="stage" style="--c:var(--coral)">⛺ האוהל שלי</span></div>
+      <h2 class="ev-name">האוהל שלי</h2>
+      <p class="ev-meta">המיקום נשמר רק בטלפון הזה</p>
+      <button class="btn block" data-t="go" style="margin-top:14px">${ICON.pin} ניווט לאוהל</button>
+      <div class="btn-row" style="margin-top:10px">
+        <button class="btn alt" data-t="move">${ICON.edit} הזזה</button>
+        <button class="btn alt" data-t="del">${ICON.trash} הסרה</button>
+      </div>`;
+    body.onclick = e => {
+      const b = e.target.closest('[data-t]');
+      if (!b) return;
+      const a = b.dataset.t;
+      if (a === 'go') goTo('tent');
+      if (a === 'move') closeAllLayers().then(() => { picking = 'tent'; updateRoute(null); });
+      if (a === 'del' && confirm('להסיר את האוהל מהמפה?')) {
+        delete S.prefs.tent;
+        if (S.prefs.here && S.prefs.here.id === 'tent') delete S.prefs.here;
+        save();
+        syncTent();
+        closeAllLayers().then(() => { render(); toast('האוהל הוסר'); });
+      }
+    };
+  });
+}
 
 function renderMap(view) {
   const f = !!mapFocus;
@@ -253,7 +313,14 @@ function renderMap(view) {
   const fs = destPlace();
   const marks = STAGES.map(st => `<div class="m-mark" style="left:${st.mapX}%;top:${st.mapY}%">
       <div class="inv"><button class="m-hit" data-stage="${st.id}" aria-label="${esc(st.name)}"></button></div>
-    </div>`).join('');
+    </div>`).join('')
+    // אייקוני השירותים שבמפה לחיצים: הקשה = ניווט אליהם
+    + WCS.map(w => `<div class="m-mark" style="left:${w.mapX}%;top:${w.mapY}%">
+      <div class="inv"><button class="m-hit wc" data-wc="${w.id}" aria-label="ניווט ל${esc(w.name)}"></button></div>
+    </div>`).join('')
+    + (PLACE.tent ? `<div class="m-mark" style="left:${PLACE.tent.mapX}%;top:${PLACE.tent.mapY}%">
+      <div class="inv"><button class="tent-pin" data-tent aria-label="האוהל שלי"><span>⛺</span></button></div>
+    </div>` : '');
   // סימון היעד: טבעת פועמת + תווית (הופעה, או שם הנקודה)
   const destMark = fs ? `<div class="m-mark" style="left:${fs.mapX}%;top:${fs.mapY}%;--c:${fs.color || 'var(--coral)'}">
       <div class="inv"><div class="pulse"><i></i><i></i><i></i><b></b></div>
@@ -307,7 +374,7 @@ function renderMap(view) {
       if (z.dataset.z === 'in') animate(stage, () => zoomAt(cx, cy, 1.6));
       if (z.dataset.z === 'out') animate(stage, () => zoomAt(cx, cy, 1 / 1.6));
       if (z.dataset.z === 'fit') {
-        if (!f) animate(stage, () => { fitHeight(); });
+        if (!fs) animate(stage, () => { fitHeight(); });
         else if (routeFrom) fitRoute(stage, fs);
         else focusStage(stage, fs, true);
       }
@@ -317,7 +384,15 @@ function renderMap(view) {
     const r = e.target.closest('[data-route]');
     if (r) {
       const a = r.dataset.route;
-      if (a === 'pick' || a === 'dest') {
+      if (a === 'wc') {
+        routeFrom = null;
+        navigateTo({ nearest: 'wc' }, { pick: 'from' });
+      } else if (a === 'tent') {
+        if (PLACE.tent) goTo('tent');
+        else { picking = 'tent'; updateRoute(fs); }
+      } else if (a === 'cancel' && mapFocus && mapFocus.nearest) {
+        popLayer();
+      } else if (a === 'pick' || a === 'dest') {
         picking = a === 'pick' ? 'from' : 'dest';
         updateRoute(fs);
         pickView(stage, fs);
@@ -336,20 +411,38 @@ function renderMap(view) {
       }
       return;
     }
+    if (e.target.closest('.map-ui')) return;
+    // סימון האוהל: הקשה בכל מקום במפה
+    if (picking === 'tent') {
+      if (mapGesture.moved) return;
+      const rc = wrap.getBoundingClientRect();
+      const mx = (e.clientX - rc.left - map.x) / map.s, my = (e.clientY - rc.top - map.y) / map.s;
+      if (mx < 0 || my < 0 || mx > MAP_W || my > MAP_H) return;
+      S.prefs.tent = { x: +(mx / MAP_W * 100).toFixed(2), y: +(my / MAP_H * 100).toFixed(2) };
+      save();
+      syncTent();
+      picking = false;
+      renderMap(view);
+      toast('האוהל נשמר ⛺');
+      if (navigator.vibrate) navigator.vibrate(15);
+      return;
+    }
     const pl = e.target.closest('[data-place]');
     if (pl && !mapGesture.moved) {
       const id = pl.dataset.place;
       if (picking === 'dest') {
-        // יעד חדש: אם כבר ידוע מאיפה יוצאים – שומרים, אחרת עוברים ישר ל"איפה אני"
-        if (routeFrom === id) routeFrom = null;
-        navigateTo({ dest: id }, { keepFrom: true, pick: routeFrom ? false : 'from' });
+        goTo(id); // יעד חדש: בניווט פעיל שומרים את נקודת המוצא, אחרת עוברים ל"איפה אני"
       } else {
         chooseOrigin(stage, fs, id);
       }
       return;
     }
+    if (mapGesture.moved) return;
+    const wc = e.target.closest('[data-wc]');
+    if (wc) { goTo(wc.dataset.wc); return; }
+    if (e.target.closest('[data-tent]')) { if (mapFocus) goTo('tent'); else openTentSheet(); return; }
     const hit = e.target.closest('[data-stage]');
-    if (hit && !mapGesture.moved) openStage(hit.dataset.stage);
+    if (hit) openStage(hit.dataset.stage);
   });
 }
 
@@ -369,6 +462,11 @@ function chooseOrigin(stage, dest, id) {
   picking = false;
   S.prefs.here = { id, at: Date.now() };
   save();
+  if (mapFocus && mapFocus.nearest) { // "שירותים קרובים": עכשיו כשידוע המיקום – בוחרים את הקרובים
+    const best = nearestWc(id);
+    if (best) navigateTo({ dest: best }, { keepFrom: true });
+    return;
+  }
   updateRoute(dest);
   fitRoute(stage, dest);
   if (navigator.vibrate) navigator.vibrate(15);
@@ -379,17 +477,33 @@ function updateRoute(dest) {
   const wrap = $('#mapwrap');
   if (!wrap) return;
   wrap.classList.toggle('picking', !!picking);
+  wrap.classList.toggle('picking-tent', picking === 'tent');
   wrap.classList.toggle('has-route', !!routeFrom && !picking && !!dest);
   const bar = $('#routebar');
 
   if (!dest) {
-    // טאב המפה בלי ניווט פעיל: כפתור "ניווט", או בחירת יעד
+    // בלי יעד: טאב המפה הרגיל, בחירת יעד, סימון האוהל, או "שירותים קרובים" שמחכה למיקום
     $('#route').innerHTML = '';
-    $('#places').innerHTML = picking === 'dest' ? placeButtons(null) : '';
-    bar.innerHTML = picking === 'dest'
-      ? `<div class="rb"><div class="rb-t"><b>לאן הולכים?</b><small>הקישו על היעד במפה – במה או כל נקודה אחרת</small></div>
-          <button class="rb-btn alt" data-route="cancel">ביטול</button></div>`
-      : `<div class="rb"><button class="rb-btn" data-route="dest">${ICON.pin} ניווט במפה</button></div>`;
+    const nearest = mapFocus && mapFocus.nearest;
+    const lastAny = S.prefs.here && PLACE[S.prefs.here.id] ? PLACE[S.prefs.here.id] : null;
+    $('#places').innerHTML = nearest || picking === 'dest' ? placeButtons(null) : '';
+    if (nearest) {
+      bar.innerHTML = `<div class="rb rb-col">
+        <div class="rb-t"><b>🚻 איפה אתם עכשיו?</b><small>נמצא את השירותים הקרובים אליכם בהליכה</small></div>
+        <div class="rb-row">${lastAny ? `<button class="rb-btn" data-route="last">מ${esc(lastAny.name)}</button>` : ''}
+        <button class="rb-btn alt" data-route="cancel">ביטול</button></div></div>`;
+    } else if (picking === 'dest') {
+      bar.innerHTML = `<div class="rb"><div class="rb-t"><b>לאן הולכים?</b><small>הקישו על היעד במפה – במה או כל נקודה אחרת</small></div>
+          <button class="rb-btn alt" data-route="cancel">ביטול</button></div>`;
+    } else if (picking === 'tent') {
+      bar.innerHTML = `<div class="rb"><div class="rb-t"><b>⛺ איפה האוהל שלכם?</b><small>הקישו על המקום המדויק במפה (אפשר להגדיל קודם)</small></div>
+          <button class="rb-btn alt" data-route="cancel">ביטול</button></div>`;
+    } else {
+      bar.innerHTML = `<div class="rb rb-row rb-row3">
+        <button class="rb-btn" data-route="dest">${ICON.pin} ניווט</button>
+        <button class="rb-btn alt" data-route="wc">🚻 שירותים</button>
+        <button class="rb-btn alt" data-route="tent">⛺ ${PLACE.tent ? 'לאוהל' : 'האוהל שלי'}</button></div>`;
+    }
     return;
   }
 
@@ -413,8 +527,7 @@ function updateRoute(dest) {
   } else {
     svgEl.innerHTML = '';
   }
-  const viaParts = route ? route.gates.map(g => PLACE[g].name) : [];
-  if (route && route.viaPass) viaParts.push('המעבר בין הבמות');
+  const viaParts = route ? route.via.map(g => g === 'pass' ? 'המעבר בין הבמות' : PLACE[g].name) : [];
   const via = viaParts.length ? 'דרך ' + viaParts.join(' ואז ') : 'הולכים לאורך הקו המקווקו';
 
   const last = S.prefs.here && PLACE[S.prefs.here.id] && S.prefs.here.id !== dest.id ? PLACE[S.prefs.here.id] : null;

@@ -42,6 +42,14 @@ const LANDMARKS = [
   { id: 'camp-fam', name: 'קמפינג משפחות', icon: '⛺', mapX: 72.25, mapY: 67.0 },
   { id: 'camp-plus', name: 'קמפינג+', icon: '⛺', mapX: 63.25, mapY: 83.5 },
   { id: 'shabbat', name: 'מתחם שבת', icon: '🕯️', mapX: 17.5, mapY: 30.6 },
+  // שירותים (לפי האייקונים במפה)
+  { id: 'wc-adama', type: 'wc', name: 'שירותים · ליד אדמה', icon: '🚻', mapX: 25.5, mapY: 34.8 },
+  { id: 'wc-west', type: 'wc', name: 'שירותים · ליד הכניסה המערבית', icon: '🚻', mapX: 28.75, mapY: 38.2 },
+  { id: 'wc-campw', type: 'wc', name: 'שירותים · קמפינג מערבי', icon: '🚻', mapX: 16.8, mapY: 57.7 },
+  { id: 'wc-camps', type: 'wc', name: 'שירותים · קמפינג דרומי', icon: '🚻', mapX: 31.8, mapY: 94.4 },
+  { id: 'wc-sound', type: 'wc', name: 'שירותים · ליד הסאונדסיסטם', icon: '🚻', mapX: 61.65, mapY: 55.4 },
+  { id: 'wc-fam', type: 'wc', name: 'שירותים · קמפינג משפחות', icon: '🚻', mapX: 64.8, mapY: 70.0 },
+  { id: 'wc-plus', type: 'wc', name: 'שירותים · ליד קמפינג+', icon: '🚻', mapX: 54.3, mapY: 89.3 },
 ];
 
 const TYPES = {

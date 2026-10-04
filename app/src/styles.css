@@ -710,3 +710,23 @@ textarea.text-in { min-height: 84px; resize: vertical; direction: ltr; font-fami
 .map-ui .rb-row .rb-btn { flex: 1; justify-content: center; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .map-ui .rb-row .rb-btn.alt { flex: 0 1 auto; }
 .map-ui .rb .rb-link.sm { font-weight: 700; font-size: inherit; color: var(--ink); }
+
+/* ───────── שירותים + האוהל שלי ───────── */
+.m-hit.wc { width: 52px; height: 52px; margin: -26px 0 0 -26px; }
+.tent-pin {
+  position: absolute; left: 0; top: 0;
+  transform: translate(-50%, calc(-100% - 6px));
+  width: 46px; height: 46px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--paper); border: 3px solid var(--coral);
+  box-shadow: 0 0 0 2px var(--ink), 0 3px 0 2px var(--ink);
+  font-size: 22px; line-height: 1;
+}
+.tent-pin::after {
+  content: ''; position: absolute; left: 50%; bottom: -12px; margin-left: -7px;
+  border: 7px solid transparent; border-bottom: 0; border-top: 9px solid var(--ink);
+}
+.picking:not(.picking-tent) .tent-pin { display: none; }
+.map-ui .rb.rb-row3 { gap: 6px; padding: 6px; }
+.map-ui .rb-row3 .rb-btn { flex: 1 1 0; justify-content: center; padding: 10px 4px; font-size: 13.5px; gap: 4px; min-width: 0; }
+.map-ui .rb-row3 .rb-btn svg { width: 16px; height: 16px; }
