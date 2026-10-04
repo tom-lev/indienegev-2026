@@ -178,10 +178,10 @@ function eventRow(ev, opts = {}) {
   const right = opts.nav
     ? `<button class="nav-btn" data-nav="${ev.id}" aria-label="ניווט ל${esc(st.name)}">${ICON.pin}</button>`
     : `<button class="star-btn ${lv ? 'on' + lv : ''}" data-star="${ev.id}" aria-label="${lv ? 'הסר מהלוז' : 'הוסף כחייב'}">${lv ? LV_ICON[lv] : '☆'}</button>`;
-  return `<div class="row lv${lv} ${ev.cancelled ? 'cancelled' : ''} ${opts.cls || ''}" style="${stageVars(ev.stage)}" data-ev="${ev.id}" role="button" tabindex="0">
+  return `<div class="row lv${lv} ${isNope(ev.id) ? 'nope' : ''} ${ev.cancelled ? 'cancelled' : ''} ${opts.cls || ''}" style="${stageVars(ev.stage)}" data-ev="${ev.id}" role="button" tabindex="0">
     <div class="t">${ev.s}<small>${opts.showDay ? DAY[ev.day].label : ev.e}</small></div>
     <div>
-      <div class="n">${name}</div>
+      <div class="n">${isNope(ev.id) ? '<span class="nope-i" title="לא בשבילי">👎</span> ' : ''}${name}</div>
       <div class="sub"><span class="stag">${esc(st.short)}</span>${opts.showDay ? `<span>${timeRange(ev)}</span>` : ''}${ev.type !== 'show' ? `<span class="chip soft">${TYPES[ev.type]}</span>` : ''}${ev.cancelled ? '<span class="chip warn">בוטל</span>' : ''}${opts.levelChip && lv ? `<span class="chip ${lv === 2 ? '' : 'soft'}">${LV_ICON[lv]} ${LV_LABEL[lv]}</span>` : ''}${going.length ? friendAvatars(going) : ''}${notesFor(ev.id).length ? `<span class="chip soft">📝 ${notesFor(ev.id).length}</span>` : ''}</div>
       ${opts.hint ? `<div class="hint">${esc(opts.hint)}</div>` : ''}
     </div>
@@ -208,7 +208,7 @@ function bindRows(root) {
 /* ───────── שינוי רמת עניין ───────── */
 function setLevel(id, lv, { silent = false } = {}) {
   const prev = level(id);
-  if (lv) S.picks[id] = lv; else delete S.picks[id];
+  if (lv) { S.picks[id] = lv; if (S.nope) delete S.nope[id]; } else delete S.picks[id];
   save();
   rerender();
   refreshSheet();
@@ -217,6 +217,16 @@ function setLevel(id, lv, { silent = false } = {}) {
     toast(msg, { label: 'ביטול', fn: () => setLevel(id, prev, { silent: true }) });
   }
   if (lv && navigator.vibrate) navigator.vibrate(12);
+}
+/* 👎 "לא בשבילי": מעומעם בכל מקום. מסמן → יוצא מהלוז; בחירה בחייב/אולי מבטלת אותו */
+function setNope(id, on, { silent = false } = {}) {
+  const prevNope = isNope(id), prevLv = level(id);
+  if (!S.nope) S.nope = {};
+  if (on) { S.nope[id] = true; delete S.picks[id]; } else delete S.nope[id];
+  save(); rerender(); refreshSheet();
+  if (!silent) toast(on ? '👎 סומן "לא בשבילי"' : 'הסימון בוטל', {
+    label: 'ביטול', fn: () => { setNope(id, prevNope, { silent: true }); if (prevLv) setLevel(id, prevLv, { silent: true }); },
+  });
 }
 function quickToggle(id) {
   setLevel(id, level(id) ? 0 : 2);

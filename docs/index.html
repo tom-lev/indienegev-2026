@@ -881,6 +881,15 @@ details.journal .jm { font-size: 12.5px; font-weight: 700; color: var(--ink-2); 
 .w-later { margin-top: 18px; font-size: 13.5px; font-weight: 700; color: var(--ink-2); text-decoration: underline; padding: 8px; }
 .g-note { margin: 0; font-size: 14px; color: var(--ink-2); }
 
+/* 👎 לא בשבילי */
+.levels { grid-template-columns: 1fr 1fr auto auto; }
+.levels .nope-btn { width: 48px; display: grid; place-items: center; font-size: 19px; border-radius: 14px; border: 2px solid var(--ink); }
+.levels .nope-btn.on { background: var(--ink); }
+.card.nope { opacity: .38; filter: grayscale(.6); }
+.card.nope b { text-decoration: line-through; text-decoration-thickness: 1.5px; }
+.row.nope, .ov.nope, .sc-item.nope { opacity: .45; }
+.nope-i { font-size: .85em; }
+
 </style>
 </head>
 <body>
@@ -1259,7 +1268,7 @@ const FRIEND_COLOR = ['#ef8d83', '#c5cc69', '#9c9ab9', '#5f8eaa', '#96a96a', '#f
 
 function defaults() {
   return {
-    v: 1, dataVersion: DATA_VERSION, name: '', picks: {}, friends: [], notes: [], ratings: {},
+    v: 1, dataVersion: DATA_VERSION, name: '', picks: {}, friends: [], notes: [], ratings: {}, nope: {},
     prefs: { day: null, view: 'grid', filter: 'all', showMaybe: true, friendsOnGrid: true },
   };
 }
@@ -1288,6 +1297,7 @@ function save() {
 }
 
 const level = id => S.picks[id] || 0;
+const isNope = id => !!(S.nope && S.nope[id]);
 const myPicks = (minLevel = 1) => BY_START.filter(e => level(e.id) >= minLevel);
 const activeFriends = () => S.friends.filter(f => f.active !== false);
 const friendsGoing = ev => activeFriends().filter(f => f.picks[ev.id]);
@@ -1597,10 +1607,10 @@ function eventRow(ev, opts = {}) {
   const right = opts.nav
     ? `<button class="nav-btn" data-nav="${ev.id}" aria-label="ניווט ל${esc(st.name)}">${ICON.pin}</button>`
     : `<button class="star-btn ${lv ? 'on' + lv : ''}" data-star="${ev.id}" aria-label="${lv ? 'הסר מהלוז' : 'הוסף כחייב'}">${lv ? LV_ICON[lv] : '☆'}</button>`;
-  return `<div class="row lv${lv} ${ev.cancelled ? 'cancelled' : ''} ${opts.cls || ''}" style="${stageVars(ev.stage)}" data-ev="${ev.id}" role="button" tabindex="0">
+  return `<div class="row lv${lv} ${isNope(ev.id) ? 'nope' : ''} ${ev.cancelled ? 'cancelled' : ''} ${opts.cls || ''}" style="${stageVars(ev.stage)}" data-ev="${ev.id}" role="button" tabindex="0">
     <div class="t">${ev.s}<small>${opts.showDay ? DAY[ev.day].label : ev.e}</small></div>
     <div>
-      <div class="n">${name}</div>
+      <div class="n">${isNope(ev.id) ? '<span class="nope-i" title="לא בשבילי">👎</span> ' : ''}${name}</div>
       <div class="sub"><span class="stag">${esc(st.short)}</span>${opts.showDay ? `<span>${timeRange(ev)}</span>` : ''}${ev.type !== 'show' ? `<span class="chip soft">${TYPES[ev.type]}</span>` : ''}${ev.cancelled ? '<span class="chip warn">בוטל</span>' : ''}${opts.levelChip && lv ? `<span class="chip ${lv === 2 ? '' : 'soft'}">${LV_ICON[lv]} ${LV_LABEL[lv]}</span>` : ''}${going.length ? friendAvatars(going) : ''}${notesFor(ev.id).length ? `<span class="chip soft">📝 ${notesFor(ev.id).length}</span>` : ''}</div>
       ${opts.hint ? `<div class="hint">${esc(opts.hint)}</div>` : ''}
     </div>
@@ -1627,7 +1637,7 @@ function bindRows(root) {
 /* ───────── שינוי רמת עניין ───────── */
 function setLevel(id, lv, { silent = false } = {}) {
   const prev = level(id);
-  if (lv) S.picks[id] = lv; else delete S.picks[id];
+  if (lv) { S.picks[id] = lv; if (S.nope) delete S.nope[id]; } else delete S.picks[id];
   save();
   rerender();
   refreshSheet();
@@ -1636,6 +1646,16 @@ function setLevel(id, lv, { silent = false } = {}) {
     toast(msg, { label: 'ביטול', fn: () => setLevel(id, prev, { silent: true }) });
   }
   if (lv && navigator.vibrate) navigator.vibrate(12);
+}
+/* 👎 "לא בשבילי": מעומעם בכל מקום. מסמן → יוצא מהלוז; בחירה בחייב/אולי מבטלת אותו */
+function setNope(id, on, { silent = false } = {}) {
+  const prevNope = isNope(id), prevLv = level(id);
+  if (!S.nope) S.nope = {};
+  if (on) { S.nope[id] = true; delete S.picks[id]; } else delete S.nope[id];
+  save(); rerender(); refreshSheet();
+  if (!silent) toast(on ? '👎 סומן "לא בשבילי"' : 'הסימון בוטל', {
+    label: 'ביטול', fn: () => { setNope(id, prevNope, { silent: true }); if (prevLv) setLevel(id, prevLv, { silent: true }); },
+  });
 }
 function quickToggle(id) {
   setLevel(id, level(id) ? 0 : 2);
@@ -1660,7 +1680,7 @@ function cardClass(ev) {
   const lv = level(ev.id);
   const f = S.prefs.filter;
   const dim = (f === 'mine' && !lv) || (f === 'must' && lv < 2);
-  return `card lv${lv} ${dim ? 'dim' : ''} ${ev.cancelled ? 'cancelled' : ''}`;
+  return `card lv${lv} ${dim ? 'dim' : ''} ${isNope(ev.id) ? 'nope' : ''} ${ev.cancelled ? 'cancelled' : ''}`;
 }
 
 function renderGrid(view, dayId) {
@@ -1678,7 +1698,7 @@ function renderGrid(view, dayId) {
       const lv = level(ev.id);
       const going = showFriends ? friendsGoing(ev) : [];
       return `<div class="${cardClass(ev)} ${h < 66 ? 'short' : ''}" data-ev="${ev.id}" style="top:${top + 1.5}px;height:${h}px">
-        ${lv ? `<span class="lv-badge">${LV_ICON[lv]}</span>` : ''}
+        ${lv ? `<span class="lv-badge">${LV_ICON[lv]}</span>` : isNope(ev.id) ? '<span class="lv-badge">👎</span>' : ''}
         <b>${esc(ev.name)}</b><small>${timeRange(ev)}</small>
         ${going.length ? `<span class="fdots">${going.map(f => f.emoji).join('')}</span>` : ''}
       </div>`;
@@ -1879,14 +1899,14 @@ function renderEventSheet(body, ev) {
     if (mode === 'mine') act = `<button class="act" data-rm="${o.id}">הסר</button>`;
     else if (lv) act = `<button class="act solid" data-swap="${o.id}" title="מחליף את ההופעה הנוכחית בזו">החלף</button>`;
     else act = `<button class="act" data-add="${o.id}">+ חייב</button>`;
-    return `<div class="ov lv${olv}" style="--c:${STAGE[o.stage].color}">
+    return `<div class="ov lv${olv} ${isNope(o.id) ? 'nope' : ''}" style="--c:${STAGE[o.stage].color}">
       <button class="info" data-open="${o.id}">
-        <div class="n">${olv ? LV_ICON[olv] + ' ' : ''}${esc(o.name)}</div>
+        <div class="n">${olv ? LV_ICON[olv] + ' ' : ''}${isNope(o.id) ? '👎 ' : ''}${esc(o.name)}</div>
         <div class="m">${timeRange(o)} · חופף ${fmtDur(overlapMin(o, ev))}</div>
       </button>${act}</div>`;
   };
 
-  const byStage = STAGES.map(s => ({ s, list: others.filter(o => o.stage === s.id) })).filter(g => g.list.length);
+  const byStage = STAGES.map(s => ({ s, list: others.filter(o => o.stage === s.id).sort((a, b) => isNope(a.id) - isNope(b.id)) })).filter(g => g.list.length);
 
   body.innerHTML = `
     <div class="ev-tags">${tags}</div>
@@ -1898,6 +1918,7 @@ function renderEventSheet(body, ev) {
       <button class="${lv === 2 ? 'on2' : ''}" data-lv="2" aria-pressed="${lv === 2}">★ חייב</button>
       <button class="${lv === 1 ? 'on1' : ''}" data-lv="1" aria-pressed="${lv === 1}">◐ אולי</button>
       <button class="rm" data-lv="0" aria-label="הסר מהלוז" ${lv ? '' : 'disabled style="opacity:.35"'}>${ICON.trash}</button>
+      <button class="nope-btn ${isNope(ev.id) ? 'on' : ''}" data-nope aria-pressed="${isNope(ev.id)}" aria-label="לא בשבילי" title="לא בשבילי">👎</button>
     </div>
     ${going.length ? `<div class="going-line">גם הולכים: ${going.map(f => `<span class="av sm" style="--fc:${f.color}">${f.emoji}</span>${esc(f.name)} <span style="opacity:.6">(${LV_LABEL[f.picks[ev.id]]})</span>`).join(' ')}</div>` : ''}
     <button class="btn block" data-navgo>${ICON.pin} ניווט ל${esc(st.name)}</button>
@@ -1916,6 +1937,7 @@ function renderEventSheet(body, ev) {
     const b = e.target.closest('button');
     if (!b) return;
     if (journalClick(b, ev)) return;
+    if ('nope' in b.dataset) { setNope(ev.id, !isNope(ev.id)); return; }
     if (b.dataset.lv != null) {
       const nl = +b.dataset.lv;
       setLevel(ev.id, nl === lv && nl ? 0 : nl);
@@ -2889,9 +2911,9 @@ function stageCards(t) {
     const m = kind === 'now'
       ? `${timeRange(e)} · נגמר בעוד ${fmtIn(e.end - t)}`
       : `${e.start - t > 12 * HOUR ? DAY[e.day].label + ' ' : ''}${e.s} · מתחיל בעוד ${fmtIn(e.start - t)}`;
-    return `<button class="sc-item" data-ev="${e.id}">
+    return `<button class="sc-item ${isNope(e.id) ? 'nope' : ''}" data-ev="${e.id}">
       <div class="k">${kind === 'now' ? '● עכשיו' : 'הבא'}</div>
-      <div class="n">${lv ? `<span>${LV_ICON[lv]}</span>` : ''}${esc(e.name)} ${friendAvatars(going)}</div>
+      <div class="n">${lv ? `<span>${LV_ICON[lv]}</span>` : ''}${isNope(e.id) ? '<span>👎</span>' : ''}${esc(e.name)} ${friendAvatars(going)}</div>
       <div class="m">${m}</div>
       ${kind === 'now' ? `<div class="progress"><i style="width:${(t - e.start) / (e.end - e.start) * 100}%"></i></div>` : ''}
     </button>`;
@@ -3828,7 +3850,7 @@ const CC = (() => {
     : v && typeof v === 'object' ? '{' + Object.keys(v).sort().filter(k => v[k] !== undefined).map(k => JSON.stringify(k) + ':' + canon(v[k])).join(',') + '}'
     : JSON.stringify(v === undefined ? null : v);
   function fp(st) {
-    const s = canon([st.picks || {}, [...(st.notes || [])].sort((a, b) => (a.id > b.id ? 1 : -1)), st.ratings || {},
+    const s = canon([st.picks || {}, [...(st.notes || [])].sort((a, b) => (a.id > b.id ? 1 : -1)), st.ratings || {}, st.nope || {},
       (st.friends || []).map(f => [f.name, f.picks]).sort(), (st.prefs && st.prefs.tent) || null, st.name || '']);
     let h = 0;
     for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
@@ -3915,6 +3937,7 @@ const CC = (() => {
       name: m3val(base.name, local.name, remote.name) || local.name || remote.name || '',
       picks: m3map(base.picks, local.picks, remote.picks),
       ratings: m3map(base.ratings, local.ratings, remote.ratings),
+      nope: m3map(base.nope, local.nope, remote.nope),
       notes, friends, prefs,
     };
   }

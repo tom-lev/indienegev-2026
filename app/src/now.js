@@ -100,9 +100,9 @@ function stageCards(t) {
     const m = kind === 'now'
       ? `${timeRange(e)} · נגמר בעוד ${fmtIn(e.end - t)}`
       : `${e.start - t > 12 * HOUR ? DAY[e.day].label + ' ' : ''}${e.s} · מתחיל בעוד ${fmtIn(e.start - t)}`;
-    return `<button class="sc-item" data-ev="${e.id}">
+    return `<button class="sc-item ${isNope(e.id) ? 'nope' : ''}" data-ev="${e.id}">
       <div class="k">${kind === 'now' ? '● עכשיו' : 'הבא'}</div>
-      <div class="n">${lv ? `<span>${LV_ICON[lv]}</span>` : ''}${esc(e.name)} ${friendAvatars(going)}</div>
+      <div class="n">${lv ? `<span>${LV_ICON[lv]}</span>` : ''}${isNope(e.id) ? '<span>👎</span>' : ''}${esc(e.name)} ${friendAvatars(going)}</div>
       <div class="m">${m}</div>
       ${kind === 'now' ? `<div class="progress"><i style="width:${(t - e.start) / (e.end - e.start) * 100}%"></i></div>` : ''}
     </button>`;

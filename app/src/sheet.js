@@ -28,14 +28,14 @@ function renderEventSheet(body, ev) {
     if (mode === 'mine') act = `<button class="act" data-rm="${o.id}">הסר</button>`;
     else if (lv) act = `<button class="act solid" data-swap="${o.id}" title="מחליף את ההופעה הנוכחית בזו">החלף</button>`;
     else act = `<button class="act" data-add="${o.id}">+ חייב</button>`;
-    return `<div class="ov lv${olv}" style="--c:${STAGE[o.stage].color}">
+    return `<div class="ov lv${olv} ${isNope(o.id) ? 'nope' : ''}" style="--c:${STAGE[o.stage].color}">
       <button class="info" data-open="${o.id}">
-        <div class="n">${olv ? LV_ICON[olv] + ' ' : ''}${esc(o.name)}</div>
+        <div class="n">${olv ? LV_ICON[olv] + ' ' : ''}${isNope(o.id) ? '👎 ' : ''}${esc(o.name)}</div>
         <div class="m">${timeRange(o)} · חופף ${fmtDur(overlapMin(o, ev))}</div>
       </button>${act}</div>`;
   };
 
-  const byStage = STAGES.map(s => ({ s, list: others.filter(o => o.stage === s.id) })).filter(g => g.list.length);
+  const byStage = STAGES.map(s => ({ s, list: others.filter(o => o.stage === s.id).sort((a, b) => isNope(a.id) - isNope(b.id)) })).filter(g => g.list.length);
 
   body.innerHTML = `
     <div class="ev-tags">${tags}</div>
@@ -47,6 +47,7 @@ function renderEventSheet(body, ev) {
       <button class="${lv === 2 ? 'on2' : ''}" data-lv="2" aria-pressed="${lv === 2}">★ חייב</button>
       <button class="${lv === 1 ? 'on1' : ''}" data-lv="1" aria-pressed="${lv === 1}">◐ אולי</button>
       <button class="rm" data-lv="0" aria-label="הסר מהלוז" ${lv ? '' : 'disabled style="opacity:.35"'}>${ICON.trash}</button>
+      <button class="nope-btn ${isNope(ev.id) ? 'on' : ''}" data-nope aria-pressed="${isNope(ev.id)}" aria-label="לא בשבילי" title="לא בשבילי">👎</button>
     </div>
     ${going.length ? `<div class="going-line">גם הולכים: ${going.map(f => `<span class="av sm" style="--fc:${f.color}">${f.emoji}</span>${esc(f.name)} <span style="opacity:.6">(${LV_LABEL[f.picks[ev.id]]})</span>`).join(' ')}</div>` : ''}
     <button class="btn block" data-navgo>${ICON.pin} ניווט ל${esc(st.name)}</button>
@@ -65,6 +66,7 @@ function renderEventSheet(body, ev) {
     const b = e.target.closest('button');
     if (!b) return;
     if (journalClick(b, ev)) return;
+    if ('nope' in b.dataset) { setNope(ev.id, !isNope(ev.id)); return; }
     if (b.dataset.lv != null) {
       const nl = +b.dataset.lv;
       setLevel(ev.id, nl === lv && nl ? 0 : nl);

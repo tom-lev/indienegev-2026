@@ -15,7 +15,7 @@ function cardClass(ev) {
   const lv = level(ev.id);
   const f = S.prefs.filter;
   const dim = (f === 'mine' && !lv) || (f === 'must' && lv < 2);
-  return `card lv${lv} ${dim ? 'dim' : ''} ${ev.cancelled ? 'cancelled' : ''}`;
+  return `card lv${lv} ${dim ? 'dim' : ''} ${isNope(ev.id) ? 'nope' : ''} ${ev.cancelled ? 'cancelled' : ''}`;
 }
 
 function renderGrid(view, dayId) {
@@ -33,7 +33,7 @@ function renderGrid(view, dayId) {
       const lv = level(ev.id);
       const going = showFriends ? friendsGoing(ev) : [];
       return `<div class="${cardClass(ev)} ${h < 66 ? 'short' : ''}" data-ev="${ev.id}" style="top:${top + 1.5}px;height:${h}px">
-        ${lv ? `<span class="lv-badge">${LV_ICON[lv]}</span>` : ''}
+        ${lv ? `<span class="lv-badge">${LV_ICON[lv]}</span>` : isNope(ev.id) ? '<span class="lv-badge">👎</span>' : ''}
         <b>${esc(ev.name)}</b><small>${timeRange(ev)}</small>
         ${going.length ? `<span class="fdots">${going.map(f => f.emoji).join('')}</span>` : ''}
       </div>`;

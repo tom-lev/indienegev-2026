@@ -36,7 +36,7 @@ const CC = (() => {
     : v && typeof v === 'object' ? '{' + Object.keys(v).sort().filter(k => v[k] !== undefined).map(k => JSON.stringify(k) + ':' + canon(v[k])).join(',') + '}'
     : JSON.stringify(v === undefined ? null : v);
   function fp(st) {
-    const s = canon([st.picks || {}, [...(st.notes || [])].sort((a, b) => (a.id > b.id ? 1 : -1)), st.ratings || {},
+    const s = canon([st.picks || {}, [...(st.notes || [])].sort((a, b) => (a.id > b.id ? 1 : -1)), st.ratings || {}, st.nope || {},
       (st.friends || []).map(f => [f.name, f.picks]).sort(), (st.prefs && st.prefs.tent) || null, st.name || '']);
     let h = 0;
     for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
@@ -123,6 +123,7 @@ const CC = (() => {
       name: m3val(base.name, local.name, remote.name) || local.name || remote.name || '',
       picks: m3map(base.picks, local.picks, remote.picks),
       ratings: m3map(base.ratings, local.ratings, remote.ratings),
+      nope: m3map(base.nope, local.nope, remote.nope),
       notes, friends, prefs,
     };
   }
@@ -207,7 +208,7 @@ const CC = (() => {
 /* Service Worker – האפליקציה נפתחת מהעותק השמור בטלפון, גם בלי קליטה.
    אסטרטגיה: מטמון קודם (פתיחה מיידית גם בקליטה חלשה). עדכון גרסה מגיע כ-SW חדש
    (הקובץ הזה משתנה בכל בנייה בגלל VERSION), שמחכה עד שהמשתמש מאשר רענון. */
-const VERSION = 'cb187d2b9546';
+const VERSION = 'e98d4c3ac01e';
 const CACHE = 'indn26-' + VERSION;
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
