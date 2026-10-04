@@ -184,7 +184,7 @@ function eventRow(ev, opts = {}) {
     <div class="t">${ev.s}<small>${opts.showDay ? DAY[ev.day].label : ev.e}</small></div>
     <div>
       <div class="n">${isNope(ev.id) ? '<span class="nope-i" title="לא בשבילי">👎</span> ' : ''}${name}</div>
-      <div class="sub"><span class="stag">${esc(st.short)}</span>${opts.showDay ? `<span>${timeRange(ev)}</span>` : ''}${ev.type !== 'show' ? `<span class="chip soft">${TYPES[ev.type]}</span>` : ''}${ev.cancelled ? '<span class="chip warn">בוטל</span>' : ''}${opts.levelChip && lv ? `<span class="chip ${lv === 2 ? '' : 'soft'}">${LV_ICON[lv]} ${LV_LABEL[lv]}</span>` : ''}${mine ? `<span class="chip soft">${LV_ICON[mine]} גם אצלי</span>` : ''}${going.length ? friendAvatars(going) : ''}${notesFor(ev.id).length ? `<span class="chip soft">📝 ${notesFor(ev.id).length}</span>` : ''}</div>
+      <div class="sub"><span class="stag">${esc(st.short)}</span>${opts.showDay ? `<span>${timeRange(ev)}</span>` : ''}${ev.type !== 'show' ? `<span class="chip soft">${TYPES[ev.type]}</span>` : ''}${ev.cancelled ? '<span class="chip warn">בוטל</span>' : ''}${opts.levelChip && lv ? `<span class="chip ${lv === 2 ? '' : 'soft'}">${LV_ICON[lv]} ${LV_LABEL[lv]}</span>` : ''}${mine ? `<span class="chip soft">${LV_ICON[mine]} גם אצלי</span>` : ''}${opts.chip || ''}${going.length ? friendAvatars(going) : ''}${notesFor(ev.id).length ? `<span class="chip soft">📝 ${notesFor(ev.id).length}</span>` : ''}</div>
       ${opts.hint ? `<div class="hint">${esc(opts.hint)}</div>` : ''}
     </div>
     ${right}

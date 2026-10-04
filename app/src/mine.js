@@ -57,7 +57,9 @@ function sharedList(evs) {
     const sep = h !== lastH ? `<div class="hour-sep">${h}:00</div>` : '';
     lastH = h;
     const people = sharedPeople(ev);
-    return sep + eventRow(ev, { nav: true, levelChip: true, people, cls: people.length >= 2 ? 'together' : '' });
+    const together = people.length >= 2;
+    return sep + eventRow(ev, { nav: true, levelChip: true, people, cls: together ? 'together' : '',
+      chip: together ? `<span class="chip together-chip">👥 ${people.length} ביחד</span>` : '' });
   }).join('');
 }
 
