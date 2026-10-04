@@ -24,6 +24,10 @@ INNER_FENCES = [
 ]
 
 
+# מתחמי בישול (כמו ב-data.js): מרכז השלט באחוזים
+COOKING = [(15.5, 35.6), (21.6, 68.4), (31.0, 79.6), (49.4, 75.7), (70.0, 76.5)]
+
+
 def classify(rgb):
     r, g, b = (rgb[..., i].astype(int) for i in range(3))
     yellow = (r > 215) & (g > 165) & (b < 125) & (r - b > 110)
@@ -54,6 +58,10 @@ def build(map_path, out_w=3200, with_gates=True):
     # אחרת הסגירה "מעגלת" את פינות החלקות והמסלול חותך עליהן
     plot_green = green & ~((g_ >= 212) & (r_ >= 125))
     light_path = (np.asarray(lp) > 127) & ~plot_green
+    # מתחמי הבישול מצוירים על השבילים (סיר + שלט) ואפשר לעבור דרכם: בתחום השלט כל מה שאינו חלקה – עביר
+    for cx, cy in COOKING:
+        box = (abs(xs - cx) < 2.6) & (ys > cy - 3.4) & (ys < cy + 1.6)
+        light_path |= box & ~plot_green
     # קמפינג+: מתחת לשביל האלכסוני שיורד מ-(64,70) ל-(50,95)
     plus_zone = (xs > 49) & (ys > 70 + (64 - xs) * 1.786)
     shabbat_zone = ((xs < 13.5) & (ys < 44)) | ((xs < 22) & (ys < 33))  # מתחם שבת, מקלחות, בישול ואדמה – שטח פתוח בלי חלקות
