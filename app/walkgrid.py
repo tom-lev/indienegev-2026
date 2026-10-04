@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw
 
-CELL = 8  # פיקסלים (במפה ברוחב 3200) לכל תא
+CELL = 4  # פיקסלים (במפה ברוחב 3200) לכל תא – עדין מספיק כדי להבחין בין מרכז השביל לשוליים
 
 # הגדר הוורודה סביב אזור במת הפיל ובין אזור במת הקוף לצפון (באחוזים)
 INNER_FENCES = [
@@ -103,6 +103,9 @@ def build(map_path, out_w=3200, with_gates=True):
     rfrac = river[:GH * CELL, :GW * CELL].reshape(GH, CELL, GW, CELL).mean(axis=(1, 3))
     cfrac = corm[:GH * CELL, :GW * CELL].reshape(GH, CELL, GW, CELL).mean(axis=(1, 3))
     grid = ((blocks > 0.6) & (rfrac < 0.1)) | (cfrac > 0.5)
+    # מתחם ההופעות (הצהוב): מסלול בין שתי נקודות בקמפינג מעדיף לא לעבור דרכו
+    ffrac = yellow[:GH * CELL, :GW * CELL].reshape(GH, CELL, GW, CELL).mean(axis=(1, 3))
+    build.fest = ffrac > 0.3
     return grid, (W, H)
 
 

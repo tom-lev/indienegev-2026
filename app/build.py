@@ -90,6 +90,7 @@ def build_assets():
     from walkgrid import build as build_walk, encode, CELL
     grid, (base_w, _) = build_walk(PROJECT / 'festival-map-2026-web-large.jpg')
     out['walk'] = encode(grid)
+    out['fest'] = encode(build_walk.fest)
     out['walkH'], out['walkW'] = grid.shape
     out['walkCell'], out['walkBase'] = CELL, base_w
     return out

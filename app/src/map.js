@@ -52,6 +52,9 @@ syncTent();
    המסלול = A* עם "קנס" על קרבה למכשולים, כך שהוא עובר באמצע מעברים ופתחים ולא צמוד לגדר. */
 const WALK = (() => {
   const GW = ASSETS.walkW, GH = ASSETS.walkH, N = GW * GH;
+  const fb = Uint8Array.from(atob(ASSETS.fest), c => c.charCodeAt(0));
+  const fest = new Uint8Array(N);
+  for (let i = 0; i < N; i++) fest[i] = (fb[i >> 3] >> (7 - (i & 7))) & 1;
   const bytes = Uint8Array.from(atob(ASSETS.walk), c => c.charCodeAt(0));
   const ok = new Uint8Array(N);
   for (let i = 0; i < N; i++) ok[i] = (bytes[i >> 3] >> (7 - (i & 7))) & 1;
@@ -92,10 +95,10 @@ const WALK = (() => {
       if (nd < dist[n]) { dist[n] = nd; q[t++] = n; }
     }
   }
-  return { GW, GH, main, dist, cell: ASSETS.walkCell * MAP_W / ASSETS.walkBase };
+  return { GW, GH, main, dist, fest, cell: ASSETS.walkCell * MAP_W / ASSETS.walkBase };
 })();
 
-const PREFERRED_CLEARANCE = 5; // תאים: מתחת למרחק הזה מהמכשול יש קנס, כדי ללכת באמצע
+const PREFERRED_CLEARANCE = 10; // תאים: מתחת למרחק הזה מהמכשול יש קנס שגדל ככל שמתקרבים לשוליים – המסלול נצמד למרכז השביל
 
 function cellOf(p) {
   return [Math.min(WALK.GW - 1, Math.max(0, Math.floor(p.x / WALK.cell))),
@@ -105,7 +108,7 @@ function cellOf(p) {
 function snapCell(p) {
   const [cx, cy] = cellOf(p);
   let bestI = -1, bestD = 1e9;
-  for (let r = 0; r < 40 && bestI < 0; r++) {
+  for (let r = 0; r < 80 && bestI < 0; r++) {
     for (let y = cy - r; y <= cy + r; y++) for (let x = cx - r; x <= cx + r; x++) {
       if (x < 0 || y < 0 || x >= WALK.GW || y >= WALK.GH) continue;
       const i = y * WALK.GW + x;
@@ -117,7 +120,9 @@ function snapCell(p) {
   return bestI;
 }
 
+const FEST_COST = 6; // פי כמה יקר לעבור במתחם ההופעות כשההתחלה והיעד שניהם מחוצה לו
 function astar(s, g) {
+  const avoidFest = !WALK.fest[s] && !WALK.fest[g];
   const { GW, GH, main, dist } = WALK, N = GW * GH;
   const cost = new Float32Array(N).fill(Infinity), prev = new Int32Array(N).fill(-1), closed = new Uint8Array(N);
   const gx = g % GW, gy = (g / GW) | 0;
@@ -164,7 +169,8 @@ function astar(s, g) {
       const n = ny * GW + nx;
       if (!main[n] || closed[n]) continue;
       const pen = Math.max(0, PREFERRED_CLEARANCE - dist[n]);
-      const nc = cost[c] + (dx && dy ? 1.414 : 1) * (1 + 0.3 * pen * pen / PREFERRED_CLEARANCE);
+      const fm = avoidFest && WALK.fest[n] ? FEST_COST : 1;
+      const nc = cost[c] + (dx && dy ? 1.414 : 1) * (1 + 0.6 * pen * pen / PREFERRED_CLEARANCE) * fm;
       if (nc < cost[n]) { cost[n] = nc; prev[n] = c; push(n, nc + heur(n)); }
     }
   }
