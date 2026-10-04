@@ -50,6 +50,26 @@ const LANDMARKS = [
   { id: 'wc-sound', type: 'wc', name: 'שירותים · ליד הסאונדסיסטם', icon: '🚻', mapX: 61.65, mapY: 55.4 },
   { id: 'wc-fam', type: 'wc', name: 'שירותים · קמפינג משפחות', icon: '🚻', mapX: 64.8, mapY: 70.0 },
   { id: 'wc-plus', type: 'wc', name: 'שירותים · ליד קמפינג+', icon: '🚻', mapX: 54.3, mapY: 89.3 },
+  // ברזיות (טיפות במפה)
+  { id: 'water-nw', type: 'water', name: 'ברזייה · ליד הכניסה המערבית', icon: '💧', mapX: 30.3, mapY: 35.2 },
+  { id: 'water-adama', type: 'water', name: 'ברזייה · ליד אדמה', icon: '💧', mapX: 23.95, mapY: 37.7 },
+  { id: 'water-gw', type: 'water', name: 'ברזייה · מול הכניסה המערבית', icon: '💧', mapX: 27.0, mapY: 40.45 },
+  { id: 'water-sweets', type: 'water', name: 'ברזייה · ליד המתוקים', icon: '💧', mapX: 35.7, mapY: 61.1 },
+  { id: 'water-camp', type: 'water', name: 'ברזייה · קמפינג', icon: '💧', mapX: 32.6, mapY: 63.5 },
+  { id: 'water-campw', type: 'water', name: 'ברזייה · קמפינג מערבי', icon: '💧', mapX: 18.0, mapY: 64.6 },
+  { id: 'water-camps', type: 'water', name: 'ברזייה · קמפינג דרומי', icon: '💧', mapX: 30.75, mapY: 86.45 },
+  { id: 'water-camps2', type: 'water', name: 'ברזייה · ליד השירותים הדרומיים', icon: '💧', mapX: 33.6, mapY: 96.5 },
+  { id: 'water-plus', type: 'water', name: 'ברזייה · ליד קמפינג+', icon: '💧', mapX: 54.85, mapY: 85.5 },
+  { id: 'water-shower', type: 'water', name: 'ברזייה · ליד המקלחות', icon: '💧', mapX: 52.0, mapY: 91.05 },
+  // מקלחות
+  { id: 'shower-w', type: 'shower', name: 'מקלחות · מערב', icon: '🚿', mapX: 11.15, mapY: 36.0 },
+  { id: 'shower-s', type: 'shower', name: 'מקלחות · דרום', icon: '🚿', mapX: 49.95, mapY: 92.5 },
+  // מתחמי בישול
+  { id: 'cook-shabbat', type: 'cook', name: 'מתחם בישול · ליד מתחם שבת', icon: '🍳', mapX: 15.5, mapY: 35.6 },
+  { id: 'cook-campw', type: 'cook', name: 'מתחם בישול · קמפינג מערבי', icon: '🍳', mapX: 21.6, mapY: 68.4 },
+  { id: 'cook-camps', type: 'cook', name: 'מתחם בישול · קמפינג דרומי', icon: '🍳', mapX: 31.0, mapY: 79.6 },
+  { id: 'cook-acc', type: 'cook', name: 'מתחם בישול · קמפינג נגיש', icon: '🍳', mapX: 49.4, mapY: 75.7 },
+  { id: 'cook-fam', type: 'cook', name: 'מתחם בישול · קמפינג משפחות', icon: '🍳', mapX: 70.0, mapY: 76.5 },
 ];
 
 const TYPES = {

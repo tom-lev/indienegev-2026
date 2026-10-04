@@ -730,3 +730,27 @@ textarea.text-in { min-height: 84px; resize: vertical; direction: ltr; font-fami
 .map-ui .rb.rb-row3 { gap: 6px; padding: 6px; }
 .map-ui .rb-row3 .rb-btn { flex: 1 1 0; justify-content: center; padding: 10px 4px; font-size: 13.5px; gap: 4px; min-width: 0; }
 .map-ui .rb-row3 .rb-btn svg { width: 16px; height: 16px; }
+
+/* ───────── נקודות קטנות + מקרא לחיץ ───────── */
+.m-place { transform: translate(-50%, -15px); min-width: 30px; gap: 1px; }
+.m-place .ic {
+  width: 30px; height: 30px; font-size: 16px;
+  border-width: 2.5px;
+  box-shadow: 0 0 0 1.5px var(--ink), 0 2px 0 1.5px var(--ink);
+}
+.m-place small { font-size: 10.5px; padding: 0 6px; }
+.far .m-place small { display: none; }
+@keyframes pop-in { from { transform: translate(-50%, -15px) scale(.3); opacity: 0; } }
+.m-hit.poi { width: 44px; height: 44px; margin: -22px 0 0 -22px; }
+.map-ui.legend { top: 10px; left: 10px; right: 10px; direction: rtl; }
+.map-ui .lg {
+  display: flex; gap: 6px; overflow-x: auto; touch-action: pan-x;
+  scrollbar-width: none; padding: 2px 2px 5px;
+}
+.map-ui .lg::-webkit-scrollbar { display: none; }
+.map-ui .lg button {
+  flex: none; white-space: nowrap;
+  border-radius: 999px; padding: 6px 11px;
+  font-size: 13px; font-weight: 800;
+}
+.map-ui .lg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }

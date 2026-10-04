@@ -16,7 +16,21 @@ const PLACE = Object.fromEntries(PLACES.map(p => [p.id, p]));
 let routeFrom = null; // מזהה נקודת המוצא בניווט הנוכחי
 let picking = false;  // false | 'from' ("איפה אני") | 'dest' (יעד) | 'tent' (סימון האוהל)
 const placeXY = p => ({ x: p.mapX / 100 * MAP_W, y: p.mapY / 100 * MAP_H });
-const WCS = LANDMARKS.filter(l => l.type === 'wc');
+/* קטגוריות למקרא הלחיץ (וסינון הנקודות בזמן בחירה) */
+const CATS = [
+  { id: 'wc', label: 'שירותים', icon: '🚻', near: 'השירותים הקרובים' },
+  { id: 'water', label: 'ברזיות', icon: '💧', near: 'הברזייה הקרובה' },
+  { id: 'shower', label: 'מקלחות', icon: '🚿', near: 'המקלחות הקרובות' },
+  { id: 'cook', label: 'בישול', icon: '🍳', near: 'מתחם הבישול הקרוב' },
+  { id: 'food', label: 'אוכל ושתייה', icon: '🍺', near: 'האוכל והשתייה הקרובים' },
+  { id: 'stage', label: 'במות', icon: '✦', near: 'הבמה הקרובה' },
+  { id: 'gate', label: 'כניסות', icon: '🚪', near: 'הכניסה הקרובה' },
+];
+const CAT = Object.fromEntries(CATS.map(c => [c.id, c]));
+const FOOD_IDS = ['food', 'bar-w', 'bar-s', 'bar-e', 'cafe', 'campbar'];
+const catOf = p => p.type || (STAGE[p.id] ? 'stage' : p.id.startsWith('gate') ? 'gate' : FOOD_IDS.includes(p.id) ? 'food' : 'other');
+const TAPPABLE_TYPES = ['wc', 'water', 'shower', 'cook']; // אייקונים במפה שלחיצה עליהם מנווטת אליהם
+let legendType = null; // קטגוריה שנבחרה במקרא (null = הכל)
 
 /* "האוהל שלי" – נקודה אישית שנשמרת במכשיר ומתנהגת כמו כל נקודה אחרת במפה */
 function syncTent() {
@@ -240,6 +254,7 @@ function navigateTo(target, opts = {}) {
     mapFocus = target.stage ? { ev: target } : target.nearest ? { nearest: target.nearest } : { dest: target.dest };
     routeFrom = keepFrom;
     picking = opts.pick || false;
+    legendType = null;
     setTab('map');
     mapFocusLayer = pushLayer(() => {
       mapFocusLayer = null;
@@ -266,10 +281,10 @@ function goTo(id) {
   navigateTo({ dest: id }, { keepFrom: keep, pick: keep ? false : 'from' });
 }
 
-/* השירותים הקרובים ביותר לפי אורך מסלול ההליכה (לא בקו אווירי) */
-function nearestWc(fromId) {
+/* הנקודה הקרובה ביותר מסוג מסוים, לפי אורך מסלול ההליכה (לא בקו אווירי) */
+function nearestOf(type, fromId) {
   let best = null, bestLen = Infinity;
-  for (const w of WCS) {
+  for (const w of PLACES.filter(pl => catOf(pl) === type)) {
     if (w.id === fromId) return w.id;
     const r = findRoute(fromId, w.id);
     if (!r) continue;
@@ -314,9 +329,9 @@ function renderMap(view) {
   const marks = STAGES.map(st => `<div class="m-mark" style="left:${st.mapX}%;top:${st.mapY}%">
       <div class="inv"><button class="m-hit" data-stage="${st.id}" aria-label="${esc(st.name)}"></button></div>
     </div>`).join('')
-    // אייקוני השירותים שבמפה לחיצים: הקשה = ניווט אליהם
-    + WCS.map(w => `<div class="m-mark" style="left:${w.mapX}%;top:${w.mapY}%">
-      <div class="inv"><button class="m-hit wc" data-wc="${w.id}" aria-label="ניווט ל${esc(w.name)}"></button></div>
+    // אייקוני שירותים, ברזיות, מקלחות ובישול שבמפה לחיצים: הקשה = ניווט אליהם
+    + LANDMARKS.filter(l => TAPPABLE_TYPES.includes(l.type)).map(w => `<div class="m-mark" style="left:${w.mapX}%;top:${w.mapY}%">
+      <div class="inv"><button class="m-hit poi" data-goto="${w.id}" aria-label="ניווט ל${esc(w.name)}"></button></div>
     </div>`).join('')
     + (PLACE.tent ? `<div class="m-mark" style="left:${PLACE.tent.mapX}%;top:${PLACE.tent.mapY}%">
       <div class="inv"><button class="tent-pin" data-tent aria-label="האוהל שלי"><span>⛺</span></button></div>
@@ -341,6 +356,7 @@ function renderMap(view) {
       <button data-z="fit" aria-label="${f ? 'חזרה לבמה' : 'כל המפה'}">${ICON.target}</button>
     </div>
     ${f ? `<div class="map-ui back"><button data-mapback>${ICON.back} חזרה</button></div>` : ''}
+    <div class="map-ui legend" id="legend"></div>
     <div class="map-ui routebar" id="routebar"></div>
   </div>`;
 
@@ -381,12 +397,24 @@ function renderMap(view) {
       return;
     }
     if (e.target.closest('[data-mapback]')) { popLayer(); return; }
+    const lg = e.target.closest('[data-legend]');
+    if (lg) {
+      legendType = legendType === lg.dataset.legend ? null : lg.dataset.legend;
+      updateRoute(fs);
+      // מתאימים את המבט כך שכל הנקודות מהקטגוריה ייראו
+      if (legendType) fitPoints(stage, PLACES.filter(pl => catOf(pl) === legendType).map(placeXY));
+      return;
+    }
     const r = e.target.closest('[data-route]');
     if (r) {
       const a = r.dataset.route;
-      if (a === 'wc') {
+      if (a === 'wc' || a === 'near') {
+        const type = a === 'wc' ? 'wc' : legendType;
         routeFrom = null;
-        navigateTo({ nearest: 'wc' }, { pick: 'from' });
+        navigateTo({ nearest: type }, { pick: 'from' });
+      } else if (a === 'legend-off') {
+        legendType = null;
+        updateRoute(fs);
       } else if (a === 'tent') {
         if (PLACE.tent) goTo('tent');
         else { picking = 'tent'; updateRoute(fs); }
@@ -430,16 +458,16 @@ function renderMap(view) {
     const pl = e.target.closest('[data-place]');
     if (pl && !mapGesture.moved) {
       const id = pl.dataset.place;
-      if (picking === 'dest') {
-        goTo(id); // יעד חדש: בניווט פעיל שומרים את נקודת המוצא, אחרת עוברים ל"איפה אני"
+      if (picking === 'dest' || !picking) {
+        goTo(id); // יעד חדש (או נקודה מהמקרא): בניווט פעיל שומרים את נקודת המוצא, אחרת עוברים ל"איפה אני"
       } else {
         chooseOrigin(stage, fs, id);
       }
       return;
     }
     if (mapGesture.moved) return;
-    const wc = e.target.closest('[data-wc]');
-    if (wc) { goTo(wc.dataset.wc); return; }
+    const poi = e.target.closest('[data-goto]');
+    if (poi) { goTo(poi.dataset.goto); return; }
     if (e.target.closest('[data-tent]')) { if (mapFocus) goTo('tent'); else openTentSheet(); return; }
     const hit = e.target.closest('[data-stage]');
     if (hit) openStage(hit.dataset.stage);
@@ -462,8 +490,8 @@ function chooseOrigin(stage, dest, id) {
   picking = false;
   S.prefs.here = { id, at: Date.now() };
   save();
-  if (mapFocus && mapFocus.nearest) { // "שירותים קרובים": עכשיו כשידוע המיקום – בוחרים את הקרובים
-    const best = nearestWc(id);
+  if (mapFocus && mapFocus.nearest) { // "הכי קרוב": עכשיו כשידוע המיקום – בוחרים את הנקודה הקרובה
+    const best = nearestOf(mapFocus.nearest, id);
     if (best) navigateTo({ dest: best }, { keepFrom: true });
     return;
   }
@@ -480,16 +508,22 @@ function updateRoute(dest) {
   wrap.classList.toggle('picking-tent', picking === 'tent');
   wrap.classList.toggle('has-route', !!routeFrom && !picking && !!dest);
   const bar = $('#routebar');
+  // המקרא מוצג בטאב המפה הרגיל ובזמן בחירת נקודה (שם הוא משמש כמסנן)
+  const nearestType = mapFocus && mapFocus.nearest;
+  const showLegend = picking === 'from' || picking === 'dest' || (!dest && !picking);
+  $('#legend').innerHTML = showLegend ? `<div class="lg" role="group" aria-label="מקרא">${CATS
+    .filter(c => !(nearestType && c.id === nearestType))
+    .map(c => `<button data-legend="${c.id}" aria-pressed="${legendType === c.id}">${c.icon} ${c.label}</button>`).join('')}</div>` : '';
 
   if (!dest) {
     // בלי יעד: טאב המפה הרגיל, בחירת יעד, סימון האוהל, או "שירותים קרובים" שמחכה למיקום
     $('#route').innerHTML = '';
     const nearest = mapFocus && mapFocus.nearest;
     const lastAny = S.prefs.here && PLACE[S.prefs.here.id] ? PLACE[S.prefs.here.id] : null;
-    $('#places').innerHTML = nearest || picking === 'dest' ? placeButtons(null) : '';
+    $('#places').innerHTML = nearest || picking === 'dest' || (!picking && legendType) ? placeButtons(null) : '';
     if (nearest) {
       bar.innerHTML = `<div class="rb rb-col">
-        <div class="rb-t"><b>🚻 איפה אתם עכשיו?</b><small>נמצא את השירותים הקרובים אליכם בהליכה</small></div>
+        <div class="rb-t"><b>${CAT[nearest].icon} איפה אתם עכשיו?</b><small>נמצא את ${CAT[nearest].near} אליכם בהליכה</small></div>
         <div class="rb-row">${lastAny ? `<button class="rb-btn" data-route="last">מ${esc(lastAny.name)}</button>` : ''}
         <button class="rb-btn alt" data-route="cancel">ביטול</button></div></div>`;
     } else if (picking === 'dest') {
@@ -498,6 +532,12 @@ function updateRoute(dest) {
     } else if (picking === 'tent') {
       bar.innerHTML = `<div class="rb"><div class="rb-t"><b>⛺ איפה האוהל שלכם?</b><small>הקישו על המקום המדויק במפה (אפשר להגדיל קודם)</small></div>
           <button class="rb-btn alt" data-route="cancel">ביטול</button></div>`;
+    } else if (legendType) {
+      const c = CAT[legendType], n = PLACES.filter(pl => catOf(pl) === legendType).length;
+      bar.innerHTML = `<div class="rb rb-col">
+        <div class="rb-t"><b>${c.icon} ${c.label} (${n})</b><small>הקישו על נקודה במפה כדי לנווט אליה</small></div>
+        <div class="rb-row"><button class="rb-btn" data-route="near">${ICON.pin} הכי קרוב אליי</button>
+        <button class="rb-btn alt" data-route="legend-off">סגירה</button></div></div>`;
     } else {
       bar.innerHTML = `<div class="rb rb-row rb-row3">
         <button class="rb-btn" data-route="dest">${ICON.pin} ניווט</button>
@@ -561,7 +601,7 @@ function updateRoute(dest) {
 
 /* כפתורי נקודות לבחירה על המפה (בלי נקודה אחת – היעד הנוכחי) */
 function placeButtons(exceptId) {
-  return PLACES.filter(p => p.id !== exceptId).map(p => `<div class="m-mark" style="left:${p.mapX}%;top:${p.mapY}%">
+  return PLACES.filter(p => p.id !== exceptId && (!legendType || catOf(p) === legendType || p.id === 'tent')).map(p => `<div class="m-mark" style="left:${p.mapX}%;top:${p.mapY}%">
       <div class="inv"><button class="m-place" data-place="${p.id}" ${p.color ? `style="--c:${p.color}"` : ''}>
         <span class="ic">${p.icon}</span><small>${esc(p.name)}</small></button></div></div>`).join('');
 }
@@ -612,6 +652,8 @@ function clampMap() {
 function applyMap(stage) {
   stage.style.transform = `translate(${map.x}px,${map.y}px) scale(${map.s})`;
   stage.style.setProperty('--inv', 1 / map.s);
+  // במבט רחוק מסתירים את שמות הנקודות (רק אייקונים), כדי שלא יכסו זה את זה
+  stage.parentElement.classList.toggle('far', map.s < Math.max(map.vh / MAP_H, map.vw / MAP_W) * 1.35);
 }
 function zoomAt(px, py, factor) {
   const ns = Math.min(map.max, Math.max(map.min, map.s * factor));
