@@ -368,7 +368,6 @@ function renderImportPreview(body, api, d, back) {
       if (!confirm('להחליף את כל הלוז שלך בלוז הזה? (הלוז הנוכחי נשמר כגרסה קודמת בגיבוי ושחזור)')) return;
       takeSnapshot('לפני החלפת לוז').then(() => {
         S.picks = { ...d.picks };
-        if (!S.name) S.name = d.name;
         save();
         toast('הלוז הוחלף');
         api.close();
