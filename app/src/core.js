@@ -104,8 +104,10 @@ function load() {
 }
 const S = load();
 function save() {
+  S.savedAt = Date.now();
   try { localStorage.setItem(KEY, JSON.stringify(S)); }
   catch (e) { storageOK = false; }
+  if (typeof mirrorSave === 'function') mirrorSave(); // עותק כפול ב-IndexedDB (backup.js)
 }
 
 const level = id => S.picks[id] || 0;

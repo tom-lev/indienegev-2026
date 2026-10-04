@@ -46,7 +46,7 @@ function renderHeader() {
        <button class="icon-btn solid" data-act="share" aria-label="שיתוף">${ICON.share}</button>` : '';
   $('#top').innerHTML = `
     <div class="top-row">
-      <h1>${t.title}</h1>
+      <h1>${t.title}</h1>${netPill()}
       ${mineBtns}
       <button class="logo-btn" data-act="settings" aria-label="הגדרות ומידע"><img src="${ASSETS.wordmark}" alt="inDnegev"></button>
     </div>
@@ -127,11 +127,15 @@ function openSettings() {
       </div>
       <div class="sec">
         <h3>גיבוי ושחזור</h3>
-        <p style="margin:0 0 8px;font-size:14px;color:var(--ink-2)">הכל נשמר רק בטלפון הזה${storageOK ? '' : ' (<b>בדפדפן הזה השמירה לא עובדת!</b>)'}. כדאי לשמור קוד גיבוי בצד, למשל בהודעה לעצמכם.</p>
+        <p style="margin:0 0 8px;font-size:14px;color:var(--ink-2)">${storageOK ? '' : '<b>בדפדפן הזה השמירה לא עובדת!</b> '}${isBackedUp() ? '✅ כל השינויים מגובים' : hasData() ? '⚠️ יש שינויים שלא גובו' : 'אין עדיין נתונים'}${lastBackupAt() ? ` · גיבוי אחרון ${agoText(lastBackupAt())}` : ''}</p>
         <div class="btn-row">
-          <button class="btn sm" data-a="backup">${ICON.copy} העתקת קוד גיבוי</button>
-          <button class="btn alt sm" data-a="restore">${ICON.import} שחזור / ייבוא</button>
+          <button class="btn sm" data-a="bkpanel">💾 גיבוי ושחזור</button>
+          <button class="btn alt sm" data-a="restore">${ICON.import} ייבוא לוז</button>
         </div>
+      </div>
+      <div class="sec">
+        <h3>בלי קליטה</h3>
+        <p style="margin:0;font-size:14px;color:var(--ink-2)">${IS_FILE ? 'זה הקובץ המקומי. מומלץ לעבור לאתר (ב"הלוז שלי").' : !IS_SITE ? '' : offlineReady ? '✓ מוכן לשימוש בלי קליטה' : '⏳ עדיין לא נשמר לשימוש בלי קליטה – פתחו פעם אחת עם קליטה'}${navigator.onLine ? '' : ' · עכשיו אין קליטה'}</p>
       </div>
       <div class="sec">
         <h3>איך משתמשים</h3>
@@ -153,7 +157,9 @@ function openSettings() {
       if (!b) return;
       if (b.dataset.a === 'backup') toast(await copyText(encodeShare(S.name, S.picks)) ? 'קוד הגיבוי הועתק' : 'לא הצלחתי להעתיק');
       if (b.dataset.a === 'restore') { await closeAllLayers(); openImport(); }
-      if (b.dataset.a === 'reset' && confirm('למחוק את כל הבחירות והחברים? אי אפשר לבטל.')) {
+      if (b.dataset.a === 'bkpanel') { await closeAllLayers(); openBackupPanel(); }
+      if (b.dataset.a === 'reset' && confirm('למחוק את כל הבחירות והחברים? (נשמרת גרסה קודמת בגיבוי ושחזור)')) {
+        await takeSnapshot('לפני איפוס');
         S.picks = {}; S.friends = []; save(); closeSheet(); render(); toast('הכל נמחק');
       }
     };
@@ -170,6 +176,10 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && ta
 
 /* אתחול */
 render();
+initBackup();
+initPwa();
+importFromHash();
+window.addEventListener('hashchange', importFromHash);
 if (/INDN1\./.test(decodeURIComponent(location.hash))) {
   const code = decodeURIComponent(location.hash.slice(1));
   history.replaceState(null, '', location.pathname + location.search);

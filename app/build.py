@@ -22,7 +22,7 @@ SITE = PROJECT / 'אינדינגב 2026 · 15-17 באוקטובר, מצפה גב
 
 # סדר קבצי ה-JS חשוב: data → core → ui → מסכים → main
 APP_FILES = ['data.js', 'core.js', 'ui.js', 'grid.js', 'mine.js', 'sheet.js', 'search.js',
-             'map.js', 'now.js', 'share.js', 'friends.js', 'journal.js', 'tentshare.js', 'main.js']
+             'map.js', 'now.js', 'share.js', 'friends.js', 'journal.js', 'tentshare.js', 'backup.js', 'pwa.js', 'main.js']
 VENDOR_FILES = ['qrcode.min.js', 'jsQR.min.js']
 
 INK = (21, 63, 76)
@@ -78,28 +78,12 @@ def build_assets():
         im.thumbnail((360, 360), Image.LANCZOS)
         return webp(im, 80)
 
-    def make_icon():
-        # אייקון: כוכב ✦ קורל על רקע כחול-כהה
-        from PIL import ImageDraw
-        s = 192
-        im = Image.new('RGBA', (s, s), (0, 0, 0, 0))
-        d = ImageDraw.Draw(im)
-        d.rounded_rectangle([0, 0, s - 1, s - 1], radius=42, fill=INK + (255,))
-        c = s / 2
-        pts = []
-        import math
-        for i in range(8):
-            r = 70 if i % 2 == 0 else 18
-            a = math.pi / 4 * i - math.pi / 2
-            pts.append((c + r * math.cos(a), c + r * math.sin(a)))
-        d.polygon(pts, fill=(244, 111, 106, 255))
-        return png(im)
+    cached('icon.png', lambda: png(icon_image(192)), 'image/png')
 
     cached('map.webp', make_map, 'image/webp')
     cached('wordmark.png', make_wordmark, 'image/png')
     cached('butterfly.webp', make_butterfly, 'image/webp')
     cached('flower.webp', make_flower, 'image/webp')
-    cached('icon.png', make_icon, 'image/png')
     with Image.open(CACHE / 'map.webp') as m:
         out['mapW'], out['mapH'] = m.size
     # רשת הליכה לחישוב מסלולים (נבנית מתמונת המפה)
@@ -109,6 +93,51 @@ def build_assets():
     out['walkH'], out['walkW'] = grid.shape
     out['walkCell'], out['walkBase'] = CELL, base_w
     return out
+
+
+def icon_image(s, full_bleed=False):
+    """אייקון: כוכב ✦ קורל על רקע כחול-כהה. full_bleed = רקע מלא (לאייקון maskable)."""
+    import math
+    from PIL import ImageDraw
+    im = Image.new('RGBA', (s, s), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    if full_bleed:
+        d.rectangle([0, 0, s, s], fill=INK + (255,))
+    else:
+        d.rounded_rectangle([0, 0, s - 1, s - 1], radius=s * 0.22, fill=INK + (255,))
+    c = s / 2
+    k = 0.30 if full_bleed else 0.365
+    pts = []
+    for i in range(8):
+        r = s * (k if i % 2 == 0 else k * 0.26)
+        a = math.pi / 4 * i - math.pi / 2
+        pts.append((c + r * math.cos(a), c + r * math.sin(a)))
+    d.polygon(pts, fill=(244, 111, 106, 255))
+    return im
+
+
+def write_pwa(docs, html):
+    """קבצי ההתקנה והעבודה בלי קליטה ל-GitHub Pages"""
+    import hashlib
+    version = hashlib.sha256(html.encode('utf-8')).hexdigest()[:12]
+    sw = (SRC / 'sw.js').read_text(encoding='utf-8').replace('__VERSION__', version)
+    (docs / 'sw.js').write_text(sw, encoding='utf-8')
+    for s in (192, 512):
+        icon_image(s, full_bleed=True).save(docs / f'icon-{s}.png', optimize=True)
+    manifest = {
+        'name': 'הלוז שלי · אינדינגב 2026',
+        'short_name': 'הלוז שלי',
+        'description': 'לוז אישי, מפה וניווט לאינדינגב 2026 – עובד גם בלי קליטה',
+        'lang': 'he', 'dir': 'rtl',
+        'start_url': './', 'scope': './', 'display': 'standalone',
+        'background_color': '#f6ead2', 'theme_color': '#f6ead2',
+        'icons': [
+            {'src': 'icon-192.png', 'sizes': '192x192', 'type': 'image/png', 'purpose': 'any maskable'},
+            {'src': 'icon-512.png', 'sizes': '512x512', 'type': 'image/png', 'purpose': 'any maskable'},
+        ],
+    }
+    (docs / 'manifest.webmanifest').write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf-8')
+    return version
 
 
 def fonts_css():
@@ -151,7 +180,8 @@ def main():
     docs.mkdir(exist_ok=True)
     (docs / 'index.html').write_text(html, encoding='utf-8')
     (docs / '.nojekyll').write_text('', encoding='utf-8')
-    print(f'{out}  ({out.stat().st_size / 1024:.0f} KB)')
+    version = write_pwa(docs, html)
+    print(f'{out}  ({out.stat().st_size / 1024:.0f} KB)  sw {version}')
 
 
 if __name__ == '__main__':

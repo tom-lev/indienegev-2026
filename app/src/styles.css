@@ -807,3 +807,41 @@ textarea.text-in { min-height: 84px; resize: vertical; direction: ltr; font-fami
 .tl-card .tl-ev { margin-bottom: 6px; }
 .tl-card .tl-rate { margin-bottom: 4px; }
 .tl-note { border-top: 1.5px dashed var(--line-2); padding-top: 6px; margin-top: 6px; }
+
+/* ───────── גיבוי + בלי קליטה ───────── */
+.net-pill {
+  flex: none; font-size: 11.5px; font-weight: 800; white-space: nowrap;
+  background: var(--lime); color: var(--ink); border-radius: 999px; padding: 3px 9px;
+}
+.banner.backup-nudge { border-color: var(--coral); }
+.banner.migrate { border-color: var(--teal); background: rgba(59,124,163,.1); }
+.bk-status { margin: 0; padding: 0; list-style: none; font-size: 14px; line-height: 1.8; }
+.warn-t { color: var(--danger); font-weight: 700; }
+.snap { display: flex; align-items: center; gap: 8px; justify-content: space-between; padding: 6px 0; font-size: 13.5px; }
+.snap + .snap { border-top: 1px dashed var(--line-2); }
+@media (max-width: 420px) { .net-pill { font-size: 10.5px; padding: 2px 7px; } }
+
+/* יומן הופעה מתקפל */
+details.journal { border: 2px solid var(--line-2); border-radius: 14px; padding: 0 12px; }
+details.journal[open] { padding-bottom: 12px; }
+details.journal summary {
+  list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px;
+  padding: 12px 0; min-height: 48px;
+}
+details.journal summary::-webkit-details-marker { display: none; }
+details.journal summary::after {
+  content: ''; width: 9px; height: 9px; margin-inline-start: auto; flex: none;
+  border-right: 2.5px solid var(--ink); border-bottom: 2.5px solid var(--ink);
+  transform: rotate(45deg); transition: transform .15s;
+}
+details.journal[open] summary::after { transform: rotate(-135deg); }
+details.journal .jt { font-weight: 900; font-size: 15px; white-space: nowrap; }
+details.journal .jm { font-size: 12.5px; font-weight: 700; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* שורת מצב הגיבוי לאינטרנט */
+.cloud-status {
+  display: block; width: 100%; text-align: start;
+  font-size: 12.5px; font-weight: 700; color: var(--ink-2);
+  background: rgba(21,63,76,.06); border-radius: 10px; padding: 7px 10px; margin-bottom: 12px;
+}
+.cloud-status.warn { color: var(--danger); background: rgba(217,83,79,.08); }
+.cloud-status.off { color: var(--ink-3); }

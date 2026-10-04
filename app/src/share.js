@@ -365,12 +365,14 @@ function renderImportPreview(body, api, d, back) {
       api.close();
     }
     if (a === 'replace') {
-      if (!confirm('להחליף את כל הלוז שלך בלוז הזה? אי אפשר לבטל.')) return;
-      S.picks = { ...d.picks };
-      if (!S.name) S.name = d.name;
-      save();
-      toast('הלוז הוחלף');
-      api.close();
+      if (!confirm('להחליף את כל הלוז שלך בלוז הזה? (הלוז הנוכחי נשמר כגרסה קודמת בגיבוי ושחזור)')) return;
+      takeSnapshot('לפני החלפת לוז').then(() => {
+        S.picks = { ...d.picks };
+        if (!S.name) S.name = d.name;
+        save();
+        toast('הלוז הוחלף');
+        api.close();
+      });
     }
   };
 }

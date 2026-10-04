@@ -60,6 +60,7 @@ function renderEventSheet(body, ev) {
         : '<p style="color:var(--ink-2);margin:0">אין עוד משהו בזמן הזה.</p>'}
     </div>`;
 
+  bindJournal(body, ev);
   body.onclick = e => {
     const b = e.target.closest('button');
     if (!b) return;

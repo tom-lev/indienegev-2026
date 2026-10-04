@@ -41,10 +41,13 @@ function renderMine(view) {
     }).join('');
   }
 
-  const warn = storageOK ? '' : `<div class="banner warn"><b>שימו לב:</b> הדפדפן הזה לא מאפשר שמירה, אז הבחירות יימחקו כשהדף ייסגר. כדאי לגבות דרך "שתף" ← העתקת קוד.</div>`;
+  const warn = storageOK ? '' : `<div class="banner warn"><b>שימו לב:</b> הדפדפן הזה לא מאפשר שמירה, אז הבחירות יימחקו כשהדף ייסגר. כדאי לשמור קובץ גיבוי (הגדרות ← גיבוי ושחזור).</div>`;
 
   view.innerHTML = `<div class="scroll" id="mscroll"><div class="pad">
     ${warn}
+    ${migrateBanner()}
+    ${backupNudge()}
+    ${hasData() ? cloudStatus() : ''}
     ${all.length ? `<div class="mine-head">
       <div class="stats">${must} חייב · ${maybe} אולי${S.friends.length ? ` · ${S.friends.length} חברים` : ''}</div>
       <label class="switch"><input type="checkbox" id="showMaybe" ${S.prefs.showMaybe ? 'checked' : ''}> הצג אולי</label>
@@ -54,6 +57,8 @@ function renderMine(view) {
 
   const sc = $('#mscroll');
   bindRows(sc);
+  bindNudge(sc);
+  bindMigrate(sc);
   sc.addEventListener('click', e => {
     const go = e.target.closest('[data-go]');
     if (go) setTab(go.dataset.go);

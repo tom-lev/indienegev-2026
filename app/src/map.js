@@ -603,7 +603,7 @@ function updateRoute(dest) {
 
 /* כפתורי נקודות לבחירה על המפה (בלי נקודה אחת – היעד הנוכחי) */
 function placeButtons(exceptId) {
-  return PLACES.filter(p => p.id !== exceptId && (!legendType || catOf(p) === legendType || p.id === 'tent')).map(p => `<div class="m-mark" style="left:${p.mapX}%;top:${p.mapY}%">
+  return PLACES.filter(p => p.id !== exceptId && (!legendType || catOf(p) === legendType)).map(p => `<div class="m-mark" style="left:${p.mapX}%;top:${p.mapY}%">
       <div class="inv"><button class="m-place" data-place="${p.id}" ${p.color ? `style="--c:${p.color}"` : ''}>
         <span class="ic">${p.icon}</span><small>${esc(p.name)}</small></button></div></div>`).join('');
 }

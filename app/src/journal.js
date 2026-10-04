@@ -23,10 +23,21 @@ function meterRow(kind, label, words, value) {
     <span class="mw">${value ? words[value] : ''}</span></div>`;
 }
 
+/* הופעות שהיומן שלהן פתוח כרגע (נשמר רק בסשן, כדי שרענון הגיליון לא יסגור אותו) */
+const journalOpen = new Set();
+
 function journalSection(ev) {
   const r = ratingFor(ev.id);
   const notes = notesFor(ev.id);
-  return `<div class="sec journal"><h3>📝 יומן ההופעה ${notes.length ? `<span class="chip soft">${notes.length}</span>` : ''}</h3>
+  // סיכום בשורת הכותרת, כדי לראות מה כבר מולא גם כשהיומן סגור
+  const meta = [
+    notes.length ? `${notes.length} ${notes.length === 1 ? 'פתק' : 'פתקים'}` : '',
+    r.crowd ? `👥 ${r.crowd}` : '',
+    r.vibe ? `🔥 ${r.vibe}` : '',
+  ].filter(Boolean).join(' · ');
+  return `<details class="sec journal" ${journalOpen.has(ev.id) ? 'open' : ''}>
+    <summary><span class="jt">📝 יומן ההופעה</span><span class="jm">${meta || 'פתקים ודירוג קהל/אווירה'}</span></summary>
+    <div class="jbody">
     ${meterRow('crowd', '👥 קהל', CROWD_WORDS, r.crowd || 0)}
     ${meterRow('vibe', '🔥 אווירה', VIBE_WORDS, r.vibe || 0)}
     <div class="notes">${notes.map(n => `<div class="note">
@@ -36,7 +47,11 @@ function journalSection(ev) {
       </div>`).join('')}</div>
     <textarea class="note-in" id="noteIn" rows="2" placeholder="פתק על ההופעה: ציטוט, קהל, רגע מיוחד…"></textarea>
     <button class="btn sm block" data-note-add>${ICON.plus} שמירת פתק</button>
-  </div>`;
+  </div></details>`;
+}
+function bindJournal(body, ev) {
+  const d = $('.journal', body);
+  if (d) d.addEventListener('toggle', () => { if (d.open) journalOpen.add(ev.id); else journalOpen.delete(ev.id); });
 }
 
 /* מחזיר true אם הלחיצה טופלה */
@@ -67,7 +82,10 @@ function journalClick(b, ev) {
     return true;
   }
   if (b.dataset.noteDel) {
-    if (confirm('למחוק את הפתק?')) { S.notes = S.notes.filter(x => x.id !== b.dataset.noteDel); save(); refreshSheet(); rerender(); }
+    const gone = S.notes.find(x => x.id === b.dataset.noteDel);
+    S.notes = S.notes.filter(x => x !== gone);
+    save(); refreshSheet(); rerender();
+    toast('הפתק נמחק', { label: 'ביטול', fn: () => { S.notes.push(gone); save(); refreshSheet(); rerender(); } });
     return true;
   }
   return false;
