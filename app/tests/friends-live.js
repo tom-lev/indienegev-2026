@@ -147,8 +147,8 @@ async function device(label) {
   check('דמות שבוב קיבל אוטומטית – תפוסה אצל אליס', JSON.stringify(pa) === JSON.stringify([bv.me]), JSON.stringify(pa));
   await A.ev(() => popLayer()); await sleep(300);
   await B.ev(() => { setTab('mine'); S.prefs.mineView = 'me'; render(); openFriends(); }); await sleep(500);
-  const pk = await B.ev(() => ({ dis: [...document.querySelectorAll('.panel .av-opt')].filter(b => b.disabled).map(b => +b.dataset.av), n: document.querySelectorAll('.panel .av-opt').length, by: (document.querySelector('.panel .av-opt[disabled] small') || {}).textContent }));
-  check('בוחר עם 10 דמויות, 🦋 תפוס ע"י אליס', pk.n === 10 && JSON.stringify(pk.dis) === '[0]' && pk.by === 'אליס', JSON.stringify(pk));
+  const AV_N = await B.ev(() => AVATARS.length); const pk = await B.ev(() => ({ dis: [...document.querySelectorAll('.panel .av-opt')].filter(b => b.disabled).map(b => +b.dataset.av), n: document.querySelectorAll('.panel .av-opt').length, by: (document.querySelector('.panel .av-opt[disabled] small') || {}).textContent }));
+  check('בוחר עם כל הדמויות, 🦋 תפוס ע"י אליס', pk.n === AV_N && JSON.stringify(pk.dis) === '[0]' && pk.by === 'אליס', JSON.stringify(pk));
   await B.ev(() => document.querySelector('.panel .av-opt[data-av="0"]').click()); await sleep(200);
   check('אי אפשר לבחור דמות תפוסה', await B.ev(() => myAvatar() !== 0));
   await B.page.click('.panel .av-opt[data-av="4"]'); await sleep(300);

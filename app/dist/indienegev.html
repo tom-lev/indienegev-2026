@@ -308,7 +308,7 @@ main#view { overflow: hidden; position: relative; min-height: 0; }
 .shared-head { background: rgba(21,63,76,.07); }
 .shared-head .avs .av { width: 30px; height: 30px; font-size: 15px; }
 .who-tabs button svg { width: 18px; height: 18px; }
-.av-pick { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 4px 0 16px; }
+.av-pick { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin: 4px 0 16px; }
 .av-opt { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 0; border-radius: 14px; border: 2px solid transparent; min-height: 54px; }
 .av-opt .av { width: 40px; height: 40px; font-size: 21px; }
 .av-opt.on { border-color: var(--ink); background: color-mix(in srgb, var(--fc) 22%, transparent); }
@@ -1319,9 +1319,9 @@ function logicalDay(t = now()) {
 /* ───────── שמירה ───────── */
 const KEY = 'indn26';
 const FRIEND_EMOJI = ['🦋', '🐘', '🐒', '🌵', '🌙', '🔥', '🌼', '🎸', '🪐', '🦎', '🍉', '⚡'];
-/* הדמות של כל משתמש: בוחר לעצמו אחת מ-10 (ייחודית בקבוצת החברים). [אימוג'י, צבע] */
+/* הדמות של כל משתמש: בוחר לעצמו אחת מ-11 (ייחודית בקבוצת החברים). [אימוג'י, צבע] */
 const AVATARS = [['🦋', '#ef8d83'], ['🌵', '#7fb685'], ['🌙', '#f4cc6e'], ['🐙', '#b190d6'], ['🍄', '#e07a5f'],
-  ['🌊', '#5f9fd1'], ['🦊', '#f2a65a'], ['🐢', '#a5c25c'], ['🍉', '#e7708f'], ['👽', '#7cc8bd']];
+  ['🌊', '#5f9fd1'], ['🦊', '#f2a65a'], ['🐢', '#a5c25c'], ['🍉', '#e7708f'], ['👽', '#7cc8bd'], ['🍑', '#ffb38a']];
 const validAv = i => Number.isInteger(i) && i >= 0 && i < AVATARS.length;
 const FRIEND_COLOR = ['#ef8d83', '#c5cc69', '#9c9ab9', '#5f8eaa', '#96a96a', '#f4cc6e', '#3b7ca3', '#f46f6a'];
 
