@@ -30,6 +30,7 @@ const CAT = Object.fromEntries(CATS.map(c => [c.id, c]));
 const FOOD_IDS = ['food', 'bar-w', 'bar-s', 'bar-e', 'cafe', 'campbar'];
 const catOf = p => p.type || (STAGE[p.id] ? 'stage' : p.id.startsWith('gate') ? 'gate' : FOOD_IDS.includes(p.id) ? 'food' : 'other');
 const TAPPABLE_TYPES = ['wc', 'water', 'shower', 'cook']; // אייקונים במפה שלחיצה עליהם מנווטת אליהם
+const TAPPABLE_IDS = ['info', 'cafe', 'bar-w', 'bar-s', 'bar-e', 'food', 'campbar']; // מודיעין/תקליטים, ברים, קפה אינדי, אוכל
 let legendType = null; // קטגוריה שנבחרה במקרא (null = הכל)
 
 /* "האוהל שלי" – נקודה אישית שנשמרת במכשיר ומתנהגת כמו כל נקודה אחרת במפה */
@@ -259,6 +260,8 @@ function navigateTo(target, opts = {}) {
     mapFocusLayer = pushLayer(() => {
       mapFocusLayer = null;
       mapFocus = null;
+      picking = false; // לא משאירים מצב "בחירת מיקום" תקוע אחרי יציאה מהניווט
+      routeFrom = null;
       if (leavingMap) leavingMap = false;
       else setTab(mapPrevTab);
     });
@@ -332,7 +335,7 @@ function renderMap(view) {
       <div class="inv"><button class="m-hit" data-stage="${st.id}" aria-label="${esc(st.name)}"></button></div>
     </div>`).join('')
     // אייקוני שירותים, ברזיות, מקלחות ובישול שבמפה לחיצים: הקשה = ניווט אליהם
-    + LANDMARKS.filter(l => TAPPABLE_TYPES.includes(l.type)).map(w => `<div class="m-mark" style="left:${w.mapX}%;top:${w.mapY}%">
+    + LANDMARKS.filter(l => TAPPABLE_TYPES.includes(l.type) || TAPPABLE_IDS.includes(l.id)).map(w => `<div class="m-mark" style="left:${w.mapX}%;top:${w.mapY}%">
       <div class="inv"><button class="m-hit poi" data-goto="${w.id}" aria-label="ניווט ל${esc(w.name)}"></button></div>
     </div>`).join('')
     + (PLACE.tent ? `<div class="m-mark" style="left:${PLACE.tent.mapX}%;top:${PLACE.tent.mapY}%">
