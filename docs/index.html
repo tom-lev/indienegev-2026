@@ -818,6 +818,10 @@ textarea.text-in { min-height: 84px; resize: vertical; direction: ltr; font-fami
   .top-row .icon-btn { width: 38px; height: 38px; }
   .logo-btn, .logo-btn img { height: 24px; }
 }
+.tl-card { background: var(--cream); border-radius: 14px; padding: 10px 12px; margin-bottom: 10px; }
+.tl-card .tl-ev { margin-bottom: 6px; }
+.tl-card .tl-rate { margin-bottom: 4px; }
+.tl-note { border-top: 1.5px dashed var(--line-2); padding-top: 6px; margin-top: 6px; }
 
 </style>
 </head>
@@ -3465,60 +3469,44 @@ function journalClick(b, ev) {
   return false;
 }
 
-/* ───────── סיכום לפי במה ───────── */
-function stageSummary() {
-  return STAGES.map(st => {
-    const rs = Object.entries(S.ratings).filter(([id]) => EV[id] && EV[id].stage === st.id).map(([, r]) => r);
-    const avg = k => { const v = rs.map(r => r[k]).filter(Boolean); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0; };
-    return { st, n: rs.length, crowd: avg('crowd'), vibe: avg('vibe') };
-  }).filter(x => x.n);
-}
-
-/* ───────── ציר זמן ───────── */
-function journalEntries() {
-  const items = S.notes.map(n => ({ kind: 'note', at: n.at, ev: EV[n.ev], n }));
-  for (const [id, r] of Object.entries(S.ratings)) if (EV[id]) items.push({ kind: 'rating', at: r.at || EV[id].start, ev: EV[id], r });
-  return items.filter(x => x.ev).sort((a, b) => a.at - b.at);
-}
+/* ───────── ציר זמן: כרטיס אחד לכל הופעה (דירוג + כל הפתקים) ───────── */
+/* הופעות שיש להן פתק או דירוג, לפי סדר ההופעות בלוז */
+const journalShows = () => {
+  const ids = new Set([...S.notes.map(n => n.ev), ...Object.keys(S.ratings)]);
+  return BY_START.filter(e => ids.has(e.id));
+};
+const ratingText = r => [r.crowd ? `👥 ${CROWD_WORDS[r.crowd]} (${r.crowd}/5)` : '', r.vibe ? `🔥 ${VIBE_WORDS[r.vibe]} (${r.vibe}/5)` : '']
+  .filter(Boolean).join(' · ');
 
 function openTimeline() {
   openPanel('יומן סיקור', (body, api) => {
-    const items = journalEntries();
-    const sum = stageSummary();
-    if (!items.length) {
+    const shows = journalShows();
+    if (!shows.length) {
       body.innerHTML = `<div class="empty"><img src="${ASSETS.butterfly}" alt="">
-        <h2>היומן ריק</h2><p>לחיצה על הופעה ← "יומן ההופעה": פתקים עם חותמת זמן ומיקום, ודירוג קהל ואווירה. הכל יופיע כאן לפי סדר הזמן.</p></div>`;
+        <h2>היומן ריק</h2><p>לחיצה על הופעה ← "יומן ההופעה": פתקים עם חותמת זמן ומיקום, ודירוג קהל ואווירה. הכל יופיע כאן.</p></div>`;
       return;
     }
     let lastDay = null;
-    const rows = items.map(it => {
-      const d = logicalDay(it.at);
-      const dayKey = d || new Date(it.at).toDateString();
-      const sep = dayKey !== lastDay ? `<div class="hour-sep">${d ? dayLabel(d) : fmtStamp(it.at).split(' ')[0]}</div>` : '';
-      lastDay = dayKey;
-      const ev = it.ev, st = STAGE[ev.stage];
-      const head = `<button class="tl-ev" data-ev="${ev.id}" style="--c:${st.color}"><b>${esc(ev.name)}</b><small>${esc(st.short)} · ${timeRange(ev)}</small></button>`;
-      if (it.kind === 'note') {
-        return sep + `<div class="tl-item"><div class="tl-t">${fmtT(it.at)}</div><div class="tl-b">${head}
-          <div class="tl-text">${esc(it.n.text)}</div><div class="nm">📍 ${esc(placeName(it.n.place))}</div></div></div>`;
-      }
-      return sep + `<div class="tl-item"><div class="tl-t">${fmtT(it.at)}</div><div class="tl-b">${head}
-        <div class="tl-rate">${it.r.crowd ? `👥 ${CROWD_WORDS[it.r.crowd]} (${it.r.crowd}/5)` : ''}${it.r.crowd && it.r.vibe ? ' · ' : ''}${it.r.vibe ? `🔥 ${VIBE_WORDS[it.r.vibe]} (${it.r.vibe}/5)` : ''}</div></div></div>`;
+    const cards = shows.map(ev => {
+      const sep = ev.day !== lastDay ? `<div class="hour-sep">${dayLabel(ev.day)}</div>` : '';
+      lastDay = ev.day;
+      const st = STAGE[ev.stage], r = ratingFor(ev.id), notes = notesFor(ev.id);
+      return sep + `<div class="tl-card" style="--c:${st.color}">
+        <button class="tl-ev" data-ev="${ev.id}"><b>${esc(ev.name)}</b><small>${esc(st.name)} · ${timeRange(ev)}</small></button>
+        ${r.crowd || r.vibe ? `<div class="tl-rate">${ratingText(r)}</div>` : ''}
+        ${notes.map(n => `<div class="tl-note"><div class="nm">🕒 ${fmtT(n.at)} · 📍 ${esc(placeName(n.place))}</div>
+          <div class="tl-text">${esc(n.text)}</div></div>`).join('')}
+      </div>`;
     }).join('');
-
-    const bar = v => `<span class="mbar"><i style="width:${v / 5 * 100}%"></i></span><b>${v ? v.toFixed(1) : '–'}</b>`;
     body.innerHTML = `
       <div class="btn-row" style="margin-bottom:14px">
         <button class="btn" data-x="share">${ICON.share} שיתוף</button>
         <button class="btn alt" data-x="file">${ICON.download} קובץ</button>
         <button class="btn alt" data-x="copy">${ICON.copy} העתקה</button>
       </div>
-      <p style="margin:-4px 0 14px;font-size:13px;color:var(--ink-2)">${S.notes.length} פתקים · ${Object.keys(S.ratings).length} הופעות מדורגות</p>
-      ${sum.length ? `<div class="card-box"><h3>קהל ואווירה לפי במה</h3>
-        <div class="sumtbl">${sum.map(x => `<div class="srow"><span class="stag" style="--c:${x.st.color}" title="${x.n} הופעות">${esc(x.st.short)}</span>
-          <span class="sk">👥</span>${bar(x.crowd)}<span class="sk">🔥</span>${bar(x.vibe)}</div>`).join('')}</div></div>` : ''}
-      ${rows}`;
-    body.onclick = async e => {
+      <p style="margin:-4px 0 6px;font-size:13px;color:var(--ink-2)">${shows.length} הופעות · ${S.notes.length} פתקים</p>
+      ${cards}`;
+    body.onclick = e => {
       const x = e.target.closest('[data-x]');
       if (x) return exportJournal(x.dataset.x);
       const evb = e.target.closest('[data-ev]');
@@ -3531,18 +3519,9 @@ function openTimeline() {
 function journalMarkdown() {
   const L = [];
   L.push(`# אינדינגב 2026 – יומן סיקור${S.name ? ` (${S.name})` : ''}`);
-  L.push(`יוצא ב-${fmtStamp(Date.now())} · ${S.notes.length} פתקים · ${Object.keys(S.ratings).length} הופעות מדורגות`, '');
-  const sum = stageSummary();
-  if (sum.length) {
-    L.push('## קהל ואווירה לפי במה', '', '| במה | הופעות שדורגו | קהל (ממוצע) | אווירה (ממוצע) |', '|---|---|---|---|');
-    for (const x of sum) L.push(`| ${x.st.name} | ${x.n} | ${x.crowd ? x.crowd.toFixed(1) : '–'} | ${x.vibe ? x.vibe.toFixed(1) : '–'} |`);
-    L.push('');
-  }
-  // לפי יום והופעה (לפי שעת ההופעה), עם כל הפתקים והדירוג
-  const evIds = new Set([...S.notes.map(n => n.ev), ...Object.keys(S.ratings)]);
-  const evs = BY_START.filter(e => evIds.has(e.id));
+  L.push(`יוצא ב-${fmtStamp(Date.now())} · ${journalShows().length} הופעות · ${S.notes.length} פתקים`, '');
   let day = null;
-  for (const ev of evs) {
+  for (const ev of journalShows()) {
     if (ev.day !== day) { day = ev.day; L.push(`## ${dayLabel(day)}`, ''); }
     L.push(`### ${ev.name}`, `${STAGE[ev.stage].name} · ${ev.s}–${ev.e}`);
     const r = ratingFor(ev.id);
@@ -3551,12 +3530,6 @@ function journalMarkdown() {
     }
     for (const n of notesFor(ev.id)) L.push(`- [${fmtStamp(n.at)} · ${placeName(n.place)}] ${n.text.replace(/\n+/g, ' / ')}`);
     L.push('');
-  }
-  // ציר זמן מלא
-  L.push('## ציר זמן', '');
-  for (const it of journalEntries()) {
-    if (it.kind === 'note') L.push(`- ${fmtStamp(it.at)} · ${it.ev.name} (${STAGE[it.ev.stage].short}) · 📍${placeName(it.n.place)}: ${it.n.text.replace(/\n+/g, ' / ')}`);
-    else L.push(`- ${fmtStamp(it.at)} · ${it.ev.name}: דירוג קהל ${it.r.crowd || '–'}/5, אווירה ${it.r.vibe || '–'}/5`);
   }
   return L.join('\n');
 }
