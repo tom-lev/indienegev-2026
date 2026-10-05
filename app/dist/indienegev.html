@@ -1094,7 +1094,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 <script>
 'use strict';
 const FIREBASE_CFG = {"apiKey": "AIzaSyDMNlvqnDlASfIKdL5EYonDHtDuFQPN_N4", "projectId": "indnegev-14c1b", "googleClientId": "177429003497-movbi1a9k0e9j595djfuhg282e8av1l0.apps.googleusercontent.com"};
-const BUILD_ID = "05.10 15:48";
+const BUILD_ID = "05.10 15:51";
 /* ── data.js ── */
 /* נתוני אינדינגב 2026 – מקור: indnegev-2026-lineup.pdf, דף "אדמה" ורשימת הליינאפ באתר.
    חשוב: הסדר של EVENTS קובע את האינדקס (idx) שמשמש בקודי שיתוף.
@@ -2922,8 +2922,8 @@ function flyBirds(stage) {
    ברזייה / מקלחות / אוהל (שוליים של גוש ירוק כהה). בהגעה "נכנסות" ונעלמות, אחרי זמן מה יוצאות וממשיכות.
    מנוע אחד לכל פריים: המיקום על המסלול, המבט (צד/מלפנים/מאחור), תמונת הצעד והשקיפות מחושבים יחד.
    תמונת הצעד נקבעת לפי המרחק שעברו (לא לפי זמן) – כך כף הרגל שעל הקרקע נשארת נעוצה במקום, בלי "מסוע". */
-const WALK_SPOTS = ['wc-campw', 'wc-camps', 'wc-fam', 'wc-plus', 'cook-shabbat', 'cook-campw', 'cook-camps', 'cook-acc', 'cook-fam',
-  'water-campw', 'water-camp', 'water-camps', 'water-plus', 'shower-w', 'shower-s'];
+const WALK_SPOTS = ['wc-campw', 'wc-camps', 'wc-fam', 'wc-plus', 'wc-adama', 'wc-west', 'cook-shabbat', 'cook-campw', 'cook-camps', 'cook-acc', 'cook-fam',
+  'water-campw', 'water-camp', 'water-camps', 'water-plus', 'water-adama', 'water-nw', 'water-gw', 'shower-w', 'shower-s'];
 const WALK_SPEED = 17;                 // פיקסלים במפה בשנייה – טיול נינוח
 const WALK_PACE = [1, 1, 0.82, 1.18, 0.95, 1.08, 0.9, 1.12];  // 0 ו-1 זוג (אותו קצב); השאר – כל אחד בקצב שלו
 const WALK_PAIR = { 1: 0 };            // מטייל 1 הולך לצד מטייל 0
@@ -2943,7 +2943,7 @@ function walkersHtml() {
 function tentCells() {
   if (tentCellsCache) return tentCellsCache;
   const { GW, GH, main, dist, fest } = WALK, out = [];
-  for (let y = Math.floor(GH * 0.47); y < GH * 0.96; y += 2) for (let x = Math.floor(GW * 0.06); x < GW * 0.74; x += 2) {
+  for (let y = Math.floor(GH * 0.28); y < GH * 0.96; y += 2) for (let x = Math.floor(GW * 0.04); x < GW * 0.74; x += 2) { // כל שטח הקמפינג
     const c = y * GW + x;
     if (main[c] && !fest[c] && dist[c] <= 1.5) out.push(c);
   }
