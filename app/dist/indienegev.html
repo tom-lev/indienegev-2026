@@ -1107,7 +1107,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 <script>
 'use strict';
 const FIREBASE_CFG = {"apiKey": "AIzaSyDMNlvqnDlASfIKdL5EYonDHtDuFQPN_N4", "projectId": "indnegev-14c1b", "googleClientId": "177429003497-movbi1a9k0e9j595djfuhg282e8av1l0.apps.googleusercontent.com"};
-const BUILD_ID = "05.10 16:11";
+const BUILD_ID = "05.10 16:13";
 /* ── data.js ── */
 /* נתוני אינדינגב 2026 – מקור: indnegev-2026-lineup.pdf, דף "אדמה" ורשימת הליינאפ באתר.
    חשוב: הסדר של EVENTS קובע את האינדקס (idx) שמשמש בקודי שיתוף.
@@ -3108,8 +3108,9 @@ function walkPeople(stage) {
     }
     return best;
   };
-  const start = (w, t) => {
-    w.rush = !w.roam && Math.random() < 0.07;  // מדי פעם: רץ לשירותים
+  const start = (w, t, rush = false) => {
+    w.rush = rush;  // רץ לשירותים – נבחר ע"י "התור" (תמיד בדיוק אחד על המפה)
+    w.noFadeIn = false;
     const to = w.rush ? nearestWc(w.at) : w.roam ? farSpot(w.at) : walkSpot(w.at), path = to >= 0 && astar(w.at, to);
     if (w.roam && !w.born) w.born = t;
     if (!path || path.length < 4) { w.wait = t + 1000; w.at = to; return; }
@@ -3166,10 +3167,25 @@ function walkPeople(stage) {
       }
     }
   };
+  /* תמיד בדיוק אחד רץ לשירותים, ובכל פעם מישהו אחר: אם מישהו כבר הולך – משנה כיוון באמצע הדרך; אחרת – יוצא מהאוהל בריצה */
+  let lastRusher = -1, rushCheck = 0;
+  const ensureRusher = t => {
+    if (t < rushCheck) return;
+    rushCheck = t + 500;
+    if (W.some(w => w.rush && (w.state === 'walk' || w.state === 'settle'))) return;
+    const ok = W.filter(w => !w.roam && !w.lead && w.i !== lastRusher);
+    const walking = ok.filter(w => w.state === 'walk' && w.pos && w.len - w.s > 30);
+    const w = (walking.length ? walking : ok.filter(x => x.state === 'idle' || x.state === 'inside'))[0 | Math.random() * (walking.length || ok.length)];
+    if (!w) return;
+    lastRusher = w.i;
+    if (w.state === 'walk') { w.at = snapCell(w.pos); start(w, t, true); w.noFadeIn = true; }
+    else { w.state = 'idle'; start(w, t, true); }
+  };
   let last = performance.now();
   const tick = t => {
     if (!document.contains(stage)) return;
     const dt = Math.min(0.1, (t - last) / 1000); last = t;
+    ensureRusher(t);
     for (const w of W) {
       if (w.lead) continue;
       if (w.state === 'idle' && t >= w.wait) start(w, t);
@@ -3200,7 +3216,8 @@ function walkPeople(stage) {
     for (const w of W) {
       const L = w.lead || w;
       if (!L.pos || (!L.roam && (L.state === 'idle' || L.state === 'inside'))) { if (w.el.style.opacity !== '0') w.el.style.opacity = '0'; continue; }
-      const op = L.roam ? Math.min(1, (t - L.born) / 1200) : Math.max(0, Math.min(1, Math.min(L.s, L.len - L.s) / fade(L))); // הנודד תמיד נראה
+      const op = L.roam ? Math.min(1, (t - L.born) / 1200)                                   // הנודד תמיד נראה
+        : Math.max(0, Math.min(1, (L.noFadeIn ? L.len - L.s : Math.min(L.s, L.len - L.s)) / fade(L))); // שינה כיוון באמצע – לא נעלם
       if (w.lead) {
         // בן הזוג: אותו מסלול, צעד לצד (ניצב לכיוון ההליכה) ומעט מאחור; צעדיו לפי המרחק שלו
         const pa = posAt(L, Math.max(0, L.s - 5));
