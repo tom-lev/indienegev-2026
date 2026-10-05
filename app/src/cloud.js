@@ -85,7 +85,7 @@ async function cloudNow() {
   return syncing;
 }
 /* ספירת הפופולריות: מוסיפים/מורידים רק את ההבדל בין מה שכבר נספר (S.cnt, מסתנכרן) ללוז הנוכחי */
-let counting = false;
+let counting = false, countErr = '';
 async function countMine() {
   if (!CC.on || !cloudAuth || counting || !navigator.onLine) return;
   const old = S.cnt || {}, cur = S.picks || {};
@@ -94,10 +94,11 @@ async function countMine() {
   try {
     const snap = { ...cur };
     await CC.countVotes(await CC.auth(), old, snap);
+    countErr = '';
     S.cnt = snap;
     save();
     if (typeof popData !== 'undefined' && popData) popData.at = 0; // לרענן את הספירה בפעם הבאה
-  } catch (e) { /* אין קליטה / עוד לא עודכנו החוקים – ננסה בסנכרון הבא */ }
+  } catch (e) { countErr = e.message || 'שגיאה'; /* ננסה בסנכרון הבא */ }
   finally { counting = false; }
 }
 

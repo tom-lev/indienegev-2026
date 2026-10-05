@@ -7,22 +7,23 @@ function openEvent(ev) {
 /* כמה משתמשים בחרו את ההופעה (מכל המשתמשים, בלי שמות). נשמר מקומית – מוצג גם בלי קליטה */
 const POP_KEY = 'indienegev-pop';
 let popData = (() => { try { return JSON.parse(localStorage.getItem(POP_KEY)); } catch (e) { return null; } })();
-let popBusy = false;
+let popBusy = false, popErr = '';
 async function refreshPopular(force = false) {
   if (typeof CC === 'undefined' || !CC.on || !cloudAuth || !navigator.onLine || popBusy) return;
-  if (!force && popData && Date.now() - popData.at < 15 * MIN) return;
+  if (!force && popData && popData.n && Date.now() - popData.at < 5 * MIN) return;
   popBusy = true;
   try {
     popData = await CC.fetchPopular();
+    popErr = '';
     try { localStorage.setItem(POP_KEY, JSON.stringify(popData)); } catch (e) { /* */ }
     refreshSheet(false);
-  } catch (e) { /* עוד לא עודכנו חוקי האבטחה / אין קליטה – ננסה בפעם הבאה */ }
+  } catch (e) { popErr = e.message || 'שגיאה'; /* אין קליטה וכו' – ננסה בפעם הבאה */ }
   finally { popBusy = false; }
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshPopular(); });
 function popLine(ev) {
   refreshPopular();
-  if (!popData || popData.n < 2) return '';
+  if (!popData || popData.n < 1) return '';
   const [all, must] = popData.c[ev.id] || [0, 0];
   if (!all) return `<div class="pop-line">עוד אף אחד לא בחר · מתוך ${popData.n} משתמשים</div>`;
   const day = EVENTS.filter(e => e.day === ev.day && popData.c[e.id]).map(e => popData.c[e.id][0]);

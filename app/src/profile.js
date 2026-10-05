@@ -84,13 +84,15 @@ function renderProfile(view) {
         </ul>
         <h4 class="fold-h">איפוס</h4>
         <button class="btn alt sm" data-a="reset" style="border-color:var(--danger);color:var(--danger)">${ICON.trash} מחיקת כל הבחירות והחברים</button>
-        <p style="font-size:12px;color:var(--ink-3);margin:12px 0 0">${n} בחירות · נתונים v${DATA_VERSION} · לוז מתוך indnegev.co.il · אפליקציה אישית לא רשמית · ⁦15–17.10.2026⁩ מצפה גבולות</p>
+        <p style="font-size:12px;color:var(--ink-3);margin:12px 0 0">גרסה ${typeof BUILD_ID !== 'undefined' ? BUILD_ID : '-'} · פופולריות: ${countErr ? `שגיאה בספירה (${esc(countErr)})` : popErr ? `שגיאה בקריאה (${esc(popErr)})` : popData ? `${popData.n} משתמשים · עודכן ${agoText(popData.at)}` : 'עוד לא נטען'}${S.cnt ? ' · אתה נספר ✓' : ''}</p>
+        <p style="font-size:12px;color:var(--ink-3);margin:4px 0 0">${n} בחירות · נתונים v${DATA_VERSION} · לוז מתוך indnegev.co.il · אפליקציה אישית לא רשמית · ⁦15–17.10.2026⁩ מצפה גבולות</p>
       </div>
     </details>
     </div>
   </div></div>`;
 
   const sc = $('#pscroll');
+  refreshPopular();
   sc.querySelectorAll('details[data-fold]').forEach(d => d.addEventListener('toggle', () => { profFold[d.dataset.fold] = d.open; }));
   const g = $('#pgbtn', sc);
   if (g) renderGoogleButton(g);

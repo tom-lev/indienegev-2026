@@ -353,16 +353,32 @@ function openTentSheet() {
    הציפורים שבציור (נחתכו מהמפה בבנייה) – מרחפות ומנפנפות במקומן.
    אבק מדבר ביום / גחליליות בלילה – שכבה עדינה מעל המפה, לא לחיצה. */
 function birdsHtml() {
-  const moves = [['-70px', '-18px', '11s'], ['-55px', '14px', '13s'], ['60px', '-12px', '9.5s']];
-  return (ASSETS.birds || []).map((b, i) => { const [dx, dy, d] = moves[i % moves.length];
-    return `<div class="m-bird" style="left:${b.x}px;top:${b.y}px;width:${b.w}px;--dx:${dx};--dy:${dy};--d:${d};animation-delay:${-i * 3}s"><img src="${b.src}" width="${b.w}" height="${b.h}" alt="" style="animation-delay:${-i * 0.5}s"></div>`; }).join('');
+  return (ASSETS.birds || []).map((b, i) =>
+    `<div class="m-bird" style="left:${b.x}px;top:${b.y}px;width:${b.w}px"><img src="${b.src}" width="${b.w}" height="${b.h}" alt="" style="animation-delay:${-i * 0.5}s"></div>`).join('');
+}
+/* כל ציפור חוצה את כל המפה במסלול גלי משלה, בלולאה. המיקום ממשיך מאותה נקודה גם אחרי רינדור מחדש */
+const BIRD_PATHS = [[-260, 230, 1, 520], [1, 110, -260, 700], [1, 330, -260, 160]]; // [x0, y0, x1, y1]; 1 = קצה ימין של המפה
+function flyBirds(stage) {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  stage.querySelectorAll('.m-bird').forEach((el, i) => {
+    const b = ASSETS.birds[i], p = BIRD_PATHS[i % BIRD_PATHS.length];
+    const X = v => (v === 1 ? MAP_W + 260 : v);
+    const [x0, y0, x1, y1] = [X(p[0]), p[1], X(p[2]), p[3]];
+    const frames = [];
+    for (let k = 0; k <= 24; k++) {
+      const t = k / 24, x = x0 + (x1 - x0) * t, y = y0 + (y1 - y0) * t + Math.sin(t * Math.PI * 4 + i * 1.7) * 45;
+      frames.push({ transform: `translate(${(x - b.x).toFixed(0)}px, ${(y - b.y).toFixed(0)}px)` });
+    }
+    const duration = 48000 + i * 9000;
+    el.animate(frames, { duration, iterations: Infinity, delay: -((Date.now() + i * 17000) % duration) });
+  });
 }
 function ambientHtml() {
   const h = new Date(now()).getHours(), night = h >= 18 || h < 6;
   let dots = '';
-  for (let i = 0; i < (night ? 16 : 12); i++) {
+  for (let i = 0; i < (night ? 18 : 26); i++) {
     const r = (k) => ((Math.sin(i * 97.3 + k * 13.7) + 1) / 2); // פיזור קבוע (בלי לקפוץ בכל רינדור)
-    dots += `<i style="left:${(r(1) * 100).toFixed(1)}%;top:${(r(2) * 100).toFixed(1)}%;--d:${(night ? 5 : 22) + r(3) * (night ? 6 : 16)}s;--dx:${((r(4) - .5) * (night ? 60 : 180)).toFixed(0)}px;--dy:${((r(5) - .5) * (night ? 50 : 40)).toFixed(0)}px;animation-delay:${(-r(6) * 20).toFixed(1)}s"></i>`;
+    dots += `<i style="left:${(r(1) * 100).toFixed(1)}%;top:${(r(2) * 100).toFixed(1)}%;--d:${(night ? 5 : 14) + r(3) * (night ? 6 : 12)}s;--dx:${((r(4) - .5) * (night ? 60 : 260)).toFixed(0)}px;--dy:${((r(5) - .5) * (night ? 50 : 70)).toFixed(0)}px;--s:${(night ? 4 : 3 + r(7) * 4).toFixed(1)}px;animation-delay:${(-r(6) * 20).toFixed(1)}s"></i>`;
   }
   return `<div class="m-amb ${night ? 'night' : 'day'}" aria-hidden="true">${dots}</div>`;
 }
@@ -442,6 +458,7 @@ function renderMap(view) {
     }
   }
   mapIntroDone = true;
+  flyBirds(stage);
   bindMapGestures(wrap, stage);
   // מסגרת המפה לא נגללת לעולם (פוקוס על כפתור מחוץ למסך יכול לגלול אותה)
   wrap.addEventListener('scroll', () => { wrap.scrollLeft = 0; wrap.scrollTop = 0; });

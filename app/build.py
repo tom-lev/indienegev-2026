@@ -216,7 +216,8 @@ def main():
         '{{STYLES}}': (SRC / 'styles.css').read_text(encoding='utf-8'),
         '{{ASSETS}}': 'const ASSETS = ' + json.dumps(assets) + ';',
         '{{VENDOR}}': vendor_js,
-        '{{APP}}': 'const FIREBASE_CFG = ' + json.dumps(cloud_config()) + ';\n' + app_js,
+        '{{APP}}': 'const FIREBASE_CFG = ' + json.dumps(cloud_config()) + ';\n'
+                   + 'const BUILD_ID = ' + json.dumps(__import__('datetime').datetime.now().strftime('%d.%m %H:%M')) + ';\n' + app_js,
     }
     for k, v in parts.items():
         html = html.replace(k, v)
