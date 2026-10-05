@@ -362,7 +362,7 @@ function birdsHtml() {
    - מהירות משתנה: איטית בעלייה, מהירה בירידה
    שתי הציפורים הדומות (1, 2) עפות לאט יותר, כמו עופות דורסים שדואים. */
 const BIRD_PATHS = [[-260, 230, 1, 520], [1, 110, -260, 700], [1, 330, -260, 160]]; // [x0, y0, x1, y1]; 1 = קצה ימין של המפה
-const BIRD_SPEED = [40, 17, 15];  // פיקסלים במפה בשנייה (בערך)
+const BIRD_SPEED = [40, 22, 20];  // פיקסלים במפה בשנייה (בערך)
 function flyBirds(stage) {
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   stage.querySelectorAll('.m-bird').forEach((el, i) => {
@@ -411,7 +411,7 @@ const WALKERS = [['cook-campw', 'cook-camps', 0], ['wc-campw', 'cook-campw', 0.4
 function walkersHtml() {
   const p = ASSETS.person;
   if (!p) return '';
-  return WALKERS.map((_, i) => `<div class="m-walker" style="width:${p.w}px;height:${p.h}px"><i style="background-image:url(${p.src});--w:${p.w}px;animation-delay:${-i * 0.37}s"></i></div>`).join('');
+  return WALKERS.map((_, i) => `<div class="m-walker" style="width:${p.w}px;height:${p.h}px"><i style="background-image:url(${p.src});--w:${p.w}px;animation-delay:${-i * 0.43}s"></i></div>`).join('');
 }
 function walkPeople(stage) {
   if (matchMedia('(prefers-reduced-motion: reduce)').matches || !ASSETS.person) return;
@@ -420,14 +420,23 @@ function walkPeople(stage) {
     const [from, to, off] = WALKERS[i];
     const r = PLACE[from] && PLACE[to] && findRoute(from, to);
     if (!r) { el.remove(); return; }
-    const pts = r.pts;
-    let len = 0;
+    // הלוך וחזור כמסלול אחד – כך הדמות פונה תמיד לכיוון שהיא הולכת
+    const pts = [...r.pts, ...r.pts.slice(0, -1).reverse()];
     const acc = [0];
-    for (let k = 1; k < pts.length; k++) { len += Math.hypot(pts[k].x - pts[k - 1].x, pts[k].y - pts[k - 1].y); acc.push(len); }
-    // כפות הרגליים על השביל: הנקודה במסלול = מרכז תחתית הדמות
-    const frames = pts.map((q, k) => ({ offset: acc[k] / len, transform: `translate(${(q.x - p.w / 2).toFixed(0)}px, ${(q.y - p.h).toFixed(0)}px)` }));
+    for (let k = 1; k < pts.length; k++) acc.push(acc[k - 1] + Math.hypot(pts[k].x - pts[k - 1].x, pts[k].y - pts[k - 1].y));
+    const len = acc[acc.length - 1];
+    const frames = [];
+    let dir = 1; // 1 = פונה ימינה (כך מצויר מחזור ההליכה), −1 = שמאלה
+    pts.forEach((q, k) => {
+      const nx = pts[Math.min(k + 1, pts.length - 1)].x - q.x;
+      const nd = Math.abs(nx) > 2 ? Math.sign(nx) : dir; // בקטע כמעט אנכי – שומרים על הכיוון הקודם
+      // כפות הרגליים על השביל: הנקודה במסלול = מרכז תחתית הדמות
+      const tr = `translate(${(q.x - p.w / 2).toFixed(0)}px, ${(q.y - p.h).toFixed(0)}px)`;
+      frames.push({ offset: acc[k] / len, transform: `${tr} scaleX(${dir})` });
+      if (nd !== dir) { dir = nd; frames.push({ offset: acc[k] / len, transform: `${tr} scaleX(${dir})` }); } // מסתובב במקום
+    });
     const duration = len / 10 * 1000; // כ-10 פיקסלים במפה בשנייה – טיול נינוח
-    el.animate(frames, { duration, iterations: Infinity, direction: 'alternate', easing: 'linear', delay: -((Date.now() + off * duration) % (duration * 2)) });
+    el.animate(frames, { duration, iterations: Infinity, easing: 'linear', delay: -((Date.now() + off * duration) % duration) });
   });
 }
 
