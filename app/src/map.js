@@ -519,20 +519,22 @@ function smokePeople(stage) {
   const svg = document.createElementNS(NS, 'svg');
   svg.setAttribute('class', 'm-threads'); svg.setAttribute('width', '60'); svg.setAttribute('height', '70'); svg.setAttribute('viewBox', '-30 -66 60 70');
   svg.innerHTML = `<defs><linearGradient id="smk-g" x1="0" y1="1" x2="0" y2="0" gradientUnits="objectBoundingBox"><stop offset="0" stop-color="#f4f4ef" stop-opacity=".75"/><stop offset=".55" stop-color="#ececea" stop-opacity=".35"/><stop offset="1" stop-color="#e8e8e6" stop-opacity="0"/></linearGradient></defs>
-    <path class="th1" fill="none" stroke="url(#smk-g)" stroke-width="1" stroke-linecap="round"/><path class="th2" fill="none" stroke="url(#smk-g)" stroke-width=".7" stroke-linecap="round"/>`;
+    <path class="th1" fill="none" stroke="url(#smk-g)" stroke-width=".9" stroke-linecap="round" stroke-dasharray="6 2.5 3 4 5 3"/><path class="th2" fill="none" stroke="url(#smk-g)" stroke-width=".65" stroke-linecap="round" stroke-dasharray="4 3 6 2 3 5"/>`;
   if (!reduce) layer.append(svg);
   const th = [svg.querySelector('.th1'), svg.querySelector('.th2')];
   const drawThreads = (t, x, y, hot) => {
     if (reduce) return;
     svg.style.transform = `translate(${(x - 30).toFixed(1)}px, ${(y - 66).toFixed(1)}px)`;
+    svg.classList.toggle('off', hot); // בזמן השאיפה – אין חוטים (הגחלת בפה); חוזרים אחרי
     const tt = t / 1000;
     th.forEach((p, k) => {
-      const N = 22, len = (hot ? 58 : 50) - k * 8;
+      const N = 16, len = 27 - k * 6;      // קצרים
+      p.style.strokeDashoffset = (-(tt * (9 + k * 3)) % 40).toFixed(2); // הקטיעות זורמות כלפי מעלה
       let d = '';
       for (let j = 0; j <= N; j++) {
         const u = j / N, yy = -u * len;
         // תנודה שעולה עם החוט (גלים שזורמים כלפי מעלה) + סחיפה קלה ברוח
-        const xx = Math.sin(u * 7 - tt * 2.2 + k * 1.9) * (0.4 + 7 * u * u) + Math.sin(u * 3.1 - tt * 0.9 + k) * 3 * u + u * u * 6;
+        const xx = Math.sin(u * 6 - tt * 2.2 + k * 1.9) * (0.3 + 4.5 * u * u) + Math.sin(u * 3.1 - tt * 0.9 + k) * 2 * u + u * u * 3;
         d += `${j ? 'L' : 'M'}${xx.toFixed(2)} ${yy.toFixed(2)}`;
       }
       p.setAttribute('d', d);
@@ -585,7 +587,7 @@ function walkPeople(stage) {
   const P = ASSETS.person;
   if (matchMedia('(prefers-reduced-motion: reduce)').matches || !P) return;
   const W = [...stage.querySelectorAll('.m-walker')].map((el, i) => ({
-    el, i, up: el.querySelector('.up'), lo: el.querySelector('.lo'), balloon: el.querySelector('.m-balloon'), a: P.a * P.heights[i], hipPx: P.hipr * P.heights[i], kx: 0, ky: 0,
+    el, i, up: el.querySelector('.up'), lo: el.querySelector('.lo'), balloon: el.querySelector('.m-balloon'), H: P.heights[i], a: P.a * P.heights[i], hipPx: P.hipr * P.heights[i], kx: 0, ky: 0,
     speed: WALK_SPEED * (WALK_PACE[i] || 1), roam: (P.roam || []).includes(i), born: 0,
     state: 'idle', wait: performance.now() + 600 + i * 2500, at: walkerAt[i] >= 0 ? walkerAt[i] : walkSpot(-1),
     phase: Math.random(), s: 0, view: 0, dir: 1, pose: -1,
@@ -643,18 +645,20 @@ function walkPeople(stage) {
     const nd = side && Math.abs(ux) > 0.15 ? (ux > 0 ? 1 : -1) : w.dir;
     if (nv === w.view && nd === w.dir) w.pend = 0;
     else if ((w.pend = (w.pend || 0) + ds) >= 9 || ds === 0) { w.view = nv; w.dir = nd; w.pend = 0; } // כיוון חדש שנמשך ≥9 פיקסלים
-    w.phase += side ? ds * Math.abs(ux) / (4 * w.a) : ds * Math.abs(uy) / (4 * w.a * P.kf);
+    const runSide = side && (w.lead || w).rush && P.runD;
+    w.phase += runSide ? ds * Math.abs(ux) / (P.runD * w.H)   // ריצה: מחזור ארוך יותר לכל צעד
+      : side ? ds * Math.abs(ux) / (4 * w.a) : ds * Math.abs(uy) / (4 * w.a * P.kf);
   };
   const draw = (w, x, y, op) => {
     const f = w.pose >= 0 ? P.frames + w.pose : Math.floor(wrap1(w.phase) * P.frames) % P.frames; // pose = תמונת עמידה
-    const bp = `${-f * P.w}px ${rowY(w.i, w.view)}`;
+    const running = (w.lead || w).rush && w.view === 0 && w.pose < 0 && P.runRow0;
+    const bp = running ? `${-f * P.w}px ${((P.runRow0 + w.i) / (P.rows - 1) * 100).toFixed(3)}%` : `${-f * P.w}px ${rowY(w.i, w.view)}`;
     w.up.style.backgroundPosition = bp; w.lo.style.backgroundPosition = bp;
     const flip = `scaleX(${w.view === 0 ? w.dir : 1})`;
     const standing = w.pose >= 0;
     const ky = w.ky, kx = w.kx; // מוחלקים – דועכים בהדרגה בכל מעבר מבט/עצירה, בלי קפיצה
     const breath = standing ? 1 + 0.014 * Math.sin((performance.now() - (w.holdStart || 0)) / 3600 * 2 * Math.PI) : 1;
-    const L0 = w.lead || w, rushLean = L0.rush && w.view === 0 && !standing ? ' rotate(9deg)' : '';
-    w.up.style.transform = `${flip} scaleY(${breath.toFixed(4)})${rushLean}`;
+    w.up.style.transform = `${flip} scaleY(${breath.toFixed(4)})`;
     w.lo.style.transform = `${flip} skewY(${Math.atan(ky).toFixed(3)}rad) skewX(${Math.atan(kx).toFixed(3)}rad)`;
     w.el.style.transform = `translate(${(x - P.w / 2).toFixed(1)}px, ${(y - P.foot * P.h).toFixed(1)}px)`; // הגוף תמיד על השביל
     w.el.style.opacity = op.toFixed(2);
@@ -669,11 +673,12 @@ function walkPeople(stage) {
     }
   };
   /* תמיד בדיוק אחד רץ לשירותים, ובכל פעם מישהו אחר: אם מישהו כבר הולך – משנה כיוון באמצע הדרך; אחרת – יוצא מהאוהל בריצה */
-  let lastRusher = -1, rushCheck = 0;
+  let lastRusher = -1, rushCheck = 0, rushFree = performance.now() + 3000;
   const ensureRusher = t => {
     if (t < rushCheck) return;
     rushCheck = t + 500;
-    if (W.some(w => w.rush && (w.state === 'walk' || w.state === 'settle'))) return;
+    if (W.some(w => w.rush && (w.state === 'walk' || w.state === 'settle'))) { rushFree = t + 5000; return; } // רץ – והבא אחריו רק 5 שניות אחרי שהגיע
+    if (t < rushFree) return;
     const ok = W.filter(w => !w.roam && !w.lead && w.i !== lastRusher);
     const walking = ok.filter(w => w.state === 'walk' && w.pos && w.len - w.s > 30);
     const w = (walking.length ? walking : ok.filter(x => x.state === 'idle' || x.state === 'inside'))[0 | Math.random() * (walking.length || ok.length)];
