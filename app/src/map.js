@@ -414,7 +414,7 @@ function flyBirds(stage) {
 const WALK_SPOTS = ['wc-campw', 'wc-camps', 'wc-fam', 'wc-plus', 'cook-shabbat', 'cook-campw', 'cook-camps', 'cook-acc', 'cook-fam',
   'water-campw', 'water-camp', 'water-camps', 'water-plus', 'shower-w', 'shower-s'];
 const WALK_SPEED = 17;                 // פיקסלים במפה בשנייה – טיול נינוח
-const WALK_PACE = [1, 1, 0.82, 1.18, 0.95, 1.08];  // 0 ו-1 זוג (אותו קצב); השאר – כל אחד בקצב שלו
+const WALK_PACE = [1, 1, 0.82, 1.18, 0.95, 1.08, 0.9, 1.12];  // 0 ו-1 זוג (אותו קצב); השאר – כל אחד בקצב שלו
 const WALK_PAIR = { 1: 0 };            // מטייל 1 הולך לצד מטייל 0
 const walkerAt = [];                   // תא ברשת ההליכה שבו כל מטייל נמצא (נשמר בין רינדורים)
 let walkRAF = 0, tentCellsCache = null;
@@ -438,10 +438,20 @@ function tentCells() {
   }
   return (tentCellsCache = out);
 }
+/* כניסות למתחם ההופעות (מהקמפינג): נקודה מעט מחוץ לכניסה – שם נכנסים ונעלמים, ומשם יוצאים */
+const WALK_GATES = ['gate-w', 'gate-s', 'gate-se'];
+function gateCell(id) {
+  const g = PLACE[id], inner = GATE_POINTS[id];
+  if (!g || !inner) return -1;
+  const out = { x: (g.mapX + (g.mapX - inner[0]) * 0.3) / 100 * MAP_W, y: (g.mapY + (g.mapY - inner[1]) * 0.3) / 100 * MAP_H }; // ממש בפתח, מהצד החיצוני
+  return snapCell(out);
+}
 function walkSpot(not) {
-  const spots = WALK_SPOTS.filter(id => PLACE[id]), tents = tentCells();
+  const spots = WALK_SPOTS.filter(id => PLACE[id]), tents = tentCells(), gates = WALK_GATES.filter(id => PLACE[id]);
   for (let k = 0; k < 20; k++) {
-    const c = Math.random() < 0.55 && spots.length ? snapCell(placeXY(PLACE[spots[Math.floor(Math.random() * spots.length)]]))
+    const r = Math.random();
+    const c = r < 0.15 && gates.length ? gateCell(gates[Math.floor(Math.random() * gates.length)])
+      : r < 0.6 && spots.length ? snapCell(placeXY(PLACE[spots[Math.floor(Math.random() * spots.length)]]))
       : tents[Math.floor(Math.random() * tents.length)];
     if (c >= 0 && c !== not) return c;
   }

@@ -166,7 +166,7 @@ WALK_A = 0.13        # חצי צעד ביחס לגובה: כף הרגל זזה �
 WALK_KF = 0.6        # קיצור פרספקטיבה במבט מלפנים/מאחור (צעד "קדימה" נראה קצר יותר על המסך)
 # 4 דמויות: (גובה בפיקסלים של המפה, עובי, תיק על הגב, מעיל ארוך כמו הדמויות שבציור)
 WALK_VARIANTS = [(58, 1.00, False, False, None), (63, 0.88, False, False, None), (54, 1.05, True, False, None), (59, 1.0, False, True, None),
-                 (60, 0.95, False, False, 'hat'), (56, 0.92, False, False, 'pony')]
+                 (60, 0.95, False, False, 'hat'), (56, 0.92, False, False, 'pony'), (62, 1.08, False, False, 'cap'), (52, 0.95, True, False, 'hat')]
 WALK_FOOT = 0.9      # מיקום הקרקע (כפות הרגליים) בגובה התמונה – שם "נוגעים" בשביל
 WALK_IDLE = 4        # תמונות עמידה אחרי מחזור ההליכה: עומד, נושם, משען על שמאל, משען על ימין
 WALK_IDLE = 4        # תמונות עמידה אחרי מחזור ההליכה: עומד, נושם, משען על שמאל, משען על ימין
@@ -283,6 +283,9 @@ def make_walk_sheet(sprite, ink):
                     if extra == 'hat':
                         d.ellipse([hc[0] - head * 0.95, hc[1] - head * 0.42, hc[0] + head * 1.05, hc[1] - head * 0.22], fill=col)
                         d.ellipse([hc[0] - head * 0.45, hc[1] - head * 0.78, hc[0] + head * 0.5, hc[1] - head * 0.25], fill=col)
+                    if extra == 'cap':
+                        d.ellipse([hc[0] - head * 0.55, hc[1] - head * 0.7, hc[0] + head * 0.55, hc[1] - head * 0.05], fill=col)
+                        d.ellipse([hc[0] + head * 0.1, hc[1] - head * 0.32, hc[0] + head * 0.95, hc[1] - head * 0.12], fill=col)  # מצחייה קדימה
                     if extra == 'pony':
                         swing = 0.04 * Hs * math.sin(2 * math.pi * ph * 2)  # מתנדנד קצת בהליכה
                         d.ellipse([hc[0] - head * 1.0 - swing * 0.3, hc[1] - head * 0.15, hc[0] - head * 0.25, hc[1] + head * 0.55], fill=col)
@@ -321,6 +324,10 @@ def make_walk_sheet(sprite, ink):
                     if extra == 'hat':
                         d.ellipse([hc[0] - head * 1.0, hc[1] - head * 0.42, hc[0] + head * 1.0, hc[1] - head * 0.2], fill=col)
                         d.ellipse([hc[0] - head * 0.48, hc[1] - head * 0.8, hc[0] + head * 0.48, hc[1] - head * 0.25], fill=col)
+                    if extra == 'cap':
+                        d.ellipse([hc[0] - head * 0.58, hc[1] - head * 0.72, hc[0] + head * 0.58, hc[1] - head * 0.02], fill=col)
+                        if view == 1:
+                            d.ellipse([hc[0] - head * 0.5, hc[1] - head * 0.2, hc[0] + head * 0.5, hc[1] + head * 0.05], fill=col)  # מצחייה מלפנים
                     if extra == 'pony' and view == 2:  # מאחור רואים את הקוקו יורד
                         d.ellipse([hc[0] - head * 0.22, hc[1] + head * 0.2, hc[0] + head * 0.22, hc[1] + head * 0.95], fill=col)
                     if extra == 'pony':
