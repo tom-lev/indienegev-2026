@@ -98,7 +98,7 @@ def build_assets():
         make_person()
     with Image.open(CACHE / 'walk0.webp') as pm:  # מחזור הליכה: WALK_FRAMES תמונות זו לצד זו
         out['person'] = {'frames': WALK_FRAMES, 'idle': WALK_IDLE, 'idle': WALK_IDLE, 'rows': len(WALK_VARIANTS) * 3, 'variants': len(WALK_VARIANTS), 'a': WALK_A, 'kf': WALK_KF, 'foot': WALK_FOOT,
-                         'heights': [v[0] for v in WALK_VARIANTS], 'roam': [i for i, v in enumerate(WALK_VARIANTS) if v[4] == 'balloon'], 'hipr': 0.99 * (0.255 + 0.235), 'w': pm.width // (WALK_FRAMES + WALK_IDLE), 'h': pm.height // (len(WALK_VARIANTS) * 3), 'src': 'data:image/webp;base64,' + base64.b64encode((CACHE / 'walk0.webp').read_bytes()).decode()}
+                         'heights': [v[0] for v in WALK_VARIANTS], 'roam': [i for i, v in enumerate(WALK_VARIANTS) if v[4] == 'balloon'], 'balloonHands': json.loads((CACHE / 'balloon.json').read_text()), 'hipr': 0.99 * (0.255 + 0.235), 'w': pm.width // (WALK_FRAMES + WALK_IDLE), 'h': pm.height // (len(WALK_VARIANTS) * 3), 'src': 'data:image/webp;base64,' + base64.b64encode((CACHE / 'walk0.webp').read_bytes()).decode()}
     # המעשן – יושב על כיסא ליד אוהל בדרום הקמפינג
     if not (CACHE / 'smoker.json').exists():
         with Image.open(CACHE / 'walk0.webp') as wk:  # אותו צבע דיו כמו המטיילים
@@ -176,6 +176,7 @@ WALK_VARIANTS = [(58, 1.00, False, False, None), (63, 0.88, False, False, None),
                  (60, 0.95, False, False, 'hat'), (56, 0.92, False, False, 'pony'), (62, 1.08, False, False, 'cap'), (52, 0.95, True, False, 'hat'),
                  (60, 0.98, False, False, 'balloon')]   # האחרונה – הנודד עם הבלון: לא נכנס לשום מקום
 BALLOON = (244, 111, 106)
+BALLOON_HANDS = [[None] * 28 for _ in range(3)]  # מיקום היד שמחזיקה את הבלון: [מבט][תמונה] (מתמלא בבניית הגיליון)
 WALK_FOOT = 0.9      # מיקום הקרקע (כפות הרגליים) בגובה התמונה – שם "נוגעים" בשביל
 WALK_IDLE = 4        # תמונות עמידה אחרי מחזור ההליכה: עומד, נושם, משען על שמאל, משען על ימין
 WALK_IDLE = 4        # תמונות עמידה אחרי מחזור ההליכה: עומד, נושם, משען על שמאל, משען על ימין
@@ -301,11 +302,7 @@ def make_walk_sheet(sprite, ink):
                         d.ellipse([hc[0] - head * 0.75, hc[1] - head * 0.45, hc[0] - head * 0.15, hc[1] + head * 0.05], fill=col)
                     draw_side(0); draw_arm(0)
                     if extra == 'balloon':
-                        hand0 = parts[0][4]
-                        bc = (hc[0] + 0.21 * Hs + 0.25 * (hand0[0] - sh[0]) * 0.3, hc[1] - 0.02 * Hs)
-                        d.line([hand0, (bc[0], bc[1] + 0.085 * Hs)], fill=col, width=max(1, round(0.012 * Hs)))
-                        d.ellipse([bc[0] - 0.075 * Hs, bc[1] - 0.09 * Hs, bc[0] + 0.075 * Hs, bc[1] + 0.09 * Hs], fill=BALLOON + (255,))
-                        d.polygon([(bc[0] - 0.015 * Hs, bc[1] + 0.098 * Hs), (bc[0] + 0.015 * Hs, bc[1] + 0.098 * Hs), (bc[0], bc[1] + 0.082 * Hs)], fill=BALLOON + (255,))
+                        BALLOON_HANDS[view][f] = [round(parts[0][4][0] / S, 1), round(parts[0][4][1] / S, 1)]
                 else:
                     # מלפנים (1, הולך לכיוון המסך – למטה) / מאחור (2, הולך למעלה): "קדימה" = למטה/למעלה על המסך, מקוצר בפרספקטיבה
                     fsign = 1 if view == 1 else -1
@@ -346,9 +343,7 @@ def make_walk_sheet(sprite, ink):
                         if view == 1:
                             d.ellipse([hc[0] - head * 0.5, hc[1] - head * 0.2, hc[0] + head * 0.5, hc[1] + head * 0.05], fill=col)  # מצחייה מלפנים
                     if extra == 'balloon':
-                        bc = (hc[0] + 0.24 * Hs, hc[1] - 0.02 * Hs)
-                        d.line([bhand, (bc[0], bc[1] + 0.085 * Hs)], fill=col, width=max(1, round(0.012 * Hs)))
-                        d.ellipse([bc[0] - 0.075 * Hs, bc[1] - 0.09 * Hs, bc[0] + 0.075 * Hs, bc[1] + 0.09 * Hs], fill=BALLOON + (255,))
+                        BALLOON_HANDS[view][f] = [round(bhand[0] / S, 1), round(bhand[1] / S, 1)]
                     if extra == 'pony' and view == 2:  # מאחור רואים את הקוקו יורד
                         d.ellipse([hc[0] - head * 0.22, hc[1] + head * 0.2, hc[0] + head * 0.22, hc[1] + head * 0.95], fill=col)
                     if extra == 'pony':
@@ -356,11 +351,12 @@ def make_walk_sheet(sprite, ink):
                 img = big.filter(ImageFilter.GaussianBlur(S * 0.28)).resize((TW, TH), Image.LANCZOS)
                 sheet.alpha_composite(img, (f * TW, (3 * v + view) * TH))
     sheet.save(CACHE / 'walk0.webp', 'WEBP', lossless=True)
+    (CACHE / 'balloon.json').write_text(json.dumps(BALLOON_HANDS))
 
 
 SMOKER_H = 58          # גובה הדמות (עומדת) – בפיקסלים של המפה
 SMOKER_FRAMES = 9      # היד: 0 = על הברך, 8 = הסיגריה בפה
-SMOKER_AT = (35.78, 83.3)  # בתוך גוש ירוק כהה בדרום הקמפינג, ליד אוהל (אחוזים במפה) – נקודת הקרקע מתחת לכיסא
+SMOKER_AT = (20.72, 33.52)  # בתוך גוש ירוק כהה בצפון הקמפינג (ליד מתחם שבת), ליד אוהל – נקודת הקרקע מתחת לכיסא
 
 
 def make_smoker(ink):

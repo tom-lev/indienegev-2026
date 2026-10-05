@@ -425,7 +425,9 @@ function walkersHtml() {
   // שתי שכבות מאותה תמונה: עליונה (ראש וגוף) ותחתונה (רגליים) שמוטה לפי זווית השביל
   return Array.from({ length: p.variants || 1 }, (_, i) => {
     const hip = (p.foot - p.hipr * p.heights[i] / p.h) * 100, bg = `background-image:url(${p.src});background-size:${(p.frames + (p.idle || 0)) * 100}% ${p.rows * 100}%`;
-    return `<div class="m-walker" style="width:${p.w}px;height:${p.h}px;opacity:0;--foot:${p.foot};--hip:${hip.toFixed(2)}%"><i class="up" style="${bg}"></i><i class="lo" style="${bg}"></i></div>`;
+    const balloon = (p.roam || []).includes(i)
+      ? `<b class="m-balloon"><svg width="16" height="26" viewBox="-8 -24 16 26" aria-hidden="true"><path d="M0 0 Q 1.5 -6 0 -12" fill="none" stroke="#3a1c18" stroke-width=".7"/><ellipse cx="0" cy="-17.5" rx="4.3" ry="5.2" fill="#f46f6a"/><path d="M-0.9 -12.2 L0.9 -12.2 L0 -13.3 Z" fill="#f46f6a"/><ellipse cx="-1.4" cy="-19.3" rx="1" ry="1.5" fill="#fff" opacity=".45"/></svg></b>` : '';
+    return `<div class="m-walker" style="width:${p.w}px;height:${p.h}px;opacity:0;--foot:${p.foot};--hip:${hip.toFixed(2)}%"><i class="up" style="${bg}"></i><i class="lo" style="${bg}"></i>${balloon}</div>`;
   }).join('');
 }
 /* "אוהלים": תאי שביל בקמפינג שצמודים לגוש ירוק כהה (נכנסים אליו = נכנסים לאוהל) */
@@ -486,7 +488,7 @@ function smokerHtml() {
   if (!m) return '';
   const x = m.at[0] / 100 * MAP_W, y = m.at[1] / 100 * MAP_H;
   return `<div class="m-smoker" style="left:${(x - m.cx * m.w).toFixed(0)}px;top:${(y - m.foot * m.h).toFixed(0)}px;width:${m.w}px;height:${m.h}px">
-    <i style="background-image:url(${m.src});background-size:${m.frames * 100}% 100%"></i></div><div class="m-smoke-layer"></div>`;
+    <i style="background-image:url(${m.src});background-size:${m.frames * 100}% 100%"></i><b class="ember"></b></div><div class="m-smoke-layer"></div>`;
 }
 let smokeRAF = 0;
 function smokePeople(stage) {
@@ -494,7 +496,7 @@ function smokePeople(stage) {
   const m = ASSETS.smoker, el = stage.querySelector('.m-smoker'), layer = stage.querySelector('.m-smoke-layer');
   if (!m || !el) return;
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const inner = el.querySelector('i'), ox = parseFloat(el.style.left), oy = parseFloat(el.style.top);
+  const inner = el.querySelector('i'), ember = el.querySelector('.ember'), ox = parseFloat(el.style.left), oy = parseFloat(el.style.top);
   const puff = (x, y, big) => {
     if (reduce || layer.childElementCount > 40) return;
     const p = document.createElement('i');
@@ -502,12 +504,15 @@ function smokePeople(stage) {
     const sz = big ? 7 + Math.random() * 3 : 3 + Math.random() * 2;
     p.style.cssText = `left:${(x - sz / 2).toFixed(1)}px;top:${(y - sz / 2).toFixed(1)}px;width:${sz.toFixed(1)}px;height:${sz.toFixed(1)}px`;
     layer.append(p);
-    const dx = (Math.random() - 0.3) * (big ? 22 : 12), up = 30 + Math.random() * 22, dur = (big ? 3200 : 2600) + Math.random() * 900;
-    p.animate([
-      { transform: 'translate(0,0) scale(.5)', opacity: big ? 0.55 : 0.45 },
-      { transform: `translate(${(dx * 0.5).toFixed(1)}px, ${(-up * 0.45).toFixed(1)}px) scale(1.2)`, opacity: big ? 0.42 : 0.32, offset: 0.4 },
-      { transform: `translate(${dx.toFixed(1)}px, ${(-up).toFixed(1)}px) scale(${big ? 2.6 : 2})`, opacity: 0 },
-    ], { duration: dur, easing: 'ease-out' }).onfinish = () => p.remove();
+    // עשן מסתלסל: עולה לאט, מתפתל בגלים שהולכים וגדלים, מסתובב, מתרחב ונעלם
+    const drift = (Math.random() - 0.35) * (big ? 18 : 10), up = 34 + Math.random() * 20, dur = (big ? 5200 : 4400) + Math.random() * 1400;
+    const ph = Math.random() * Math.PI * 2, turns = 1.6 + Math.random() * 0.8, op0 = big ? 0.55 : 0.45, N = 8, kf = [];
+    for (let k = 0; k <= N; k++) {
+      const u = k / N, curl = Math.sin(ph + u * turns * Math.PI * 2) * (2 + 9 * u);
+      kf.push({ offset: u, transform: `translate(${(drift * u + curl).toFixed(1)}px, ${(-up * (1 - (1 - u) * (1 - u) * 0.35) * u).toFixed(1)}px) rotate(${(u * 160).toFixed(0)}deg) scale(${(0.5 + u * (big ? 2.2 : 1.7)).toFixed(2)})`,
+        opacity: (op0 * (u < 0.15 ? u / 0.15 : 1 - (u - 0.15) / 0.85)).toFixed(3) });
+    }
+    p.animate(kf, { duration: dur, easing: 'linear' }).onfinish = () => p.remove();
   };
   // מחזור עישון אחד (שניות): מנוחה, הרמה, שאיפה, הורדה
   let cyc = null, t0 = performance.now(), nextPuff = 0, exhaled = false;
@@ -525,8 +530,10 @@ function smokePeople(stage) {
     const f = Math.round(a * (m.frames - 1));
     inner.style.backgroundPosition = `${-f * m.w}px 0`;
     const tip = m.tips[f], inhale = a === 1;
-    inner.classList.toggle('drag', inhale); // הגחלת מתלהטת בשאיפה
-    if (t >= nextPuff) { puff(ox + tip[0], oy + tip[1], false); nextPuff = t + (inhale ? 520 : 300 + Math.random() * 140); }
+    // רק הגחלת זוהרת (ומתלהטת בשאיפה) – לא כל הדמות
+    ember.style.transform = `translate(${tip[0].toFixed(1)}px, ${tip[1].toFixed(1)}px)`;
+    ember.classList.toggle('hot', inhale);
+    if (t >= nextPuff) { puff(ox + tip[0], oy + tip[1], false); nextPuff = t + (inhale ? 700 : 420 + Math.random() * 200); }
     // נשיפה: כשהיד יורדת – כמה משבים גדולים מהפה
     if (!exhaled && s > c.rest + c.up + c.hold + c.down * 0.4) {
       exhaled = true;
@@ -542,7 +549,7 @@ function walkPeople(stage) {
   const P = ASSETS.person;
   if (matchMedia('(prefers-reduced-motion: reduce)').matches || !P) return;
   const W = [...stage.querySelectorAll('.m-walker')].map((el, i) => ({
-    el, i, up: el.querySelector('.up'), lo: el.querySelector('.lo'), a: P.a * P.heights[i], hipPx: P.hipr * P.heights[i], kx: 0, ky: 0,
+    el, i, up: el.querySelector('.up'), lo: el.querySelector('.lo'), balloon: el.querySelector('.m-balloon'), a: P.a * P.heights[i], hipPx: P.hipr * P.heights[i], kx: 0, ky: 0,
     speed: WALK_SPEED * (WALK_PACE[i] || 1), roam: (P.roam || []).includes(i), born: 0,
     state: 'idle', wait: performance.now() + 600 + i * 2500, at: walkerAt[i] >= 0 ? walkerAt[i] : walkSpot(-1),
     phase: Math.random(), s: 0, view: 0, dir: 1, pose: -1,
@@ -614,6 +621,15 @@ function walkPeople(stage) {
     w.lo.style.transform = `${flip} skewY(${Math.atan(ky).toFixed(3)}rad) skewX(${Math.atan(kx).toFixed(3)}rad)`;
     w.el.style.transform = `translate(${(x - P.w / 2).toFixed(1)}px, ${(y - P.foot * P.h).toFixed(1)}px)`; // הגוף תמיד על השביל
     w.el.style.opacity = op.toFixed(2);
+    if (w.balloon) {
+      // הבלון קשור ליד: מתנופף ברוח (שני גלים איטיים) ונגרר מעט אחורה ביחס לכיוון ההליכה
+      const hh = P.balloonHands[w.view] && P.balloonHands[w.view][f];
+      if (hh) {
+        const hx = w.view === 0 && w.dir < 0 ? P.w - hh[0] : hh[0], tt = performance.now() / 1000;
+        const ang = 9 * Math.sin(tt * 0.9 + w.i) + 4 * Math.sin(tt * 2.1) + (w.view === 0 ? -w.dir * 11 : 0);
+        w.balloon.style.transform = `translate(${hx.toFixed(1)}px, ${hh[1].toFixed(1)}px) rotate(${ang.toFixed(1)}deg)`;
+      }
+    }
   };
   let last = performance.now();
   const tick = t => {
