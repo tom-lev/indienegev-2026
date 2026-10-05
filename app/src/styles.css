@@ -577,10 +577,10 @@ details.fold[open] .fold-ch svg { transform: rotate(-90deg); }
 /* ציפורים מהציור – מרחפות ומנפנפות */
 /* אנשים הולכים בקמפינג: צעדים קטנים (קפיצה עדינה ונדנוד) */
 .m-walker { position: absolute; left: 0; top: 0; pointer-events: none; will-change: transform; transform-origin: 50% 100%; }
-/* מחזור הליכה: 24 תמונות (תנועה רציפה) – כל מחזור = 2 צעדים; משך המחזור מותאם למהירות ההליכה (בלי החלקה) */
-.m-walker i { display: block; width: 100%; height: 100%; background-repeat: no-repeat; animation: walk-cycle var(--cyc, 1.9s) steps(24) infinite; }
-@keyframes walk-cycle { from { background-position-x: 0; } to { background-position-x: calc(var(--w) * -24); } }
-@media (prefers-reduced-motion: reduce) { .m-walker i { animation: none; } }
+/* צל קטן מתחת לכפות הרגליים – "מושיב" את הדמות על השביל */
+.m-walker::before { content: ''; position: absolute; left: 24%; right: 24%; top: calc(var(--foot) * 100% - 2.5px); height: 5px; border-radius: 50%; background: rgba(30, 40, 20, .28); filter: blur(1.2px); }
+/* תמונת הצעד נקבעת בכל פריים לפי המרחק שהדמות עברה (ב-JS) */
+.m-walker i { display: block; width: 100%; height: 100%; background-repeat: no-repeat; }
 .m-bird { position: absolute; pointer-events: none; will-change: transform; z-index: 1; }
 .m-bird img { display: block; width: 100%; height: auto; transform-origin: 50% 70%; animation: bird-flap .75s ease-in-out infinite; }
 @keyframes bird-glide { from { transform: translate(0, 0); } to { transform: translate(var(--dx), var(--dy)); } }

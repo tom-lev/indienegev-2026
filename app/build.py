@@ -97,8 +97,8 @@ def build_assets():
     if not (CACHE / 'walk0.webp').exists():
         make_person()
     with Image.open(CACHE / 'walk0.webp') as pm:  # מחזור הליכה: WALK_FRAMES תמונות זו לצד זו
-        out['person'] = {'frames': WALK_FRAMES, 'rows': len(WALK_VARIANTS) * 3, 'variants': len(WALK_VARIANTS), 'stride': WALK_STRIDE, 'heights': [v[0] for v in WALK_VARIANTS],
-                         'w': pm.width // WALK_FRAMES, 'h': pm.height // (len(WALK_VARIANTS) * 3), 'src': 'data:image/webp;base64,' + base64.b64encode((CACHE / 'walk0.webp').read_bytes()).decode()}
+        out['person'] = {'frames': WALK_FRAMES, 'rows': len(WALK_VARIANTS) * 3, 'variants': len(WALK_VARIANTS), 'a': WALK_A, 'kf': WALK_KF, 'foot': WALK_FOOT,
+                         'heights': [v[0] for v in WALK_VARIANTS], 'w': pm.width // WALK_FRAMES, 'h': pm.height // (len(WALK_VARIANTS) * 3), 'src': 'data:image/webp;base64,' + base64.b64encode((CACHE / 'walk0.webp').read_bytes()).decode()}
     # רשת הליכה לחישוב מסלולים (נבנית מתמונת המפה)
     from walkgrid import build as build_walk, encode, CELL
     grid, (base_w, _) = build_walk(PROJECT / 'festival-map-2026-web-large.jpg')
@@ -162,35 +162,25 @@ def make_person():
 
 
 WALK_FRAMES = 24
-def _walk_stride():
-    """אורך צעד אמיתי ביחס לגובה: כמה הקרסול של רגל העמידה זז אחורה ביחס לירך בחצי מחזור – כך כף הרגל לא מחליקה"""
-    import math
-    g = lambda x, m, w: math.exp(-((x - m) / w) ** 2)
-    def ank(p):
-        hip = 6 + 16 * math.cos(2 * math.pi * p)
-        knee = 4 + 12 * g(p, 0.12, 0.07) + 55 * g(p, 0.72, 0.12)
-        return math.sin(math.radians(hip)) * 0.255 + math.sin(math.radians(hip - knee)) * 0.235
-    return ank(0.0) - ank(0.5)
-
-
-WALK_STRIDE = round(_walk_stride(), 3)
+WALK_A = 0.13        # חצי צעד ביחס לגובה: כף הרגל זזה מ-+A ל-−A (ביחס לירך) בזמן שהיא על הקרקע
+WALK_KF = 0.6        # קיצור פרספקטיבה במבט מלפנים/מאחור (צעד "קדימה" נראה קצר יותר על המסך)
 # 4 דמויות: (גובה בפיקסלים של המפה, עובי, תיק על הגב, מעיל ארוך כמו הדמויות שבציור)
 WALK_VARIANTS = [(58, 1.00, False, False), (63, 0.88, False, False), (54, 1.05, True, False), (59, 1.0, False, True)]
+WALK_FOOT = 0.9      # מיקום הקרקע (כפות הרגליים) בגובה התמונה – שם "נוגעים" בשביל
 
 
 def make_walk_sheet(sprite, ink):
-    """מחזור הליכה מצויר מאפס, 24 תמונות, מבט מהצד (פונה ימינה; מתהפך כשהולכים שמאלה), שורה לכל אחת מ-4 דמויות.
-    פרופורציות טבעיות: ראש קטן, גוף צר, ירכיים בחצי הגובה. זוויות המפרקים לפי מחזור הליכה אמיתי:
-    ירך מתנדנדת, ברך מתכופפת חזק באמצע התנופה (וקצת בנחיתה), כף רגל מתגלגלת מעקב לבוהן,
-    ידיים עם כיפוף מרפק שמתנדנדות הפוך לרגליים, והגוף יורד מעט ברגע ששתי הרגליים על הקרקע.
-    בצבע הדיו של הדמויות שבציור, עם קצוות רכים כמו מכחול (מצויר בהגדלה ×8 ומוקטן)."""
+    """מחזור הליכה מצויר מאפס: 24 תמונות לכל מחזור (2 צעדים), 3 מבטים (צד/מלפנים/מאחור) × 4 דמויות.
+    בנוי לפי מיקום כפות הרגליים (ולא זוויות): כף הרגל שעל הקרקע זזה אחורה בקצב קבוע לגמרי ביחס לירך,
+    וכף הרגל שבאוויר מתקדמת בקשת. הברך מחושבת (קינמטיקה הפוכה, שני מקטעים), וגובה הירך נובע מאורך הרגל –
+    כך מתקבלת עלייה-וירידה טבעית. באפליקציה התמונה נבחרת לפי המרחק שהדמות עברה, כך שכף הרגל שעל הקרקע
+    נשארת נעוצה במקום – בלי החלקה. בצבע הדיו של הדמויות שבציור, קצוות רכים (מצויר ×8 ומוקטן)."""
     import math
     from PIL import ImageDraw, ImageFilter
     S = 8
     Hmax = max(v[0] for v in WALK_VARIANTS)
-    TW, TH = round(Hmax * 0.72), Hmax + 4
+    TW, TH = round(Hmax * 0.7), round(Hmax * 1.12)
     col = ink + (255,)
-    g = lambda x, m, w: math.exp(-((x - m) / w) ** 2)
     wrap = lambda x: x - math.floor(x)
 
     def seg(d, a, b, wa, wb):
@@ -202,108 +192,106 @@ def make_walk_sheet(sprite, ink):
         for c, r in ((a, wa / 2), (b, wb / 2)):
             d.ellipse([c[0] - r, c[1] - r, c[0] + r, c[1] + r], fill=col)
 
-    def at(o, ang, L):  # נקודה במרחק L מ-o בזווית ang (מעלות מהאנך כלפי מטה, חיובי = קדימה)
-        a = math.radians(ang)
-        return (o[0] + math.sin(a) * L, o[1] + math.cos(a) * L)
+    def foot(q, A, lift_h):
+        """מיקום כף רגל בשלב q: (היסט קדימה ביחס לירך, הרמה). q<0.5 – על הקרקע, זזה אחורה בקצב קבוע"""
+        if q < 0.5:
+            return A - 2 * A * (q / 0.5), 0.0
+        u = (q - 0.5) / 0.5
+        return -A + 2 * A * (1 - math.cos(math.pi * u)) / 2, lift_h * math.sin(math.pi * u)
 
-    def leg(p):
-        """זוויות רגל בשלב p של המחזור (0 = נחיתת עקב)"""
-        hip = 6 + 16 * math.cos(2 * math.pi * p)                                   # ירך: קדימה בנחיתה, אחורה לפני הניתוק
-        knee = 4 + 12 * g(p, 0.12, 0.07) + 55 * g(p, 0.72, 0.12)                 # כיפוף ברך
-        foot = 8 * g(p, 0.02, 0.05) - 22 * g(p, 0.6, 0.07)                       # עקב → בוהן
-        return hip, knee, foot
+    def knee_ik(H, Ap, Lt, Ls, fwd):
+        dx, dy = Ap[0] - H[0], Ap[1] - H[1]
+        d = min(math.hypot(dx, dy), (Lt + Ls) * 0.999)
+        th = math.atan2(dy, dx)
+        al = math.acos(max(-1, min(1, (Lt * Lt + d * d - Ls * Ls) / (2 * Lt * d))))
+        a = th - al * fwd  # הברך קדימה
+        return (H[0] + Lt * math.cos(a), H[1] + Lt * math.sin(a))
 
-    sheet = Image.new('RGBA', (TW * WALK_FRAMES, TH * len(WALK_VARIANTS) * 3), (0, 0, 0, 0))  # 3 מבטים לכל דמות
+    sheet = Image.new('RGBA', (TW * WALK_FRAMES, TH * len(WALK_VARIANTS) * 3), (0, 0, 0, 0))
     for v, (H, wf, bag, coat) in enumerate(WALK_VARIANTS):
         Hs = H * S
-        head, sh_y, hip_y = 0.135 * Hs, 0.205 * Hs, 0.50 * Hs          # קוטר ראש, גובה כתפיים וירכיים מלמעלה
-        Lt, Ls, foot_l = 0.255 * Hs, 0.235 * Hs, 0.085 * Hs
+        head, Lt, Ls, foot_l = 0.135 * Hs, 0.255 * Hs, 0.235 * Hs, 0.085 * Hs
+        L = Lt + Ls
+        A, lift_h = WALK_A * Hs, 0.055 * Hs
+        torso_len = 0.295 * Hs                                   # מהירך לכתפיים
         wt, wsn, wua, wfa = 0.075 * Hs * wf, 0.052 * Hs * wf, 0.05 * Hs * wf, 0.04 * Hs * wf
         sw, hw = 0.15 * Hs * wf, 0.125 * Hs * wf
-        for f in range(WALK_FRAMES):
-            p = f / WALK_FRAMES
-            bob = 0.012 * Hs * (math.cos(4 * math.pi * p))                   # נמוך כששתי הרגליים על הקרקע
-            big = Image.new('RGBA', (TW * S, TH * S), (0, 0, 0, 0))
-            d = ImageDraw.Draw(big)
-            top = (TH - H - 1.5) * S + bob - 0.01 * Hs
-            cx = TW * S * 0.5
-            lean = 3                                                         # נטייה קלה קדימה
-            hipP = (cx, top + hip_y)
-            shP = at(hipP, 180 + lean, hip_y - sh_y)
-            limbs = {}
-            for k in (0, 1):                                                 # 0 = הצד הקרוב, 1 = הרחוק
-                ph = wrap(p + 0.5 * k)
-                hip, knee, footA = leg(ph)
-                kneeP = at(hipP, hip, Lt)
-                ank = at(kneeP, hip - knee, Ls)
-                toe = at(ank, hip - knee + 90 + footA, foot_l)
-                arm = -26 * math.cos(2 * math.pi * ph)                        # יד מתנדנדת הפוך לרגל באותו צד
-                elbow = 14 + 22 * max(0.0, math.sin(2 * math.pi * ph + 1.2))
-                elP = at(shP, arm, 0.17 * Hs)
-                hand = at(elP, arm + elbow, 0.15 * Hs)
-                limbs[k] = (kneeP, ank, toe, elP, hand)
-
-            def draw_leg(k):
-                kneeP, ank, toe, _, _ = limbs[k]
-                seg(d, hipP, kneeP, wt, wsn * 1.08)
-                seg(d, kneeP, ank, wsn * 1.08, wsn * 0.8)
-                seg(d, ank, toe, wsn * 0.95, wsn * 0.6)
-
-            def draw_arm(k):
-                _, _, _, elP, hand = limbs[k]
-                seg(d, shP, elP, wua, wfa)
-                seg(d, elP, hand, wfa, wfa * 0.85)
-
-            draw_arm(1); draw_leg(1)                                          # הצד הרחוק – מאחור
-            # גוף: צר בכתפיים ובמותניים (או מעיל ארוך עד אמצע הירך)
-            if coat:
-                bot = at(hipP, 0, 0.13 * Hs)
-                d.polygon([(shP[0] - sw / 2, shP[1]), (shP[0] + sw / 2, shP[1]), (bot[0] + hw * 0.8, bot[1]), (bot[0] - hw * 0.8, bot[1])], fill=col)
-            d.polygon([(shP[0] - sw / 2, shP[1] + 0.01 * Hs), (shP[0] + sw / 2, shP[1] + 0.01 * Hs),
-                       (hipP[0] + hw / 2, hipP[1]), (hipP[0] - hw / 2, hipP[1])], fill=col)
-            d.ellipse([shP[0] - sw / 2, shP[1] - 0.02 * Hs, shP[0] + sw / 2, shP[1] + 0.06 * Hs], fill=col)  # כתפיים מעוגלות
-            if bag:
-                b0 = at(shP, 0, 0.04 * Hs)
-                d.rounded_rectangle([b0[0] - sw / 2 - 0.07 * Hs, b0[1], b0[0] - sw / 2 + 0.03 * Hs, b0[1] + 0.17 * Hs], radius=0.025 * Hs, fill=col)
-            neck = at(shP, 180 + lean, 0.035 * Hs)
-            seg(d, shP, neck, 0.055 * Hs, 0.05 * Hs)
-            hc = at(neck, 180 + lean, head * 0.5)
-            d.ellipse([hc[0] - head / 2, hc[1] - head * 0.55, hc[0] + head / 2, hc[1] + head * 0.5], fill=col)
-            draw_leg(0); draw_arm(0)                                          # הצד הקרוב – מלפנים
-            img = big.filter(ImageFilter.GaussianBlur(S * 0.28)).resize((TW, TH), Image.LANCZOS)
-            sheet.alpha_composite(img, (f * TW, (3 * v) * TH))
-            # מבט מלפנים (הולך לכיוון המסך – למטה) ומאחור (הולך למעלה): הרגליים עולות ויורדות במקום להתנדנד הצידה
-            for view in (1, 2):
+        gy = TH * WALK_FOOT * S                                  # הקרקע
+        cx = TW * S / 2
+        for view in (0, 1, 2):
+            for f in range(WALK_FRAMES):
+                ph = f / WALK_FRAMES
+                feet = [foot(wrap(ph + 0.5 * k), A, lift_h) for k in (0, 1)]
+                fx_st = feet[0][0] if wrap(ph) < 0.5 else feet[1][0]           # הרגל שעל הקרקע
+                ag = wsn * 0.4                                                  # הקרסול מעט מעל הקרקע
+                hipH = math.sqrt((L * 0.992) ** 2 - fx_st ** 2) + ag           # גובה הירך: רגל העמידה כמעט ישרה
                 big = Image.new('RGBA', (TW * S, TH * S), (0, 0, 0, 0))
                 d = ImageDraw.Draw(big)
-                sway = 0.012 * Hs * math.sin(2 * math.pi * p)                # העברת משקל מרגל לרגל
-                hipC = (cx + sway, top + hip_y)
-                shC = (cx + sway * 0.6, top + sh_y)
-                for k in (0, 1):
-                    ph = wrap(p + 0.5 * k)
-                    hip, knee, _ = leg(ph)
-                    side = -1 if k == 0 else 1
-                    hx = hipC[0] + side * 0.045 * Hs
-                    kneeY = hipC[1] + Lt * math.cos(math.radians(hip)) * 0.98
-                    ankY = kneeY + Ls * math.cos(math.radians(hip - knee))
-                    kneeP, ankP = (hx + side * 0.004 * Hs, kneeY), (hx, ankY)
-                    seg(d, (hx, hipC[1]), kneeP, wt, wsn * 1.08)
-                    seg(d, kneeP, ankP, wsn * 1.08, wsn * 0.8)
-                    d.ellipse([ankP[0] - wsn * 0.6, ankP[1] - wsn * 0.35, ankP[0] + wsn * 0.6, ankP[1] + wsn * 0.45], fill=col)  # כף רגל
-                    arm = -26 * math.cos(2 * math.pi * ph)
-                    elY = shC[1] + 0.17 * Hs * math.cos(math.radians(arm)) * 0.97
-                    elP = (shC[0] + side * (sw / 2 + wua * 0.1), elY)
-                    seg(d, (shC[0] + side * sw * 0.42, shC[1] + 0.02 * Hs), elP, wua, wfa)
-                    seg(d, elP, (elP[0] + side * 0.01 * Hs, elY + 0.15 * Hs * math.cos(math.radians(arm + 20))), wfa, wfa * 0.85)
-                if coat:
-                    d.polygon([(shC[0] - sw / 2, shC[1]), (shC[0] + sw / 2, shC[1]), (hipC[0] + hw * 0.85, hipC[1] + 0.13 * Hs), (hipC[0] - hw * 0.85, hipC[1] + 0.13 * Hs)], fill=col)
-                d.polygon([(shC[0] - sw / 2, shC[1] + 0.01 * Hs), (shC[0] + sw / 2, shC[1] + 0.01 * Hs), (hipC[0] + hw * 0.6, hipC[1]), (hipC[0] - hw * 0.6, hipC[1])], fill=col)
-                d.ellipse([shC[0] - sw / 2, shC[1] - 0.02 * Hs, shC[0] + sw / 2, shC[1] + 0.06 * Hs], fill=col)
-                if bag and view == 2:  # מאחור רואים את התיק על הגב
-                    d.rounded_rectangle([shC[0] - sw * 0.38, shC[1] + 0.03 * Hs, shC[0] + sw * 0.38, shC[1] + 0.21 * Hs], radius=0.03 * Hs, fill=col)
-                seg(d, shC, (shC[0], shC[1] - 0.035 * Hs), 0.055 * Hs, 0.05 * Hs)
-                hc = (shC[0], shC[1] - 0.035 * Hs - head * 0.5)
-                d.ellipse([hc[0] - head / 2, hc[1] - head * 0.55, hc[0] + head / 2, hc[1] + head * 0.5], fill=col)
+                if view == 0:
+                    lean = 3
+                    hip = (cx, gy - hipH)
+                    a_l = math.radians(180 + lean)
+                    sh = (hip[0] + math.sin(a_l) * torso_len, hip[1] + math.cos(a_l) * torso_len)
+                    parts = []
+                    for k in (0, 1):
+                        fx, lf = feet[k]
+                        ank = (cx + fx, gy - lf - ag)
+                        kn = knee_ik(hip, ank, Lt, Ls, 1)
+                        ta = math.radians(22 * math.sin(math.pi * max(0.0, (wrap(ph + 0.5 * k) - 0.5) / 0.5)))  # בוהן מעט כלפי מטה באוויר
+                        toe = (ank[0] + math.cos(ta) * foot_l, ank[1] + math.sin(ta) * foot_l)
+                        armA = math.radians(-24 * fx / A)                          # יד הפוכה לרגל באותו צד
+                        el = (sh[0] + math.sin(armA) * 0.17 * Hs, sh[1] + math.cos(armA) * 0.17 * Hs)
+                        fa = armA + math.radians(18 + 14 * max(0.0, -fx / A))
+                        hand = (el[0] + math.sin(fa) * 0.15 * Hs, el[1] + math.cos(fa) * 0.15 * Hs)
+                        parts.append((kn, ank, toe, el, hand))
+
+                    def draw_side(k):
+                        kn, ank, toe, el, hand = parts[k]
+                        seg(d, hip, kn, wt, wsn * 1.08); seg(d, kn, ank, wsn * 1.08, wsn * 0.8); seg(d, ank, toe, wsn * 0.95, wsn * 0.6)
+
+                    def draw_arm(k):
+                        kn, ank, toe, el, hand = parts[k]
+                        seg(d, sh, el, wua, wfa); seg(d, el, hand, wfa, wfa * 0.85)
+
+                    draw_arm(1); draw_side(1)
+                    if coat:
+                        bot = (hip[0], hip[1] + 0.13 * Hs)
+                        d.polygon([(sh[0] - sw / 2, sh[1]), (sh[0] + sw / 2, sh[1]), (bot[0] + hw * 0.8, bot[1]), (bot[0] - hw * 0.8, bot[1])], fill=col)
+                    d.polygon([(sh[0] - sw / 2, sh[1] + 0.01 * Hs), (sh[0] + sw / 2, sh[1] + 0.01 * Hs), (hip[0] + hw / 2, hip[1]), (hip[0] - hw / 2, hip[1])], fill=col)
+                    d.ellipse([sh[0] - sw / 2, sh[1] - 0.02 * Hs, sh[0] + sw / 2, sh[1] + 0.06 * Hs], fill=col)
+                    if bag:
+                        d.rounded_rectangle([sh[0] - sw / 2 - 0.07 * Hs, sh[1] + 0.04 * Hs, sh[0] - sw / 2 + 0.03 * Hs, sh[1] + 0.21 * Hs], radius=0.025 * Hs, fill=col)
+                    neck = (sh[0] + math.sin(a_l) * 0.035 * Hs, sh[1] + math.cos(a_l) * 0.035 * Hs)
+                    seg(d, sh, neck, 0.055 * Hs, 0.05 * Hs)
+                    hc = (neck[0] + math.sin(a_l) * head * 0.5, neck[1] + math.cos(a_l) * head * 0.5)
+                    d.ellipse([hc[0] - head / 2, hc[1] - head * 0.55, hc[0] + head / 2, hc[1] + head * 0.5], fill=col)
+                    draw_side(0); draw_arm(0)
+                else:
+                    # מלפנים (1, הולך לכיוון המסך – למטה) / מאחור (2, הולך למעלה): "קדימה" = למטה/למעלה על המסך, מקוצר בפרספקטיבה
+                    fsign = 1 if view == 1 else -1
+                    sway = 0.012 * Hs * math.sin(2 * math.pi * ph)
+                    hip = (cx + sway, gy - hipH)
+                    sh = (cx + sway * 0.6, hip[1] - torso_len)
+                    for k in (0, 1):
+                        fx, lf = feet[k]
+                        side = -1 if k == 0 else 1
+                        hx = hip[0] + side * 0.045 * Hs
+                        ank = (hx, gy + fsign * fx * WALK_KF - lf - ag)
+                        mid = ((hx + ank[0]) / 2 + side * 0.01 * Hs, (hip[1] + ank[1]) / 2)
+                        seg(d, (hx, hip[1]), mid, wt, wsn * 1.08)
+                        seg(d, mid, ank, wsn * 1.08, wsn * 0.8)
+                        d.ellipse([ank[0] - wsn * 0.6, ank[1] - wsn * 0.3, ank[0] + wsn * 0.6, ank[1] + wsn * 0.5], fill=col)
+                        armV = math.cos(math.radians(24 * fx / A))
+                        el = (sh[0] + side * (sw / 2 + wua * 0.1), sh[1] + 0.17 * Hs * armV)
+                        seg(d, (sh[0] + side * sw * 0.42, sh[1] + 0.02 * Hs), el, wua, wfa)
+                        seg(d, el, (el[0] + side * 0.01 * Hs, el[1] + 0.15 * Hs * armV), wfa, wfa * 0.85)
+                    if coat:
+                        d.polygon([(sh[0] - sw / 2, sh[1]), (sh[0] + sw / 2, sh[1]), (hip[0] + hw * 0.85, hip[1] + 0.13 * Hs), (hip[0] - hw * 0.85, hip[1] + 0.13 * Hs)], fill=col)
+                    d.polygon([(sh[0] - sw / 2, sh[1] + 0.01 * Hs), (sh[0] + sw / 2, sh[1] + 0.01 * Hs), (hip[0] + hw * 0.6, hip[1]), (hip[0] - hw * 0.6, hip[1])], fill=col)
+                    d.ellipse([sh[0] - sw / 2, sh[1] - 0.02 * Hs, sh[0] + sw / 2, sh[1] + 0.06 * Hs], fill=col)
+                    seg(d, sh, (sh[0], sh[1] - 0.035 * Hs), 0.055 * Hs, 0.05 * Hs)
+                    hc = (sh[0], sh[1] - 0.035 * Hs - head * 0.5)
+                    d.ellipse([hc[0] - head / 2, hc[1] - head * 0.55, hc[0] + head / 2, hc[1] + head * 0.5], fill=col)
                 img = big.filter(ImageFilter.GaussianBlur(S * 0.28)).resize((TW, TH), Image.LANCZOS)
                 sheet.alpha_composite(img, (f * TW, (3 * v + view) * TH))
     sheet.save(CACHE / 'walk0.webp', 'WEBP', lossless=True)
