@@ -97,8 +97,8 @@ def build_assets():
     if not (CACHE / 'walk0.webp').exists():
         make_person()
     with Image.open(CACHE / 'walk0.webp') as pm:  # מחזור הליכה: WALK_FRAMES תמונות זו לצד זו
-        out['person'] = {'frames': WALK_FRAMES, 'rows': len(WALK_VARIANTS) * 3, 'variants': len(WALK_VARIANTS), 'a': WALK_A, 'kf': WALK_KF, 'foot': WALK_FOOT,
-                         'heights': [v[0] for v in WALK_VARIANTS], 'w': pm.width // WALK_FRAMES, 'h': pm.height // (len(WALK_VARIANTS) * 3), 'src': 'data:image/webp;base64,' + base64.b64encode((CACHE / 'walk0.webp').read_bytes()).decode()}
+        out['person'] = {'frames': WALK_FRAMES, 'idle': WALK_IDLE, 'idle': WALK_IDLE, 'rows': len(WALK_VARIANTS) * 3, 'variants': len(WALK_VARIANTS), 'a': WALK_A, 'kf': WALK_KF, 'foot': WALK_FOOT,
+                         'heights': [v[0] for v in WALK_VARIANTS], 'hipr': 0.99 * (0.255 + 0.235), 'w': pm.width // (WALK_FRAMES + WALK_IDLE), 'h': pm.height // (len(WALK_VARIANTS) * 3), 'src': 'data:image/webp;base64,' + base64.b64encode((CACHE / 'walk0.webp').read_bytes()).decode()}
     # רשת הליכה לחישוב מסלולים (נבנית מתמונת המפה)
     from walkgrid import build as build_walk, encode, CELL
     grid, (base_w, _) = build_walk(PROJECT / 'festival-map-2026-web-large.jpg')
@@ -165,8 +165,11 @@ WALK_FRAMES = 24
 WALK_A = 0.13        # חצי צעד ביחס לגובה: כף הרגל זזה מ-+A ל-−A (ביחס לירך) בזמן שהיא על הקרקע
 WALK_KF = 0.6        # קיצור פרספקטיבה במבט מלפנים/מאחור (צעד "קדימה" נראה קצר יותר על המסך)
 # 4 דמויות: (גובה בפיקסלים של המפה, עובי, תיק על הגב, מעיל ארוך כמו הדמויות שבציור)
-WALK_VARIANTS = [(58, 1.00, False, False), (63, 0.88, False, False), (54, 1.05, True, False), (59, 1.0, False, True)]
+WALK_VARIANTS = [(58, 1.00, False, False, None), (63, 0.88, False, False, None), (54, 1.05, True, False, None), (59, 1.0, False, True, None),
+                 (60, 0.95, False, False, 'hat'), (56, 0.92, False, False, 'pony')]
 WALK_FOOT = 0.9      # מיקום הקרקע (כפות הרגליים) בגובה התמונה – שם "נוגעים" בשביל
+WALK_IDLE = 4        # תמונות עמידה אחרי מחזור ההליכה: עומד, נושם, משען על שמאל, משען על ימין
+WALK_IDLE = 4        # תמונות עמידה אחרי מחזור ההליכה: עומד, נושם, משען על שמאל, משען על ימין
 
 
 def make_walk_sheet(sprite, ink):
@@ -207,8 +210,8 @@ def make_walk_sheet(sprite, ink):
         a = th - al * fwd  # הברך קדימה
         return (H[0] + Lt * math.cos(a), H[1] + Lt * math.sin(a))
 
-    sheet = Image.new('RGBA', (TW * WALK_FRAMES, TH * len(WALK_VARIANTS) * 3), (0, 0, 0, 0))
-    for v, (H, wf, bag, coat) in enumerate(WALK_VARIANTS):
+    sheet = Image.new('RGBA', (TW * (WALK_FRAMES + WALK_IDLE), TH * len(WALK_VARIANTS) * 3), (0, 0, 0, 0))
+    for v, (H, wf, bag, coat, extra) in enumerate(WALK_VARIANTS):
         Hs = H * S
         head, Lt, Ls, foot_l = 0.135 * Hs, 0.255 * Hs, 0.235 * Hs, 0.085 * Hs
         L = Lt + Ls
@@ -219,25 +222,37 @@ def make_walk_sheet(sprite, ink):
         gy = TH * WALK_FOOT * S                                  # הקרקע
         cx = TW * S / 2
         for view in (0, 1, 2):
-            for f in range(WALK_FRAMES):
-                ph = f / WALK_FRAMES
-                feet = [foot(wrap(ph + 0.5 * k), A, lift_h) for k in (0, 1)]
-                fx_st = feet[0][0] if wrap(ph) < 0.5 else feet[1][0]           # הרגל שעל הקרקע
+            for f in range(WALK_FRAMES + WALK_IDLE):
+                idle = f - WALK_FRAMES                                          # ≥0: תמונת עמידה
+                if idle < 0:
+                    ph = f / WALK_FRAMES
+                    feet = [foot(wrap(ph + 0.5 * k), A, lift_h) for k in (0, 1)]
+                    fx_st = feet[0][0] if wrap(ph) < 0.5 else feet[1][0]       # הרגל שעל הקרקע
+                    tl, sx = torso_len, 0.0
+                else:
+                    # עמידה: שתי הרגליים על הקרקע, צמודות; נשימה = הכתפיים עולות מעט; העברת משקל = הירכיים זזות הצידה
+                    ph = 0.25
+                    feet = [(-0.04 * A, 0.0), (0.04 * A, 0.0)]
+                    fx_st = 0.0
+                    tl = torso_len * (1.03 if idle == 1 else 1.0)
+                    sx = {2: -0.014, 3: 0.014}.get(idle, 0.0) * Hs
                 ag = wsn * 0.4                                                  # הקרסול מעט מעל הקרקע
                 hipH = math.sqrt((L * 0.992) ** 2 - fx_st ** 2) + ag           # גובה הירך: רגל העמידה כמעט ישרה
                 big = Image.new('RGBA', (TW * S, TH * S), (0, 0, 0, 0))
                 d = ImageDraw.Draw(big)
                 if view == 0:
                     lean = 5                                                # נטייה קדימה (לכיוון ההליכה)
-                    hip = (cx, gy - hipH)
+                    if idle >= 0:
+                        lean = 1.5                                          # בעמידה – כמעט זקוף
+                    hip = (cx + sx * 0.5, gy - hipH)
                     a_l = math.radians(180 - lean)                          # 180 = למעלה; פחות = מעט קדימה (ימינה, לכיוון ההליכה)
-                    sh = (hip[0] + math.sin(a_l) * torso_len, hip[1] + math.cos(a_l) * torso_len)
+                    sh = (hip[0] + math.sin(a_l) * tl, hip[1] + math.cos(a_l) * tl)
                     parts = []
                     for k in (0, 1):
                         fx, lf = feet[k]
                         ank = (cx + fx, gy - lf - ag)
                         kn = knee_ik(hip, ank, Lt, Ls, 1)
-                        ta = math.radians(22 * math.sin(math.pi * max(0.0, (wrap(ph + 0.5 * k) - 0.5) / 0.5)))  # בוהן מעט כלפי מטה באוויר
+                        ta = 0 if idle >= 0 else math.radians(22 * math.sin(math.pi * max(0.0, (wrap(ph + 0.5 * k) - 0.5) / 0.5)))  # בוהן מעט כלפי מטה באוויר
                         toe = (ank[0] + math.cos(ta) * foot_l, ank[1] + math.sin(ta) * foot_l)
                         armA = math.radians(-24 * fx / A)                          # יד הפוכה לרגל באותו צד
                         el = (sh[0] + math.sin(armA) * 0.17 * Hs, sh[1] + math.cos(armA) * 0.17 * Hs)
@@ -265,13 +280,20 @@ def make_walk_sheet(sprite, ink):
                     seg(d, sh, neck, 0.055 * Hs, 0.05 * Hs)
                     hc = (neck[0] + math.sin(a_l) * head * 0.5, neck[1] + math.cos(a_l) * head * 0.5)
                     d.ellipse([hc[0] - head / 2, hc[1] - head * 0.55, hc[0] + head / 2, hc[1] + head * 0.5], fill=col)
+                    if extra == 'hat':
+                        d.ellipse([hc[0] - head * 0.95, hc[1] - head * 0.42, hc[0] + head * 1.05, hc[1] - head * 0.22], fill=col)
+                        d.ellipse([hc[0] - head * 0.45, hc[1] - head * 0.78, hc[0] + head * 0.5, hc[1] - head * 0.25], fill=col)
+                    if extra == 'pony':
+                        swing = 0.04 * Hs * math.sin(2 * math.pi * ph * 2)  # מתנדנד קצת בהליכה
+                        d.ellipse([hc[0] - head * 1.0 - swing * 0.3, hc[1] - head * 0.15, hc[0] - head * 0.25, hc[1] + head * 0.55], fill=col)
+                        d.ellipse([hc[0] - head * 0.75, hc[1] - head * 0.45, hc[0] - head * 0.15, hc[1] + head * 0.05], fill=col)
                     draw_side(0); draw_arm(0)
                 else:
                     # מלפנים (1, הולך לכיוון המסך – למטה) / מאחור (2, הולך למעלה): "קדימה" = למטה/למעלה על המסך, מקוצר בפרספקטיבה
                     fsign = 1 if view == 1 else -1
-                    sway = 0.012 * Hs * math.sin(2 * math.pi * ph)
+                    sway = 0.012 * Hs * math.sin(2 * math.pi * ph) if idle < 0 else sx
                     hip = (cx + sway, gy - hipH)
-                    sh = (cx + sway * 0.6, hip[1] - torso_len)
+                    sh = (cx + sway * 0.6, hip[1] - tl)
                     for k in (0, 1):
                         fx, lf = feet[k]
                         side = -1 if k == 0 else 1
@@ -296,6 +318,13 @@ def make_walk_sheet(sprite, ink):
                     seg(d, sh, (sh[0], sh[1] - 0.035 * Hs), 0.055 * Hs, 0.05 * Hs)
                     hc = (sh[0], sh[1] - 0.035 * Hs - head * 0.5)
                     d.ellipse([hc[0] - head / 2, hc[1] - head * 0.55, hc[0] + head / 2, hc[1] + head * 0.5], fill=col)
+                    if extra == 'hat':
+                        d.ellipse([hc[0] - head * 1.0, hc[1] - head * 0.42, hc[0] + head * 1.0, hc[1] - head * 0.2], fill=col)
+                        d.ellipse([hc[0] - head * 0.48, hc[1] - head * 0.8, hc[0] + head * 0.48, hc[1] - head * 0.25], fill=col)
+                    if extra == 'pony' and view == 2:  # מאחור רואים את הקוקו יורד
+                        d.ellipse([hc[0] - head * 0.22, hc[1] + head * 0.2, hc[0] + head * 0.22, hc[1] + head * 0.95], fill=col)
+                    if extra == 'pony':
+                        d.ellipse([hc[0] - head * 0.58, hc[1] - head * 0.5, hc[0] + head * 0.58, hc[1] + head * 0.35], fill=col)
                 img = big.filter(ImageFilter.GaussianBlur(S * 0.28)).resize((TW, TH), Image.LANCZOS)
                 sheet.alpha_composite(img, (f * TW, (3 * v + view) * TH))
     sheet.save(CACHE / 'walk0.webp', 'WEBP', lossless=True)

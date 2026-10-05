@@ -414,7 +414,7 @@ function flyBirds(stage) {
 const WALK_SPOTS = ['wc-campw', 'wc-camps', 'wc-fam', 'wc-plus', 'cook-shabbat', 'cook-campw', 'cook-camps', 'cook-acc', 'cook-fam',
   'water-campw', 'water-camp', 'water-camps', 'water-plus', 'shower-w', 'shower-s'];
 const WALK_SPEED = 17;                 // פיקסלים במפה בשנייה – טיול נינוח
-const WALK_PACE = [1, 1, 0.82, 1.18];  // 0 ו-1 זוג (אותו קצב); 2 נינוח; 3 קצת זריז
+const WALK_PACE = [1, 1, 0.82, 1.18, 0.95, 1.08];  // 0 ו-1 זוג (אותו קצב); השאר – כל אחד בקצב שלו
 const WALK_PAIR = { 1: 0 };            // מטייל 1 הולך לצד מטייל 0
 const walkerAt = [];                   // תא ברשת ההליכה שבו כל מטייל נמצא (נשמר בין רינדורים)
 let walkRAF = 0, tentCellsCache = null;
@@ -422,8 +422,11 @@ const wrap1 = x => x - Math.floor(x);
 function walkersHtml() {
   const p = ASSETS.person;
   if (!p) return '';
-  return Array.from({ length: p.variants || 1 }, () =>
-    `<div class="m-walker" style="width:${p.w}px;height:${p.h}px;opacity:0;--foot:${p.foot}"><i style="background-image:url(${p.src});background-size:${p.frames * 100}% ${p.rows * 100}%"></i></div>`).join('');
+  // שתי שכבות מאותה תמונה: עליונה (ראש וגוף) ותחתונה (רגליים) שמוטה לפי זווית השביל
+  return Array.from({ length: p.variants || 1 }, (_, i) => {
+    const hip = (p.foot - p.hipr * p.heights[i] / p.h) * 100, bg = `background-image:url(${p.src});background-size:${(p.frames + (p.idle || 0)) * 100}% ${p.rows * 100}%`;
+    return `<div class="m-walker" style="width:${p.w}px;height:${p.h}px;opacity:0;--foot:${p.foot};--hip:${hip.toFixed(2)}%"><i class="up" style="${bg}"></i><i class="lo" style="${bg}"></i></div>`;
+  }).join('');
 }
 /* "אוהלים": תאי שביל בקמפינג שצמודים לגוש ירוק כהה (נכנסים אליו = נכנסים לאוהל) */
 function tentCells() {
@@ -444,14 +447,36 @@ function walkSpot(not) {
   }
   return not;
 }
+/* מסיר נקודות שיוצרות קטע קצר מאוד (פחות מ-14 פיקסלים) – כל עוד הקו הישר שנוצר נשאר כולו על השביל */
+function cleanRoute(pts) {
+  const onPath = (a, b) => {
+    const n = Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 2);
+    for (let t = 0; t <= n; t++) { const c = cellOf({ x: a.x + (b.x - a.x) * t / n, y: a.y + (b.y - a.y) * t / n }); if (!WALK.main[c[1] * WALK.GW + c[0]]) return false; }
+    return true;
+  };
+  const out = pts.slice();
+  for (let changed = true; changed && out.length > 2;) {
+    changed = false;
+    for (let k = 1; k < out.length - 1; k++) {
+      const a = out[k - 1], b = out[k], c = out[k + 1];
+      if ((Math.hypot(b.x - a.x, b.y - a.y) < 14 || Math.hypot(c.x - b.x, c.y - b.y) < 14) && onPath(a, c)) { out.splice(k, 1); changed = true; break; }
+    }
+  }
+  // גם בקצוות: קטע ראשון/אחרון קצר מאוד – מוותרים עליו (שם הדמות ממילא נכנסת/יוצאת בשקיפות)
+  if (out.length > 2 && Math.hypot(out[1].x - out[0].x, out[1].y - out[0].y) < 10) out.shift();
+  if (out.length > 2 && Math.hypot(out[out.length - 1].x - out[out.length - 2].x, out[out.length - 1].y - out[out.length - 2].y) < 10) out.pop();
+  return out;
+}
+
 function walkPeople(stage) {
   cancelAnimationFrame(walkRAF);
   const P = ASSETS.person;
   if (matchMedia('(prefers-reduced-motion: reduce)').matches || !P) return;
   const W = [...stage.querySelectorAll('.m-walker')].map((el, i) => ({
-    el, i, inner: el.querySelector('i'), a: P.a * P.heights[i], speed: WALK_SPEED * (WALK_PACE[i] || 1),
+    el, i, up: el.querySelector('.up'), lo: el.querySelector('.lo'), a: P.a * P.heights[i], hipPx: P.hipr * P.heights[i], kx: 0, ky: 0,
+    speed: WALK_SPEED * (WALK_PACE[i] || 1),
     state: 'idle', wait: performance.now() + 600 + i * 2500, at: walkerAt[i] >= 0 ? walkerAt[i] : walkSpot(-1),
-    phase: Math.random(), s: 0, view: 0, dir: 1,
+    phase: Math.random(), s: 0, view: 0, dir: 1, pose: -1,
   }));
   W.forEach(w => { if (WALK_PAIR[w.i] !== undefined) w.lead = W[WALK_PAIR[w.i]]; });
   const rowY = (i, v) => `${((3 * i + v) / (P.rows - 1) * 100).toFixed(3)}%`;
@@ -459,13 +484,15 @@ function walkPeople(stage) {
   const start = (w, t) => {
     const to = walkSpot(w.at), path = astar(w.at, to);
     if (!path || path.length < 4) { w.wait = t + 1000; w.at = to; return; }
-    const pts = simplify(path), acc = [0];
+    const pts = cleanRoute(simplify(path)), acc = [0];
     for (let k = 1; k < pts.length; k++) acc.push(acc[k - 1] + Math.hypot(pts[k].x - pts[k - 1].x, pts[k].y - pts[k - 1].y));
     const len = acc[acc.length - 1];
     // 0–2 עצירות קצרות בדרך (בנקודות פנייה), לא קרוב לקצוות
     const stops = acc.slice(1, -1).filter(d => d > fade(w) * 1.5 && d < len - fade(w) * 1.5)
       .filter(() => Math.random() < 0.35).slice(0, 2).map(d => ({ d, dur: 2000 + Math.random() * 3500 }));
-    Object.assign(w, { pts, acc, len, s: 0, to, stops, state: 'walk' });
+    Object.assign(w, { pts, acc, len, s: 0, to, stops, state: 'walk', pend: 0 });
+    const u0 = { x: pts[1].x - pts[0].x, y: pts[1].y - pts[0].y };
+    step(w, 0, u0.x / (Math.hypot(u0.x, u0.y) || 1), u0.y / (Math.hypot(u0.x, u0.y) || 1));
   };
   const posAt = (w, s) => {
     let k = 1;
@@ -475,17 +502,39 @@ function walkPeople(stage) {
   };
   /* צעד לפי מרחק: במבט מהצד כף הרגל זזה אופקית (4A לכל מחזור), במבט מלפנים/מאחור אנכית ומקוצרת (×KF) */
   const step = (w, ds, ux, uy) => {
-    const side = Math.abs(uy) <= Math.abs(ux) * 1.2;
+    const side = Math.abs(uy) <= Math.abs(ux) * 2;  // עד ~63° מהאופק – מהצד (הרגליים מוטות לפי השביל)
+    // הטיית הרגליים: מהצד – צעד קדימה יורד/עולה לאורך השביל; מלפנים/מאחור – זז הצידה לאורך השביל
+    const tY = side ? uy / Math.max(0.2, Math.abs(ux)) : 0, tX = side ? 0 : ux / (Math.abs(uy) < 0.2 ? Math.sign(uy || 1) * 0.2 : uy);
+    const sm = Math.min(1, ds / 6); // מעבר הדרגתי בפניות – בלי קפיצות
+    w.ky += (tY - w.ky) * sm; w.kx += (tX - w.kx) * sm;
     const nv = side ? 0 : uy > 0 ? 1 : 2;
-    if (nv !== w.view) w.view = nv;
-    if (side && Math.abs(ux) > 0.15) w.dir = ux > 0 ? 1 : -1;
+    const nd = side && Math.abs(ux) > 0.15 ? (ux > 0 ? 1 : -1) : w.dir;
+    if (nv === w.view && nd === w.dir) w.pend = 0;
+    else if ((w.pend = (w.pend || 0) + ds) >= 9 || ds === 0) { w.view = nv; w.dir = nd; w.pend = 0; } // כיוון חדש שנמשך ≥9 פיקסלים
     w.phase += side ? ds * Math.abs(ux) / (4 * w.a) : ds * Math.abs(uy) / (4 * w.a * P.kf);
   };
   const draw = (w, x, y, op) => {
-    const f = Math.floor(wrap1(w.phase) * P.frames) % P.frames;
-    w.inner.style.backgroundPosition = `${-f * P.w}px ${rowY(w.i, w.view)}`;
-    w.el.style.transform = `translate(${(x - P.w / 2).toFixed(1)}px, ${(y - P.foot * P.h).toFixed(1)}px) scaleX(${w.view === 0 ? w.dir : 1})`;
+    const f = w.pose >= 0 ? P.frames + w.pose : Math.floor(wrap1(w.phase) * P.frames) % P.frames; // pose = תמונת עמידה
+    const bp = `${-f * P.w}px ${rowY(w.i, w.view)}`;
+    w.up.style.backgroundPosition = bp; w.lo.style.backgroundPosition = bp;
+    const flip = `scaleX(${w.view === 0 ? w.dir : 1})`;
+    const standing = w.pose >= 0;
+    const ky = w.view === 0 && !standing ? w.ky : 0, kx = w.view !== 0 && !standing ? w.kx : 0;
+    w.up.style.transform = flip;
+    w.lo.style.transform = `${flip} skewY(${Math.atan(ky).toFixed(3)}rad) skewX(${Math.atan(kx).toFixed(3)}rad)`;
+    // הטיה הצידה (מלפנים/מאחור) מזיזה את כפות הרגליים – מזיזים את הדמות כך שהן יהיו על השביל
+    w.el.style.transform = `translate(${(x - P.w / 2 - kx * w.hipPx).toFixed(1)}px, ${(y - P.foot * P.h).toFixed(1)}px)`;
     w.el.style.opacity = op.toFixed(2);
+  };
+  /* עמידה חיה: נושם, מעביר משקל, ולפעמים מסתובב להסתכל (מבט מלפנים) */
+  const idlePose = (w, t) => {
+    if (t < w.nextIdle) return;
+    const r = Math.random();
+    if (w.pose === 1 || w.pose === 2 || w.pose === 3) w.pose = 0;
+    else w.pose = r < 0.45 ? 1 : r < 0.7 ? 2 : r < 0.95 ? 3 : 0;
+    if (w.view === 0 && Math.random() < 0.18 && t - w.holdStart > 900) w.view = 1;           // מסתובב להסתכל
+    else if (w.view !== w.walkView && Math.random() < 0.5) w.view = w.walkView;             // וחוזר
+    w.nextIdle = t + (w.pose === 1 ? 900 : 600 + Math.random() * 900);
   };
   let last = performance.now();
   const tick = t => {
@@ -494,15 +543,23 @@ function walkPeople(stage) {
     for (const w of W) {
       if (w.lead) continue;
       if (w.state === 'idle' && t >= w.wait) start(w, t);
-      if (w.state === 'hold' && t >= w.holdEnd) w.state = 'walk';
-      if (w.state === 'walk') {
-        let ns = w.s + w.speed * dt;
-        const st = w.stops.find(o => o.d > w.s && o.d <= ns);
-        if (st) { ns = st.d; w.state = 'hold'; w.holdEnd = t + st.dur; w.stops = w.stops.filter(o => o !== st); }
-        const ds = ns - w.s, pa = posAt(w, ns);
+      if (w.state === 'hold') {
+        idlePose(w, t);
+        if (t >= w.holdEnd) { w.state = 'walk'; w.pose = -1; w.view = w.walkView; w.phase = Math.floor(w.phase) + 0.25; } // יוצא בהרמת רגל
+      }
+      if (w.state === 'walk' || w.state === 'settle') {
+        // בדרך לעצירה – מאטים בהדרגה ומשלימים את הצעד
+        const sp = w.state === 'settle' ? w.speed * 0.55 : w.speed;
+        let ns = Math.min(w.len, w.s + sp * dt);
+        const st = w.state === 'walk' && w.stops.find(o => o.d > w.s && o.d <= ns);
+        if (st) { w.state = 'settle'; w.holdDur = st.dur; w.stops = w.stops.filter(o => o !== st); }
+        const ds = ns - w.s, pa = posAt(w, ns), before = w.phase;
         w.s = ns;
         step(w, ds, pa.ux, pa.uy);
-        if (w.state === 'hold') w.phase = Math.round(w.phase * 2 - 0.5) / 2 + 0.25; // עומד: רגליים כמעט צמודות
+        // הרגל שבאוויר מגיעה מתחת לגוף (שלב 0.25 / 0.75 במחזור) → מניחים אותה: עומדים
+        if (w.state === 'settle' && Math.floor(before * 2 - 0.5) !== Math.floor(w.phase * 2 - 0.5)) {
+          w.state = 'hold'; w.holdStart = t; w.holdEnd = t + w.holdDur; w.pose = 0; w.walkView = w.view; w.nextIdle = t + 700;
+        }
         if (w.s >= w.len) { w.state = 'inside'; w.at = w.to; walkerAt[w.i] = w.to; w.wait = t + 8000 + Math.random() * 22000; }
         w.pos = pa;
       }
@@ -518,14 +575,20 @@ function walkPeople(stage) {
         const ds = w.lastS === undefined ? 0 : Math.max(0, L.s - w.lastS);
         w.lastS = L.s;
         step(w, ds, pa.ux, pa.uy);
-        if (L.state === 'hold') w.phase = Math.round(w.phase * 2 - 0.5) / 2 + 0.25;
+        // בן הזוג עוצר ויוצא יחד עם המוביל (משען על הצד ההפוך)
+        w.pose = L.state === 'hold' ? (L.pose === 2 ? 3 : L.pose === 3 ? 2 : L.pose) : -1;
         // צעד לצד – ובשביל צר מתקרבים, כדי לא לדרוך על הירוק הכהה
-        let ox = 0, oy = 0;
+        const sm = Math.min(1, dt * 2.2);
+        w.sux = w.sux === undefined ? pa.ux : w.sux + (pa.ux - w.sux) * sm;   // כיוון מוחלק
+        w.suy = w.suy === undefined ? pa.uy : w.suy + (pa.uy - w.suy) * sm;
+        const nl = Math.hypot(w.sux, w.suy) || 1, px = -w.suy / nl, py = w.sux / nl;
+        let want = 0;
         for (const d of [9, 7, 5, 3]) {
-          const c = cellOf({ x: pa.x - pa.uy * d, y: pa.y + pa.ux * d });
-          if (WALK.main[c[1] * WALK.GW + c[0]]) { ox = -pa.uy * d; oy = pa.ux * d; break; }
+          const c = cellOf({ x: pa.x + px * d, y: pa.y + py * d });
+          if (WALK.main[c[1] * WALK.GW + c[0]]) { want = d; break; }
         }
-        draw(w, pa.x + ox, pa.y + oy, op);
+        w.sd = w.sd === undefined ? want : w.sd + (want - w.sd) * Math.min(1, dt * 1.5); // מתקרב/מתרחק לאט
+        draw(w, pa.x + px * w.sd, pa.y + py * w.sd, op);
       } else draw(w, L.pos.x, L.pos.y, op);
     }
     walkRAF = requestAnimationFrame(tick);
