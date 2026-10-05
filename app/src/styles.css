@@ -601,6 +601,7 @@ details.fold[open] .fold-ch svg { transform: rotate(-90deg); }
 .m-fplayer i { position: absolute; inset: 0; background-repeat: no-repeat; }
 .m-frisbee { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; z-index: 2; }
 .m-frisbee svg { display: block; overflow: visible; }
+.m-fshadow { position: absolute; left: 0; top: 0; width: 10px; height: 4px; border-radius: 50%; background: #1d1206; opacity: 0; pointer-events: none; z-index: 1; filter: blur(.6px); }
 /* הבלון של הנודד: נקודת הקשירה (ביד) היא ראש הסיבוב */
 .m-balloon { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; }
 .m-balloon svg { position: absolute; left: -8px; top: -24px; overflow: visible; }

@@ -543,7 +543,7 @@ def make_smoker(ink):
 
 
 FRISBEE_H = 57
-FRISBEE_POSES = 6   # 0 עומד · 1 הכנה (היד לאחור) · 2 שחרור (היד קדימה) · 3 המשך תנועה · 4 הושטה לתפיסה · 5 תפס (היד ליד החזה)
+FRISBEE_POSES = 48  # 0–28 זריקה (חזה → הכנה 12 → שחרור 20 → המשך 28) · 29–44 תפיסה (הושטה 36 → ספיגה אל החזה 44) · 45–47 חזרה לעמידה
 
 
 def make_frisbee(ink):
@@ -568,7 +568,14 @@ def make_frisbee(ink):
             d.ellipse([q[0] - r, q[1] - r, q[0] + r, q[1] + r], fill=col)
     at = lambda o, deg, L: (o[0] + math.sin(math.radians(deg)) * L, o[1] + math.cos(math.radians(deg)) * L)
     # (נטייה, כיפוף ברכיים, זווית הזרוע העליונה, זווית האמה) – מעלות מהאנך כלפי מטה, חיובי = קדימה
-    poses = [(2, 0.0, 6, 20), (-6, 0.4, -80, -105), (12, 0.55, 95, 90), (16, 0.45, 60, 40), (6, 0.2, 120, 150), (3, 0.15, 40, 150)]
+    K = {'idle': (2, 0.0, 6, 20), 'chest': (3, 0.15, 40, 150), 'wind': (-6, 0.4, -80, -105), 'release': (12, 0.55, 95, 90),
+         'follow': (16, 0.45, 60, 40), 'reach': (6, 0.25, 82, 70)}
+    lerpP = lambda a, b, t: tuple(x + (y - x) * t for x, y in zip(a, b))
+    ease = lambda t: (1 - math.cos(math.pi * t)) / 2
+    seq = lambda a, b, n: [lerpP(K[a], K[b], ease((k + 1) / n)) for k in range(n)]
+    poses = ([K['chest']] + seq('chest', 'wind', 12) + seq('wind', 'release', 8) + seq('release', 'follow', 8)   # 0–28
+             + seq('idle', 'reach', 8) + seq('reach', 'chest', 8)                                                     # 29–44
+             + seq('follow', 'idle', 3))                                                                              # 45–47
     sheet = Image.new('RGBA', (TW * FRISBEE_POSES, TH), (0, 0, 0, 0))
     hands = []
     for f, (lean, kb, ua, fa) in enumerate(poses):
