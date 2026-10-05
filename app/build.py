@@ -98,7 +98,14 @@ def build_assets():
         make_person()
     with Image.open(CACHE / 'walk0.webp') as pm:  # מחזור הליכה: WALK_FRAMES תמונות זו לצד זו
         out['person'] = {'frames': WALK_FRAMES, 'idle': WALK_IDLE, 'idle': WALK_IDLE, 'rows': len(WALK_VARIANTS) * 3, 'variants': len(WALK_VARIANTS), 'a': WALK_A, 'kf': WALK_KF, 'foot': WALK_FOOT,
-                         'heights': [v[0] for v in WALK_VARIANTS], 'hipr': 0.99 * (0.255 + 0.235), 'w': pm.width // (WALK_FRAMES + WALK_IDLE), 'h': pm.height // (len(WALK_VARIANTS) * 3), 'src': 'data:image/webp;base64,' + base64.b64encode((CACHE / 'walk0.webp').read_bytes()).decode()}
+                         'heights': [v[0] for v in WALK_VARIANTS], 'roam': [i for i, v in enumerate(WALK_VARIANTS) if v[4] == 'balloon'], 'hipr': 0.99 * (0.255 + 0.235), 'w': pm.width // (WALK_FRAMES + WALK_IDLE), 'h': pm.height // (len(WALK_VARIANTS) * 3), 'src': 'data:image/webp;base64,' + base64.b64encode((CACHE / 'walk0.webp').read_bytes()).decode()}
+    # המעשן – יושב על כיסא ליד אוהל בדרום הקמפינג
+    if not (CACHE / 'smoker.json').exists():
+        with Image.open(CACHE / 'walk0.webp') as wk:  # אותו צבע דיו כמו המטיילים
+            px = [c for c in wk.convert('RGBA').getdata() if c[3] > 250]
+        ink = tuple(sorted(px)[len(px) // 2][:3])
+        (CACHE / 'smoker.json').write_text(json.dumps(make_smoker(ink)))
+    out['smoker'] = dict(json.loads((CACHE / 'smoker.json').read_text()), src='data:image/webp;base64,' + base64.b64encode((CACHE / 'smoker0.webp').read_bytes()).decode())
     # רשת הליכה לחישוב מסלולים (נבנית מתמונת המפה)
     from walkgrid import build as build_walk, encode, CELL
     grid, (base_w, _) = build_walk(PROJECT / 'festival-map-2026-web-large.jpg')
@@ -166,7 +173,9 @@ WALK_A = 0.13        # חצי צעד ביחס לגובה: כף הרגל זזה �
 WALK_KF = 0.6        # קיצור פרספקטיבה במבט מלפנים/מאחור (צעד "קדימה" נראה קצר יותר על המסך)
 # 4 דמויות: (גובה בפיקסלים של המפה, עובי, תיק על הגב, מעיל ארוך כמו הדמויות שבציור)
 WALK_VARIANTS = [(58, 1.00, False, False, None), (63, 0.88, False, False, None), (54, 1.05, True, False, None), (59, 1.0, False, True, None),
-                 (60, 0.95, False, False, 'hat'), (56, 0.92, False, False, 'pony'), (62, 1.08, False, False, 'cap'), (52, 0.95, True, False, 'hat')]
+                 (60, 0.95, False, False, 'hat'), (56, 0.92, False, False, 'pony'), (62, 1.08, False, False, 'cap'), (52, 0.95, True, False, 'hat'),
+                 (60, 0.98, False, False, 'balloon')]   # האחרונה – הנודד עם הבלון: לא נכנס לשום מקום
+BALLOON = (244, 111, 106)
 WALK_FOOT = 0.9      # מיקום הקרקע (כפות הרגליים) בגובה התמונה – שם "נוגעים" בשביל
 WALK_IDLE = 4        # תמונות עמידה אחרי מחזור ההליכה: עומד, נושם, משען על שמאל, משען על ימין
 WALK_IDLE = 4        # תמונות עמידה אחרי מחזור ההליכה: עומד, נושם, משען על שמאל, משען על ימין
@@ -291,6 +300,12 @@ def make_walk_sheet(sprite, ink):
                         d.ellipse([hc[0] - head * 1.0 - swing * 0.3, hc[1] - head * 0.15, hc[0] - head * 0.25, hc[1] + head * 0.55], fill=col)
                         d.ellipse([hc[0] - head * 0.75, hc[1] - head * 0.45, hc[0] - head * 0.15, hc[1] + head * 0.05], fill=col)
                     draw_side(0); draw_arm(0)
+                    if extra == 'balloon':
+                        hand0 = parts[0][4]
+                        bc = (hc[0] + 0.21 * Hs + 0.25 * (hand0[0] - sh[0]) * 0.3, hc[1] - 0.02 * Hs)
+                        d.line([hand0, (bc[0], bc[1] + 0.085 * Hs)], fill=col, width=max(1, round(0.012 * Hs)))
+                        d.ellipse([bc[0] - 0.075 * Hs, bc[1] - 0.09 * Hs, bc[0] + 0.075 * Hs, bc[1] + 0.09 * Hs], fill=BALLOON + (255,))
+                        d.polygon([(bc[0] - 0.015 * Hs, bc[1] + 0.098 * Hs), (bc[0] + 0.015 * Hs, bc[1] + 0.098 * Hs), (bc[0], bc[1] + 0.082 * Hs)], fill=BALLOON + (255,))
                 else:
                     # מלפנים (1, הולך לכיוון המסך – למטה) / מאחור (2, הולך למעלה): "קדימה" = למטה/למעלה על המסך, מקוצר בפרספקטיבה
                     fsign = 1 if view == 1 else -1
@@ -314,6 +329,8 @@ def make_walk_sheet(sprite, ink):
                         seg(d, s0, el, wua * 0.92, wfa)
                         seg(d, el, hand, wfa, wfa * 0.8)
                         d.ellipse([hand[0] - wfa * 0.62, hand[1] - wfa * 0.5, hand[0] + wfa * 0.62, hand[1] + wfa * 0.7], fill=col)  # כף יד
+                        if extra == 'balloon' and side == 1:
+                            bhand = hand
                     if coat:
                         d.polygon([(sh[0] - sw / 2, sh[1]), (sh[0] + sw / 2, sh[1]), (hip[0] + hw * 0.85, hip[1] + 0.13 * Hs), (hip[0] - hw * 0.85, hip[1] + 0.13 * Hs)], fill=col)
                     d.polygon([(sh[0] - sw / 2, sh[1] + 0.01 * Hs), (sh[0] + sw / 2, sh[1] + 0.01 * Hs), (hip[0] + hw * 0.6, hip[1]), (hip[0] - hw * 0.6, hip[1])], fill=col)
@@ -328,6 +345,10 @@ def make_walk_sheet(sprite, ink):
                         d.ellipse([hc[0] - head * 0.58, hc[1] - head * 0.72, hc[0] + head * 0.58, hc[1] - head * 0.02], fill=col)
                         if view == 1:
                             d.ellipse([hc[0] - head * 0.5, hc[1] - head * 0.2, hc[0] + head * 0.5, hc[1] + head * 0.05], fill=col)  # מצחייה מלפנים
+                    if extra == 'balloon':
+                        bc = (hc[0] + 0.24 * Hs, hc[1] - 0.02 * Hs)
+                        d.line([bhand, (bc[0], bc[1] + 0.085 * Hs)], fill=col, width=max(1, round(0.012 * Hs)))
+                        d.ellipse([bc[0] - 0.075 * Hs, bc[1] - 0.09 * Hs, bc[0] + 0.075 * Hs, bc[1] + 0.09 * Hs], fill=BALLOON + (255,))
                     if extra == 'pony' and view == 2:  # מאחור רואים את הקוקו יורד
                         d.ellipse([hc[0] - head * 0.22, hc[1] + head * 0.2, hc[0] + head * 0.22, hc[1] + head * 0.95], fill=col)
                     if extra == 'pony':
@@ -335,6 +356,81 @@ def make_walk_sheet(sprite, ink):
                 img = big.filter(ImageFilter.GaussianBlur(S * 0.28)).resize((TW, TH), Image.LANCZOS)
                 sheet.alpha_composite(img, (f * TW, (3 * v + view) * TH))
     sheet.save(CACHE / 'walk0.webp', 'WEBP', lossless=True)
+
+
+SMOKER_H = 58          # גובה הדמות (עומדת) – בפיקסלים של המפה
+SMOKER_FRAMES = 9      # היד: 0 = על הברך, 8 = הסיגריה בפה
+SMOKER_AT = (35.78, 83.3)  # בתוך גוש ירוק כהה בדרום הקמפינג, ליד אוהל (אחוזים במפה) – נקודת הקרקע מתחת לכיסא
+
+
+def make_smoker(ink):
+    """דמות יושבת על כיסא קמפינג ומעשנת (מבט מהצד, פונה ימינה). 9 תמונות של תנועת היד מהברך אל הפה.
+    מחזיר את מיקומי קצה הסיגריה בכל תמונה ואת מיקום הפה – לעשן שעולה (ב-JS)."""
+    import math
+    from PIL import ImageDraw, ImageFilter
+    S, H = 8, SMOKER_H
+    Hs = H * S
+    TW, TH = round(H * 0.62), round(H * 0.82)
+    gy = TH * 0.95 * S
+    cx = TW * 0.42 * S
+    col = ink + (255,)
+    chair = (40, 58, 64, 255)
+    cig, ember = (238, 232, 214, 255), (255, 118, 40, 255)
+
+    def seg(d, a, b, wa, wb, c=col):
+        dx, dy = b[0] - a[0], b[1] - a[1]
+        n = math.hypot(dx, dy) or 1
+        nx, ny = -dy / n, dx / n
+        d.polygon([(a[0] + nx * wa / 2, a[1] + ny * wa / 2), (b[0] + nx * wb / 2, b[1] + ny * wb / 2),
+                   (b[0] - nx * wb / 2, b[1] - ny * wb / 2), (a[0] - nx * wa / 2, a[1] - ny * wa / 2)], fill=c)
+        for q, r in ((a, wa / 2), (b, wb / 2)):
+            d.ellipse([q[0] - r, q[1] - r, q[0] + r, q[1] + r], fill=c)
+
+    lerp = lambda a, b, t: (a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t)
+    sheet = Image.new('RGBA', (TW * SMOKER_FRAMES, TH), (0, 0, 0, 0))
+    tips = []
+    for f in range(SMOKER_FRAMES):
+        a = f / (SMOKER_FRAMES - 1)
+        e = (1 - math.cos(math.pi * a)) / 2                       # תנועה רכה
+        big = Image.new('RGBA', (TW * S, TH * S), (0, 0, 0, 0))
+        d = ImageDraw.Draw(big)
+        seat_y = gy - 0.25 * Hs
+        # כיסא קמפינג: רגליים מוצלבות, מושב, משענת
+        seg(d, (cx - 0.12 * Hs, gy), (cx + 0.1 * Hs, seat_y), 0.018 * Hs, 0.018 * Hs, chair)
+        seg(d, (cx + 0.1 * Hs, gy), (cx - 0.12 * Hs, seat_y), 0.018 * Hs, 0.018 * Hs, chair)
+        seg(d, (cx - 0.14 * Hs, seat_y), (cx + 0.12 * Hs, seat_y), 0.03 * Hs, 0.03 * Hs, chair)
+        seg(d, (cx - 0.14 * Hs, seat_y), (cx - 0.19 * Hs, seat_y - 0.26 * Hs), 0.028 * Hs, 0.028 * Hs, chair)
+        # הדמות
+        hip = (cx - 0.07 * Hs, seat_y - 0.03 * Hs)
+        knee = (cx + 0.16 * Hs, seat_y - 0.045 * Hs)
+        ank = (cx + 0.19 * Hs, gy - 0.02 * Hs)
+        lean = math.radians(180 + 8 - 3 * e)                      # נשען מעט אחורה; מתקרב קצת קדימה כשמעשן
+        sh = (hip[0] + math.sin(lean) * 0.3 * Hs, hip[1] + math.cos(lean) * 0.3 * Hs)
+        hc = (sh[0] + math.sin(lean) * 0.1 * Hs + 0.01 * Hs, sh[1] + math.cos(lean) * 0.1 * Hs)
+        seg(d, sh, hip, 0.15 * Hs, 0.13 * Hs)                     # גוף
+        d.ellipse([sh[0] - 0.075 * Hs, sh[1] - 0.025 * Hs, sh[0] + 0.075 * Hs, sh[1] + 0.06 * Hs], fill=col)
+        seg(d, hip, knee, 0.08 * Hs, 0.06 * Hs)                   # ירך
+        seg(d, knee, ank, 0.06 * Hs, 0.045 * Hs)                  # שוק
+        seg(d, ank, (ank[0] + 0.08 * Hs, ank[1] + 0.005 * Hs), 0.045 * Hs, 0.03 * Hs)
+        seg(d, sh, (sh[0] + 0.01 * Hs, sh[1] - 0.035 * Hs), 0.055 * Hs, 0.05 * Hs)  # צוואר
+        d.ellipse([hc[0] - 0.068 * Hs, hc[1] - 0.075 * Hs, hc[0] + 0.068 * Hs, hc[1] + 0.068 * Hs], fill=col)
+        mouth = (hc[0] + 0.07 * Hs, hc[1] + 0.03 * Hs)
+        # יד המעשנת: מהברך אל הפה
+        el = lerp((sh[0] + 0.07 * Hs, sh[1] + 0.17 * Hs), (sh[0] + 0.13 * Hs, sh[1] + 0.1 * Hs), e)
+        hand = lerp((knee[0] - 0.03 * Hs, knee[1] - 0.04 * Hs), (mouth[0] + 0.005 * Hs, mouth[1] + 0.01 * Hs), e)
+        seg(d, sh, el, 0.05 * Hs, 0.04 * Hs)
+        seg(d, el, hand, 0.04 * Hs, 0.035 * Hs)
+        # סיגריה (קדימה מהיד) וגחלת בקצה
+        ang = math.radians(-8 - 25 * e)
+        tip = (hand[0] + math.cos(ang) * 0.065 * Hs, hand[1] + math.sin(ang) * 0.065 * Hs)
+        seg(d, hand, tip, 0.016 * Hs, 0.016 * Hs, cig)
+        d.ellipse([tip[0] - 0.012 * Hs, tip[1] - 0.012 * Hs, tip[0] + 0.012 * Hs, tip[1] + 0.012 * Hs], fill=ember)
+        img = big.filter(ImageFilter.GaussianBlur(S * 0.25)).resize((TW, TH), Image.LANCZOS)
+        sheet.alpha_composite(img, (f * TW, 0))
+        tips.append([round(tip[0] / S, 1), round(tip[1] / S, 1)])
+    sheet.save(CACHE / 'smoker0.webp', 'WEBP', lossless=True)
+    return {'w': TW, 'h': TH, 'frames': SMOKER_FRAMES, 'tips': tips, 'mouth': [round(mouth[0] / S, 1), round(mouth[1] / S, 1)],
+            'foot': 0.95, 'cx': 0.42, 'at': SMOKER_AT}
 
 
 def icon_image(s, full_bleed=False):

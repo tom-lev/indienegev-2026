@@ -414,7 +414,7 @@ function flyBirds(stage) {
 const WALK_SPOTS = ['wc-campw', 'wc-camps', 'wc-fam', 'wc-plus', 'wc-adama', 'wc-west', 'cook-shabbat', 'cook-campw', 'cook-camps', 'cook-acc', 'cook-fam',
   'water-campw', 'water-camp', 'water-camps', 'water-plus', 'water-adama', 'water-nw', 'water-gw', 'shower-w', 'shower-s'];
 const WALK_SPEED = 17;                 // פיקסלים במפה בשנייה – טיול נינוח
-const WALK_PACE = [1, 1, 0.82, 1.18, 0.95, 1.08, 0.9, 1.12];  // 0 ו-1 זוג (אותו קצב); השאר – כל אחד בקצב שלו
+const WALK_PACE = [1, 1, 0.82, 1.18, 0.95, 1.08, 0.9, 1.12, 1.05];  // 0 ו-1 זוג (אותו קצב); השאר – כל אחד בקצב שלו
 const WALK_PAIR = { 1: 0 };            // מטייל 1 הולך לצד מטייל 0
 const walkerAt = [];                   // תא ברשת ההליכה שבו כל מטייל נמצא (נשמר בין רינדורים)
 let walkRAF = 0, tentCellsCache = null;
@@ -478,21 +478,98 @@ function cleanRoute(pts) {
   return out;
 }
 
+/* ───────── המעשן ─────────
+   יושב על כיסא ליד האוהל שלו ומעשן בלי הפסקה: מנוחה → היד עולה לפה → שאיפה (הגחלת מתלהטת) → היד יורדת → נשיפה.
+   עשן דק עולה כל הזמן מקצה הסיגריה, ומשב גדול יותר יוצא מהפה אחרי כל שאיפה. */
+function smokerHtml() {
+  const m = ASSETS.smoker;
+  if (!m) return '';
+  const x = m.at[0] / 100 * MAP_W, y = m.at[1] / 100 * MAP_H;
+  return `<div class="m-smoker" style="left:${(x - m.cx * m.w).toFixed(0)}px;top:${(y - m.foot * m.h).toFixed(0)}px;width:${m.w}px;height:${m.h}px">
+    <i style="background-image:url(${m.src});background-size:${m.frames * 100}% 100%"></i></div><div class="m-smoke-layer"></div>`;
+}
+let smokeRAF = 0;
+function smokePeople(stage) {
+  cancelAnimationFrame(smokeRAF);
+  const m = ASSETS.smoker, el = stage.querySelector('.m-smoker'), layer = stage.querySelector('.m-smoke-layer');
+  if (!m || !el) return;
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const inner = el.querySelector('i'), ox = parseFloat(el.style.left), oy = parseFloat(el.style.top);
+  const puff = (x, y, big) => {
+    if (reduce || layer.childElementCount > 40) return;
+    const p = document.createElement('i');
+    p.className = 'm-smoke';
+    const sz = big ? 7 + Math.random() * 3 : 3 + Math.random() * 2;
+    p.style.cssText = `left:${(x - sz / 2).toFixed(1)}px;top:${(y - sz / 2).toFixed(1)}px;width:${sz.toFixed(1)}px;height:${sz.toFixed(1)}px`;
+    layer.append(p);
+    const dx = (Math.random() - 0.3) * (big ? 22 : 12), up = 30 + Math.random() * 22, dur = (big ? 3200 : 2600) + Math.random() * 900;
+    p.animate([
+      { transform: 'translate(0,0) scale(.5)', opacity: big ? 0.55 : 0.45 },
+      { transform: `translate(${(dx * 0.5).toFixed(1)}px, ${(-up * 0.45).toFixed(1)}px) scale(1.2)`, opacity: big ? 0.42 : 0.32, offset: 0.4 },
+      { transform: `translate(${dx.toFixed(1)}px, ${(-up).toFixed(1)}px) scale(${big ? 2.6 : 2})`, opacity: 0 },
+    ], { duration: dur, easing: 'ease-out' }).onfinish = () => p.remove();
+  };
+  // מחזור עישון אחד (שניות): מנוחה, הרמה, שאיפה, הורדה
+  let cyc = null, t0 = performance.now(), nextPuff = 0, exhaled = false;
+  const newCycle = t => { cyc = { rest: 3 + Math.random() * 3, up: 0.9, hold: 1.1 + Math.random() * 0.6, down: 0.9 }; t0 = t; exhaled = false; };
+  const tick = t => {
+    if (!document.contains(stage)) return;
+    if (!cyc) newCycle(t);
+    const s = (t - t0) / 1000, c = cyc;
+    let a = 0;
+    if (s < c.rest) a = 0;
+    else if (s < c.rest + c.up) a = (s - c.rest) / c.up;
+    else if (s < c.rest + c.up + c.hold) a = 1;
+    else if (s < c.rest + c.up + c.hold + c.down) a = 1 - (s - c.rest - c.up - c.hold) / c.down;
+    else { newCycle(t); a = 0; }
+    const f = Math.round(a * (m.frames - 1));
+    inner.style.backgroundPosition = `${-f * m.w}px 0`;
+    const tip = m.tips[f], inhale = a === 1;
+    inner.classList.toggle('drag', inhale); // הגחלת מתלהטת בשאיפה
+    if (t >= nextPuff) { puff(ox + tip[0], oy + tip[1], false); nextPuff = t + (inhale ? 520 : 300 + Math.random() * 140); }
+    // נשיפה: כשהיד יורדת – כמה משבים גדולים מהפה
+    if (!exhaled && s > c.rest + c.up + c.hold + c.down * 0.4) {
+      exhaled = true;
+      for (let k = 0; k < 4; k++) setTimeout(() => document.contains(stage) && puff(ox + m.mouth[0] + 2, oy + m.mouth[1], true), k * 170);
+    }
+    smokeRAF = requestAnimationFrame(tick);
+  };
+  smokeRAF = requestAnimationFrame(tick);
+}
+
 function walkPeople(stage) {
   cancelAnimationFrame(walkRAF);
   const P = ASSETS.person;
   if (matchMedia('(prefers-reduced-motion: reduce)').matches || !P) return;
   const W = [...stage.querySelectorAll('.m-walker')].map((el, i) => ({
     el, i, up: el.querySelector('.up'), lo: el.querySelector('.lo'), a: P.a * P.heights[i], hipPx: P.hipr * P.heights[i], kx: 0, ky: 0,
-    speed: WALK_SPEED * (WALK_PACE[i] || 1),
+    speed: WALK_SPEED * (WALK_PACE[i] || 1), roam: (P.roam || []).includes(i), born: 0,
     state: 'idle', wait: performance.now() + 600 + i * 2500, at: walkerAt[i] >= 0 ? walkerAt[i] : walkSpot(-1),
     phase: Math.random(), s: 0, view: 0, dir: 1, pose: -1,
   }));
   W.forEach(w => { if (WALK_PAIR[w.i] !== undefined) w.lead = W[WALK_PAIR[w.i]]; });
+  walkPeople.W = W; // לבדיקות
   const rowY = (i, v) => `${((3 * i + v) / (P.rows - 1) * 100).toFixed(3)}%`;
   const fade = w => w.speed * 1.3; // "נבלע" / "יוצא" לאורך כשנייה של הליכה
+  const farSpot = from => {
+    const { GW } = WALK, fx = from % GW, fy = (from / GW) | 0;
+    let best = -1, bd = -1;
+    for (let k = 0; k < 8; k++) { const c = walkSpot(from), d = Math.hypot(c % GW - fx, ((c / GW) | 0) - fy); if (d > bd) { bd = d; best = c; } }
+    return best;
+  };
+  const nearestWc = from => {
+    const { GW } = WALK, fx = from % GW, fy = (from / GW) | 0;
+    let best = -1, bd = 1e9;
+    for (const id of WALK_SPOTS.filter(id => id.startsWith('wc-') && PLACE[id])) {
+      const c = snapCell(placeXY(PLACE[id])), d = Math.hypot(c % GW - fx, ((c / GW) | 0) - fy);
+      if (d < bd && c !== from) { bd = d; best = c; }
+    }
+    return best;
+  };
   const start = (w, t) => {
-    const to = walkSpot(w.at), path = astar(w.at, to);
+    w.rush = !w.roam && Math.random() < 0.07;  // מדי פעם: רץ לשירותים
+    const to = w.rush ? nearestWc(w.at) : w.roam ? farSpot(w.at) : walkSpot(w.at), path = to >= 0 && astar(w.at, to);
+    if (w.roam && !w.born) w.born = t;
     if (!path || path.length < 4) { w.wait = t + 1000; w.at = to; return; }
     const pts = cleanRoute(simplify(path)), acc = [0];
     for (let k = 1; k < pts.length; k++) acc.push(acc[k - 1] + Math.hypot(pts[k].x - pts[k - 1].x, pts[k].y - pts[k - 1].y));
@@ -532,7 +609,8 @@ function walkPeople(stage) {
     const standing = w.pose >= 0;
     const ky = w.ky, kx = w.kx; // מוחלקים – דועכים בהדרגה בכל מעבר מבט/עצירה, בלי קפיצה
     const breath = standing ? 1 + 0.014 * Math.sin((performance.now() - (w.holdStart || 0)) / 3600 * 2 * Math.PI) : 1;
-    w.up.style.transform = `${flip} scaleY(${breath.toFixed(4)})`;
+    const L0 = w.lead || w, rushLean = L0.rush && w.view === 0 && !standing ? ' rotate(9deg)' : '';
+    w.up.style.transform = `${flip} scaleY(${breath.toFixed(4)})${rushLean}`;
     w.lo.style.transform = `${flip} skewY(${Math.atan(ky).toFixed(3)}rad) skewX(${Math.atan(kx).toFixed(3)}rad)`;
     w.el.style.transform = `translate(${(x - P.w / 2).toFixed(1)}px, ${(y - P.foot * P.h).toFixed(1)}px)`; // הגוף תמיד על השביל
     w.el.style.opacity = op.toFixed(2);
@@ -548,7 +626,7 @@ function walkPeople(stage) {
       if (w.state === 'walk' || w.state === 'settle') {
         // מהירות משתנה בהדרגה: האטה רכה לפני עצירה, האצה רכה אחרי (הצעדים תמיד לפי המרחק – בלי החלקה)
         w.spf = (w.spf === undefined ? 1 : w.spf) + ((w.state === 'settle' ? 0.22 : 1) - (w.spf === undefined ? 1 : w.spf)) * Math.min(1, dt * 2.4);
-        const sp = w.speed * w.spf;
+        const sp = w.speed * w.spf * (w.rush ? 2.3 : 1); // בריצה – פי 2.3 (הצעדים מהירים בהתאם, בלי החלקה)
         let ns = Math.min(w.len, w.s + sp * dt);
         const st = w.state === 'walk' && w.stops.find(o => o.d > w.s && o.d <= ns);
         if (st) { w.state = 'settle'; w.holdDur = st.dur; w.stops = w.stops.filter(o => o !== st); }
@@ -559,15 +637,19 @@ function walkPeople(stage) {
         if (w.state === 'settle' && Math.floor(before * 2 - 0.5) !== Math.floor(w.phase * 2 - 0.5)) {
           w.state = 'hold'; w.holdStart = t; w.holdEnd = t + w.holdDur; w.pose = 0; w.walkView = w.view;
         }
-        if (w.s >= w.len) { w.state = 'inside'; w.at = w.to; walkerAt[w.i] = w.to; w.wait = t + 8000 + Math.random() * 22000; }
+        if (w.s >= w.len) {
+          w.at = w.to; walkerAt[w.i] = w.to;
+          if (w.roam) { w.state = 'idle'; w.wait = t; }  // הנודד ממשיך מיד הלאה
+          else { w.state = 'inside'; w.wait = t + 8000 + Math.random() * 22000; }
+        }
         w.pos = pa;
       }
       if (w.state === 'inside' && t >= w.wait) w.state = 'idle';
     }
     for (const w of W) {
       const L = w.lead || w;
-      if (!L.pos || L.state === 'idle' || L.state === 'inside') { if (w.el.style.opacity !== '0') w.el.style.opacity = '0'; continue; }
-      const op = Math.max(0, Math.min(1, Math.min(L.s, L.len - L.s) / fade(L)));
+      if (!L.pos || (!L.roam && (L.state === 'idle' || L.state === 'inside'))) { if (w.el.style.opacity !== '0') w.el.style.opacity = '0'; continue; }
+      const op = L.roam ? Math.min(1, (t - L.born) / 1200) : Math.max(0, Math.min(1, Math.min(L.s, L.len - L.s) / fade(L))); // הנודד תמיד נראה
       if (w.lead) {
         // בן הזוג: אותו מסלול, צעד לצד (ניצב לכיוון ההליכה) ומעט מאחור; צעדיו לפי המרחק שלו
         const pa = posAt(L, Math.max(0, L.s - 5));
@@ -619,6 +701,7 @@ function renderMap(view) {
   view.innerHTML = `<div class="mapwrap" id="mapwrap">
     <div class="mapstage" id="mapstage" style="width:${MAP_W}px;height:${MAP_H}px">
       <img src="${ASSETS.map}" width="${MAP_W}" height="${MAP_H}" alt="מפת הפסטיבל אינדינגב 2026">
+      ${smokerHtml()}
       ${walkersHtml()}
       ${birdsHtml()}
       <svg class="route" id="route" viewBox="0 0 ${MAP_W} ${MAP_H}" width="${MAP_W}" height="${MAP_H}" aria-hidden="true"></svg>
@@ -657,6 +740,7 @@ function renderMap(view) {
   }
   flyBirds(stage);
   walkPeople(stage);
+  smokePeople(stage);
   bindMapGestures(wrap, stage);
   // מסגרת המפה לא נגללת לעולם (פוקוס על כפתור מחוץ למסך יכול לגלול אותה)
   wrap.addEventListener('scroll', () => { wrap.scrollLeft = 0; wrap.scrollTop = 0; });

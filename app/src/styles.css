@@ -577,6 +577,15 @@ details.fold[open] .fold-ch svg { transform: rotate(-90deg); }
 /* ציפורים מהציור – מרחפות ומנפנפות */
 /* אנשים הולכים בקמפינג: צעדים קטנים (קפיצה עדינה ונדנוד) */
 .m-walker { position: absolute; left: 0; top: 0; pointer-events: none; will-change: transform; transform-origin: 50% 100%; }
+/* המעשן: יושב, נושם ומתנדנד קלות; העשן עולה ונעלם */
+.m-smoker { position: absolute; pointer-events: none; }
+.m-smoker::before { content: ''; position: absolute; left: 12%; right: 18%; top: calc(95% - 3px); height: 6px; border-radius: 50%; background: rgba(30, 40, 20, .25); filter: blur(1.4px); }
+.m-smoker i { position: absolute; inset: 0; background-repeat: no-repeat; transform-origin: 42% 95%; animation: smoker-breath 4.2s ease-in-out infinite; }
+.m-smoker i.drag { filter: drop-shadow(0 0 1.5px rgba(255, 130, 40, .9)); }
+@keyframes smoker-breath { 0%, 100% { transform: scaleY(1) rotate(0deg); } 50% { transform: scaleY(1.018) rotate(-0.8deg); } }
+.m-smoke-layer { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; }
+.m-smoke { position: absolute; border-radius: 50%; background: radial-gradient(circle, rgba(245, 245, 240, .95), rgba(230, 230, 225, 0) 70%); will-change: transform, opacity; }
+@media (prefers-reduced-motion: reduce) { .m-smoker i { animation: none; } }
 /* צל קטן מתחת לכפות הרגליים – "מושיב" את הדמות על השביל */
 .m-walker::before { content: ''; position: absolute; left: 24%; right: 24%; top: calc(var(--foot) * 100% - 2.5px); height: 5px; border-radius: 50%; background: rgba(30, 40, 20, .28); filter: blur(1.2px); }
 /* תמונת הצעד נקבעת בכל פריים לפי המרחק שהדמות עברה (ב-JS) */
