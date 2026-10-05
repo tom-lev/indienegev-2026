@@ -487,9 +487,7 @@ function walkPeople(stage) {
     const pts = cleanRoute(simplify(path)), acc = [0];
     for (let k = 1; k < pts.length; k++) acc.push(acc[k - 1] + Math.hypot(pts[k].x - pts[k - 1].x, pts[k].y - pts[k - 1].y));
     const len = acc[acc.length - 1];
-    // 0–2 עצירות קצרות בדרך (בנקודות פנייה), לא קרוב לקצוות
-    const stops = acc.slice(1, -1).filter(d => d > fade(w) * 1.5 && d < len - fade(w) * 1.5)
-      .filter(() => Math.random() < 0.35).slice(0, 2).map(d => ({ d, dur: 2000 + Math.random() * 3500 }));
+    const stops = []; // בלי עצירות בדרך – הולכים ברצף מנקודה לנקודה
     Object.assign(w, { pts, acc, len, s: 0, to, stops, state: 'walk', pend: 0 });
     const u0 = { x: pts[1].x - pts[0].x, y: pts[1].y - pts[0].y };
     step(w, 0, u0.x / (Math.hypot(u0.x, u0.y) || 1), u0.y / (Math.hypot(u0.x, u0.y) || 1));
@@ -506,7 +504,8 @@ function walkPeople(stage) {
     // הטיית הרגליים: מהצד – צעד קדימה יורד/עולה לאורך השביל; מלפנים/מאחור – זז הצידה לאורך השביל
     // ההטיה מוגבלת (עד ~27°) – יותר מזה הרגליים נראות שטוחות
     const clamp = (v, m) => Math.max(-m, Math.min(m, v));
-    const tY = side ? clamp(uy / Math.max(0.2, Math.abs(ux)), 0.5) : 0, tX = side ? 0 : clamp(ux / (Math.abs(uy) < 0.2 ? Math.sign(uy || 1) * 0.2 : uy), 0.5);
+    // מהצד – הטיה קלה של הרגליים לאורך השביל (עד ~19°); מלפנים/מאחור – בלי הטיה בכלל (רגליים ישרות מתחת לגוף)
+    const tY = side ? clamp(uy / Math.max(0.2, Math.abs(ux)), 0.35) : 0, tX = 0;
     const sm = Math.min(1, ds / 6); // מעבר הדרגתי בפניות – בלי קפיצות
     w.ky += (tY - w.ky) * sm; w.kx += (tX - w.kx) * sm;
     const nv = side ? 0 : uy > 0 ? 1 : 2;
@@ -525,8 +524,7 @@ function walkPeople(stage) {
     const breath = standing ? 1 + 0.014 * Math.sin((performance.now() - (w.holdStart || 0)) / 3600 * 2 * Math.PI) : 1;
     w.up.style.transform = `${flip} scaleY(${breath.toFixed(4)})`;
     w.lo.style.transform = `${flip} skewY(${Math.atan(ky).toFixed(3)}rad) skewX(${Math.atan(kx).toFixed(3)}rad)`;
-    // הטיה הצידה (מלפנים/מאחור) מזיזה את כפות הרגליים – מזיזים את הדמות כך שהן יהיו על השביל
-    w.el.style.transform = `translate(${(x - P.w / 2 - kx * w.hipPx).toFixed(1)}px, ${(y - P.foot * P.h).toFixed(1)}px)`;
+    w.el.style.transform = `translate(${(x - P.w / 2).toFixed(1)}px, ${(y - P.foot * P.h).toFixed(1)}px)`; // הגוף תמיד על השביל
     w.el.style.opacity = op.toFixed(2);
   };
   let last = performance.now();
