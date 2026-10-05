@@ -153,7 +153,13 @@ class H(BaseHTTPRequestHandler):
             if code:
                 LOG.append(f'share write DENIED {code} {why}')
                 return self.reply(code, {'error': {'status': 'PERMISSION_DENIED'}})
+            q = parse_qs(urlparse(self.path).query)
             with lock:
+                if 'updateMask.fieldPaths' in q and su in SHARES:
+                    doc = json.loads(SHARES[su]); new = json.loads(b)
+                    for fp in q['updateMask.fieldPaths']:
+                        if fp in new['fields']: doc['fields'][fp] = new['fields'][fp]
+                    b = json.dumps(doc)
                 SHARES[su] = b; LOG.append(f'share write {su}')
             return self.reply(200, json.loads(b))
         uid = self.doc_uid()

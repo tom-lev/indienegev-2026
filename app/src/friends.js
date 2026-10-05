@@ -112,6 +112,40 @@ function upsertFriend(d) {
   return existing || S.friends[S.friends.length - 1];
 }
 
+/* "נראה לאחרונה" של כל חבר: נשמר מקומית בלבד (לא בגיבוי) כדי שבדיקה כל דקה לא תיצור כתיבות לענן */
+const FSEEN_KEY = 'indienegev-fseen';
+const friendSeen = (() => { try { return JSON.parse(localStorage.getItem(FSEEN_KEY)) || {}; } catch (e) { return {}; } })();
+function seenText(f) {
+  const t = f.src && friendSeen[f.src];
+  if (!t) return '';
+  const m = (Date.now() - t) / MIN;
+  return m < 3 ? 'באפליקציה עכשיו' : `נראה/תה לאחרונה ${ago(t)}`;
+}
+/* אני: מעדכן "נראה לאחרונה" בפתיחה / חזרה לאפליקציה (לכל היותר פעם ב-3 דקות) */
+let seenPingAt = 0;
+function pingSeen() {
+  if (typeof CC === 'undefined' || !CC.on || !cloudAuth || !navigator.onLine || document.hidden) return;
+  if (Date.now() - seenPingAt < 3 * MIN) return;
+  seenPingAt = Date.now();
+  CC.touchShare().catch(() => { seenPingAt = 0; });
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) pingSeen(); });
+setInterval(pingSeen, 5 * MIN);
+
+/* "מה השתנה" בלוז של חבר מאז שבדקתי: f.seen = הלוז שראיתי בפעם האחרונה */
+function friendDiff(f) {
+  if (!f.seen) return null;
+  const added = [], removed = [], up = [], down = [];
+  for (const [id, lv] of Object.entries(f.picks)) {
+    if (!EV[id]) continue;
+    const was = f.seen[id] || 0;
+    if (!was) added.push(id); else if (lv > was) up.push(id); else if (lv < was) down.push(id);
+  }
+  for (const id of Object.keys(f.seen)) if (!f.picks[id] && EV[id]) removed.push(id);
+  return added.length + removed.length + up.length + down.length ? { added, removed, up, down } : null;
+}
+const sessionDiff = {}; // מה השתנה – נשאר גלוי עד "הבנתי" גם אחרי שסומן כנראה
+
 /* לוז חי: משיכת הלוז העדכני של כל חבר ששיתף עם קוד חי (בפתיחה, בחזרה לאפליקציה, בחזרת קליטה, בכניסה ללשונית שלו).
    לכל היותר פעם בדקה. בלי קליטה – נשאר הלוז האחרון שנמשך. */
 let friendsPulledAt = 0, friendsPulling = false;
@@ -130,6 +164,8 @@ async function refreshFriends(force = false) {
       if (!cur) continue;
       if (!r) { if (cur.liveErr !== 'gone') { cur.liveErr = 'gone'; ui = true; } continue; }
       if (cur.liveErr) { delete cur.liveErr; ui = true; }
+      if (r.seenAt && friendSeen[cur.src] !== r.seenAt) { friendSeen[cur.src] = r.seenAt; ui = true; try { localStorage.setItem(FSEEN_KEY, JSON.stringify(friendSeen)); } catch (e) { /* */ } }
+      if (!r.picks) continue;
       const same = JSON.stringify(Object.entries(r.picks).sort()) === JSON.stringify(Object.entries(cur.picks).sort());
       if (!same) { cur.picks = r.picks; cur.importedAt = r.at || Date.now(); changed = true; }
       if (validAv(r.avatar) && cur.avatar !== r.avatar) { cur.avatar = r.avatar; changed = true; }
@@ -137,7 +173,8 @@ async function refreshFriends(force = false) {
     }
     if (resolveAvatars()) changed = true;
   } finally { friendsPulling = false; }
-  if (changed || ui) { save(); rerender(); }
+  if (changed) save();
+  if (changed || ui) rerender();
 }
 window.addEventListener('online', () => refreshFriends(true));
 document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshFriends(); });
@@ -170,6 +207,7 @@ function friendsBlock() {
       <div class="info">
         <div class="n">${esc(f.name)}</div>
         <div class="m">${Object.keys(f.picks).length} הופעות · ${f.src ? (f.liveErr === 'gone' ? 'הפסיק/ה לשתף' : '🔄 מתעדכן לבד') : 'צילום מצב'} · ${ago(f.importedAt)}</div>
+        ${seenText(f) ? `<div class="m seen">● ${seenText(f)}</div>` : ''}
       </div>
       <button class="icon-btn" data-toggle="${f.id}" aria-label="${f.active === false ? 'הצג' : 'הסתר'}">${f.active === false ? ICON.eyeOff : ICON.eye}</button>
       <button class="icon-btn" data-rename="${f.id}" aria-label="שינוי שם">${ICON.edit}</button>

@@ -237,14 +237,23 @@ const CC = (() => {
     await set('share', { uid: a.uid, fp: h, at: Date.now() });
     return true;
   }
-  /* הלוז העדכני של חבר: { name, picks, at } | null (אין / הפסיק לשתף) */
+  /* "נראה לאחרונה": מעדכן רק את שדה הזמן במסמך הלוז החי (אחרי שכבר פורסם) */
+  async function touchShare() {
+    const a = await auth();
+    const pub = (await get('share')) || {};
+    if (pub.uid !== a.uid) return false; // עוד לא פורסם לוז – לא יוצרים מסמך ריק
+    const r = await req(`${shareUrl(a.uid)}?updateMask.fieldPaths=seenAt`, { method: 'PATCH', headers: { Authorization: `Bearer ${a.idToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: { seenAt: { integerValue: String(Date.now()) } } }) }, 8000);
+    return r.ok;
+  }
+  /* הלוז העדכני של חבר: { name, picks, at, seenAt } | null (אין / הפסיק לשתף) */
   async function fetchShare(uid) {
     const r = await req(`${shareUrl(uid)}?key=${cfg.apiKey}`, {}, 12000);
     if (r.status === 404) return null;
     if (!r.ok) throw new Error(`שגיאה ${r.status}`);
     const f = (await r.json()).fields || {};
     const av = f.avatar ? +f.avatar.integerValue : -1;
-    return { name: f.name ? f.name.stringValue : '', picks: JSON.parse((f.picks && f.picks.stringValue) || '{}'), at: +((f.at && f.at.integerValue) || 0), avatar: av >= 0 ? av : null, avAt: f.avAt ? +f.avAt.integerValue : null };
+    return { name: f.name ? f.name.stringValue : '', picks: f.picks ? JSON.parse(f.picks.stringValue || '{}') : null, at: +((f.at && f.at.integerValue) || 0),
+      avatar: av >= 0 ? av : null, avAt: f.avAt ? +f.avAt.integerValue : null, seenAt: f.seenAt ? +f.seenAt.integerValue : null };
   }
 
   /* יומן סנכרון (לאבחון): 30 האירועים האחרונים */
@@ -321,13 +330,13 @@ const CC = (() => {
     return { text: JSON.stringify({ app: 'indienegev-2026', kind: 'backup', v: 1, createdAt: remote.updatedAt, state: remote.state }), updatedAt: remote.updatedAt };
   }
 
-  return { on, cfg, get, set, del, fp, sync, upload, download, history, size, signInWithGoogleToken, auth, buildUpload, fetchShare, publishShare, lww, stampEdits, replaceStamped, items, clean };
+  return { on, cfg, get, set, del, fp, sync, upload, download, history, size, signInWithGoogleToken, auth, buildUpload, fetchShare, publishShare, touchShare, lww, stampEdits, replaceStamped, items, clean };
 })();
 
 /* Service Worker – האפליקציה נפתחת מהעותק השמור בטלפון, גם בלי קליטה.
    אסטרטגיה: מטמון קודם (פתיחה מיידית גם בקליטה חלשה). עדכון גרסה מגיע כ-SW חדש
    (הקובץ הזה משתנה בכל בנייה בגלל VERSION), שמחכה עד שהמשתמש מאשר רענון. */
-const VERSION = 'a7e6d5595513';
+const VERSION = 'e90f692975e6';
 const CACHE = 'indn26-' + VERSION;
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 

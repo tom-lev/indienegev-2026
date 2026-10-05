@@ -129,6 +129,52 @@ async function device(label) {
   await A.ev(c => upsertFriend(decodeShare(c)), code); await sleep(300);
   check('קוד של עצמי – בלי מקור חי', await A.ev(() => !S.friends[0].src));
 
+  // ───── מה השתנה אצל חבר + נראה לאחרונה ─────
+  await A.ev(() => { S.picks = { [BY_START[0].id]: 2, [BY_START[2].id]: 1, [BY_START[6].id]: 1 }; save(); cloudNow(); }); await sleep(2500);
+  const codeD = await A.ev(() => encodeShare(S.name, S.picks, cloudAuth.uid, myAvatar()));
+  await B.ev(() => { S.friends = []; save(); });
+  await B.ev(c => upsertFriend(decodeShare(c)), codeD); await sleep(1200);
+  await B.ev(() => { setTab('mine'); viewDay = BY_START[0].day; S.prefs.mineView = S.friends[0].id; S.prefs.showMaybe = true; S.prefs.mineLayout = 'list'; render(); }); await sleep(400);
+  check('צפייה ראשונה – בלי "מה השתנה"', await B.ev(() => !document.querySelector('.diff-box') && !!S.friends[0].seen));
+  await B.ev(() => { S.prefs.mineView = 'me'; render(); });
+  await A.ev(() => { delete S.picks[BY_START[2].id]; S.picks[BY_START[3].id] = 2; S.picks[BY_START[4].id] = 1; S.picks[BY_START[6].id] = 2; save(); cloudNow(); }); await sleep(2500);
+  await B.ev(() => refreshFriends(true)); await sleep(1500);
+  check('נקודה על הלשונית של החבר כשיש שינויים', await B.ev(() => !!document.querySelector('.who-tabs [data-who^="f"] .new-dot')));
+  await B.page.click('.who-tabs [data-who^="f"]'); await sleep(500);
+  const df = await B.ev(() => ({ box: (document.querySelector('.diff-box') || {}).textContent || '', news: [...document.querySelectorAll('#mscroll .row')].filter(r => r.querySelector('.new-chip')).map(r => r.dataset.ev), dot: !!document.querySelector('.who-tabs .new-dot'),
+    names: [BY_START[2], BY_START[3], BY_START[4], BY_START[6]].map(e => e.name), addedIds: [BY_START[3].id, BY_START[4].id] }));
+  check('"מאז שבדקת": נוספו 2, ירדה 1, עכשיו חייב 1', /נוספו 2/.test(df.box) && df.box.includes(df.names[1]) && df.box.includes(df.names[2]) && /ירדה/.test(df.box) && df.box.includes(df.names[0]) && /עכשיו "חייב"/.test(df.box) && df.box.includes(df.names[3]), df.box.replace(/\s+/g, ' '));
+  check('הנקודה נעלמה אחרי הצפייה', !df.dot);
+  check('תגית "חדש" על ההופעות שנוספו', df.news.length >= 1 && df.news.every(id => df.addedIds.includes(id)), JSON.stringify(df.news));
+  await B.ev(() => rerender()); await sleep(200);
+  check('"מה השתנה" נשאר גלוי עד "הבנתי"', await B.ev(() => !!document.querySelector('.diff-box')));
+  await B.page.click('.diff-ok'); await sleep(300);
+  check('"הבנתי" – נעלם', await B.ev(() => !document.querySelector('.diff-box') && !document.querySelector('.new-chip')));
+  await B.ev(() => { S.prefs.mineView = 'me'; render(); S.prefs.mineView = S.friends[0].id; render(); }); await sleep(300);
+  check('בלי שינויים חדשים – לא מופיע שוב', await B.ev(() => !document.querySelector('.diff-box')));
+  // נראה לאחרונה
+  await A.ev(() => { seenPingAt = 0; pingSeen(); }); await sleep(1500);
+  await B.ev(() => refreshFriends(true)); await sleep(1500);
+  const sn = await B.ev(() => ({ head: (document.querySelector('.friend-head .seen') || {}).textContent || '', synced: JSON.stringify(S.friends[0]).includes('seenAt') }));
+  check('"באפליקציה עכשיו" ליד החבר', /באפליקציה עכשיו/.test(sn.head), sn.head);
+  check('"נראה לאחרונה" לא נשמר בגיבוי (לא יוצר כתיבות)', !sn.synced);
+  const sd = await (async () => { const st = await srv(); return st.log.filter(l => l === 'share write uid-alice').length; })();
+  check('הלוז החי של אליס לא נמחק מהפינג', await B.ev(() => Object.keys(S.friends[0].picks).length === 4));
+  await B.ev(() => { setTab('profile'); }); await sleep(300);
+  check('"נראה לאחרונה" גם ברשימת החברים בפרופיל', await B.ev(() => /באפליקציה עכשיו/.test((document.querySelector('#pscroll .friend-row .seen') || {}).textContent || '')));
+  await B.ev(() => { setTab('mine'); S.prefs.mineView = 'me'; S.friends = []; save(); render(); });
+
+  // ───── הופעות שהיו מתקפלות (ביום הנוכחי) ─────
+  await B.ev(() => { const th = BY_START.filter(e => e.day === 'thu'); S.picks = { [th[0].id]: 2, [th[3].id]: 2, [th[th.length - 1].id]: 2 }; save();
+    setSim(th[3].end + 60000); viewDay = 'thu'; S.prefs.mineView = 'me'; render(); }); await sleep(300);
+  const pr = await B.ev(() => ({ row: (document.querySelector('.past-row') || {}).textContent || '', ids: [...document.querySelectorAll('#mscroll .row[data-ev]')].map(r => r.dataset.ev) }));
+  check('הופעות שנגמרו מתקפלות לשורה "2 הופעות שהיו"', /2 הופעות שהיו/.test(pr.row) && pr.ids.length === 1, JSON.stringify(pr));
+  await B.page.click('.past-row'); await sleep(300);
+  check('לחיצה – מוצגות שוב', await B.ev(() => document.querySelectorAll('#mscroll .row[data-ev]').length === 3 && /הסתרת/.test(document.querySelector('.past-row').textContent)));
+  await B.ev(() => { showPast = false; viewDay = 'fri'; render(); }); await sleep(200);
+  check('ביום אחר – בלי קיפול', await B.ev(() => !document.querySelector('.past-row')));
+  await B.ev(() => { simTime = null; S.picks = {}; save(); render(); });
+
   // ───── דמויות ─────
   await A.ev(() => { S.friends = []; save(); setMyAvatar(0); cloudNow(); }); await sleep(2500);
   const codeAv = await A.ev(() => encodeShare(S.name, S.picks, cloudAuth.uid, myAvatar()));
@@ -185,6 +231,7 @@ async function device(label) {
   // ───── לינק שיתוף: חבר חדש לוחץ על לינק ─────
   await A.ev(() => { S.picks[BY_START[3].id] = 2; save(); cloudNow(); }); await sleep(2500);
   const link = await A.ev(() => shareLink(encodeShare(S.name, S.picks, cloudAuth.uid)));
+  const AN = await A.ev(() => Object.keys(S.picks).length);
   check('הלינק בנוי נכון', /^https:\/\/tom-lev\.github\.io\/indienegev-2026\/#INDN1\..+\.uid-alice$/.test(link), link.slice(0, 60));
   const C = await device('C');
   await C.page.goto('about:blank');
@@ -200,7 +247,7 @@ async function device(label) {
   check('אחרי ההתחברות – ההזמנה גלויה (מסך הפתיחה נסגר)', await C.ev(() => !document.querySelector('.welcome') && !!document.querySelector('.invite')));
   await C.page.click('.invite [data-a="accept"]'); await sleep(900);
   const c2 = await C.ev(() => ({ fr: S.friends.map(f => [f.name, f.src, Object.keys(f.picks).length]), tab, who: S.prefs.mineView === (S.friends[0] || {}).id, head: (document.querySelector('.friend-head') || {}).textContent || '', key: localStorage.getItem('indienegev-invite'), mine: Object.keys(S.picks).length }));
-  check('לחיצה אחת → אליס נוספה עם לוז חי', c2.fr.length === 1 && c2.fr[0][1] === 'uid-alice' && c2.fr[0][2] === 3, JSON.stringify(c2.fr));
+  check('לחיצה אחת → אליס נוספה עם לוז חי', c2.fr.length === 1 && c2.fr[0][1] === 'uid-alice' && c2.fr[0][2] === AN, JSON.stringify(c2.fr));
   check('עובר ישר ללשונית של אליס ב"הלוז שלי"', c2.tab === 'mine' && c2.who && /הלוז של אליס/.test(c2.head));
   check('ההזמנה נמחקה ולא תיפתח שוב', c2.key === null);
   check('הלוז של צ׳רלי לא השתנה', c2.mine === 0);
@@ -211,7 +258,7 @@ async function device(label) {
   await C.page.goto('about:blank'); await C.page.goto(link.replace('https://tom-lev.github.io/indienegev-2026/', 'http://localhost:8765/'), { waitUntil: 'load' }); await sleep(1500);
   check('לינק שכבר נוסף – הכפתור "עדכון הלוז של אליס"', await C.ev(() => /עדכון הלוז של אליס/.test(document.querySelector('.invite [data-a="accept"]').textContent)));
   await C.ev(() => { document.querySelector('.invite-more').open = true; document.querySelector('.invite [data-a="merge"]').click(); }); await sleep(500);
-  check('מיזוג ממסך ההזמנה', await C.ev(() => Object.keys(S.picks).length === 3));
+  check('מיזוג ממסך ההזמנה', await C.ev(n => Object.keys(S.picks).length === n, AN));
   if (process.env.SHOTS) await C.page.screenshot({ path: process.env.SHOTS + '/inv-after.png' }).catch(() => {});
   if (C.errors.length) A.errors.push(...C.errors);
 

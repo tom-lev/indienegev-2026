@@ -314,6 +314,14 @@ main#view { overflow: hidden; position: relative; min-height: 0; }
 .prof-card .av.big { width: 64px; height: 64px; font-size: 34px; flex: none; border-width: 3px; }
 .prof-name { flex: 1; min-width: 0; }
 .prof-name .text-in { margin: 4px 0 0; }
+.who-tabs button { position: relative; }
+.new-dot { position: absolute; top: 2px; inset-inline-end: 4px; width: 9px; height: 9px; border-radius: 50%; background: var(--coral); box-shadow: 0 0 0 2px var(--paper); }
+.diff-box { margin: -4px 0 12px; padding: 10px 12px; border-radius: 14px; background: rgba(244,111,106,.12); font-size: 13.5px; line-height: 1.5; }
+.diff-box b { display: block; margin-bottom: 2px; }
+.diff-ok { margin-top: 6px; font-size: 13px; font-weight: 800; text-decoration: underline; color: var(--ink); padding: 4px 0; }
+.chip.new-chip { background: var(--coral); color: var(--ink); font-weight: 800; }
+.past-row { display: block; width: 100%; text-align: start; margin: 0 0 10px; padding: 10px 12px; border-radius: var(--r); border: 1.5px dashed var(--line-2); font-size: 13.5px; font-weight: 700; color: var(--ink-2); }
+.friend-head small.seen, .friend-row .m.seen { color: #2f8a57; }
 .who-tabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 0 -14px 12px; padding: 2px 14px; }
 .who-tabs::-webkit-scrollbar { display: none; }
 .who-tabs button {

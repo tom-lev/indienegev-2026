@@ -23,7 +23,7 @@ function mineTabs(sel) {
   return `<div class="who-tabs" role="tablist" aria-label="של מי הלוז">
     <button role="tab" data-who="me" aria-selected="${on('me')}" style="--fc:${meLook().color}"><span class="av sm">${meLook().emoji}</span>שלי</button>
     <button role="tab" data-who="shared" aria-selected="${on('shared')}">${ICON.users}משותף</button>
-    ${S.friends.map(f => `<button role="tab" data-who="${f.id}" aria-selected="${sel.f === f}" style="--fc:${f.color}"><span class="av sm">${f.emoji}</span>${esc(f.name)}</button>`).join('')}
+    ${S.friends.map(f => `<button role="tab" data-who="${f.id}" aria-selected="${sel.f === f}" style="--fc:${f.color}"><span class="av sm">${f.emoji}</span>${esc(f.name)}${sel.f !== f && friendDiff(f) ? '<i class="new-dot" aria-label="יש שינויים"></i>' : ''}</button>`).join('')}
   </div>`;
 }
 
@@ -69,10 +69,20 @@ function headCard(sel) {
     const live = f.src
       ? `<span class="live-dot ${f.liveErr ? 'off' : ''}"></span>${f.liveErr === 'gone' ? 'הפסיק/ה לשתף' : 'מתעדכן לבד'} · שינוי אחרון ${ago(f.importedAt)}`
       : `צילום מצב מ${ago(f.importedAt)} · לעדכון צריך קוד חדש`;
+    const d = sessionDiff[f.id];
+    const names = ids => ids.map(id => esc(EV[id].name)).join(', ');
+    const diff = d ? `<div class="diff-box">
+      <b>מאז שבדקת:</b>
+      ${d.added.length ? `<div>➕ ${d.added.length === 1 ? 'נוספה' : `נוספו ${d.added.length}`}: ${names(d.added)}</div>` : ''}
+      ${d.removed.length ? `<div>➖ ${d.removed.length === 1 ? 'ירדה' : `ירדו ${d.removed.length}`}: ${names(d.removed)}</div>` : ''}
+      ${d.up.length ? `<div>★ עכשיו "חייב": ${names(d.up)}</div>` : ''}
+      ${d.down.length ? `<div>◐ עכשיו "אולי": ${names(d.down)}</div>` : ''}
+      <button class="diff-ok" data-diffok="${f.id}">הבנתי</button>
+    </div>` : '';
     return `<div class="friend-head" style="--fc:${f.color}">
       <span class="av" style="--fc:${f.color}">${f.emoji}</span>
-      <div><b>הלוז של ${esc(f.name)}</b><small>${live}</small></div>
-    </div>`;
+      <div><b>הלוז של ${esc(f.name)}</b><small>${live}</small>${seenText(f) ? `<small class="seen">● ${seenText(f)}</small>` : ''}</div>
+    </div>${diff}`;
   }
   if (sel.kind === 'shared') {
     const act = activeFriends(), hidden = S.friends.length - act.length;
@@ -84,8 +94,21 @@ function headCard(sel) {
   return '';
 }
 
+let showPast = false; // "הופעות שהיו" פתוחות
+/* רואים את השינויים בלוז של חבר → מסמנים כנראה (השינויים נשארים גלויים עד "הבנתי") */
+function markFriendSeen(f) {
+  const d = friendDiff(f);
+  if (d) {
+    const s = sessionDiff[f.id] || { added: [], removed: [], up: [], down: [] };
+    for (const k of Object.keys(s)) s[k] = [...new Set([...s[k].filter(id => k === 'removed' ? !f.picks[id] : f.picks[id]), ...d[k]])];
+    sessionDiff[f.id] = s;
+  }
+  if (!f.seen || d) { f.seen = { ...f.picks }; save(); }
+}
+
 function renderMine(view) {
   const sel = mineSel();
+  if (sel.kind === 'friend') markFriendSeen(sel.f);
   const dayId = currentViewDay();
   const incl = selLv(sel);
   const all = mineSet(sel);
@@ -93,6 +116,10 @@ function renderMine(view) {
   const togetherN = sel.kind === 'shared' ? dayEvs.filter(e => sharedPeople(e).length >= 2).length : 0;
   if (sel.kind === 'shared' && S.prefs.together) dayEvs = dayEvs.filter(e => sharedPeople(e).length >= 2);
   const byStage = S.prefs.mineLayout === 'stages';
+  // היום, בזמן אמת: הופעות שנגמרו מתקפלות לשורה אחת
+  const t = now();
+  const past = !byStage && logicalDay(t) === dayId ? dayEvs.filter(e => e.end <= t) : [];
+  if (past.length && !showPast) dayEvs = dayEvs.filter(e => e.end > t);
   const fname = sel.kind === 'friend' ? esc(sel.f.name) : '';
   const maybeNote = S.prefs.showMaybe ? '' : ' (מוצגים רק "חייב")';
 
@@ -107,6 +134,8 @@ function renderMine(view) {
           <button class="btn alt" data-act="import">${ICON.import} ייבוא לוז</button></div>
         </div>`
       : `<div class="empty"><h2>${sel.kind === 'friend' ? `ל${fname} אין הופעות בלוז` : 'עוד אין הופעות בלוז של אף אחד'}</h2></div>`;
+  } else if (!dayEvs.length && past.length) {
+    empty = `<div class="empty" style="padding-top:20px"><h2>זהו להיום 🌙</h2><p>כל ההופעות של היום כבר נגמרו.</p></div>`;
   } else if (!dayEvs.length) {
     const who = sel.kind === 'friend' ? `ל${fname} אין` : sel.kind === 'shared' ? (S.prefs.together ? 'אין הופעות משותפות' : 'אין לאף אחד') : 'אין לך';
     empty = `<div class="empty"><img src="${ASSETS.flower}" alt="" style="width:120px"><h2>יום פנוי</h2><p>${who}${S.prefs.together && sel.kind === 'shared' ? '' : ' בחירות'} ב${DAY[dayId].label}${maybeNote}.</p>
@@ -153,12 +182,14 @@ function renderMine(view) {
     updateNowLine();
     root = $('.mine-top', view);
   } else {
+    const pastRow = past.length ? `<button class="past-row" data-past>${showPast ? '▴ הסתרת' : `✓ ${past.length === 1 ? 'הופעה אחת שהייתה' : `${past.length} הופעות שהיו`} · הצגה`}</button>` : '';
     let body = empty;
     if (!body) {
       body = sel.kind === 'shared' ? sharedList(dayEvs)
-        : dayList(dayEvs, incl, e => ({ nav: true, levelChip: true, ...(sel.kind === 'friend' ? { lv: incl(e.id), noFriends: true } : {}) })); // בלוז שלי – מי מהחברים הולך
+        : dayList(dayEvs, incl, e => ({ nav: true, levelChip: true, ...(sel.kind === 'friend' ? { lv: incl(e.id), noFriends: true,
+            chip: sessionDiff[sel.f.id] && sessionDiff[sel.f.id].added.includes(e.id) ? '<span class="chip new-chip">חדש</span>' : '' } : {}) })); // בלוז שלי – מי מהחברים הולך
     }
-    view.innerHTML = `<div class="scroll" id="mscroll"><div class="pad">${top}${body}</div></div>`;
+    view.innerHTML = `<div class="scroll" id="mscroll"><div class="pad">${top}${pastRow}${body}</div></div>`;
     root = $('#mscroll');
     bindRows(root);
   }
@@ -174,8 +205,11 @@ function renderMine(view) {
     }
     const l = e.target.closest('[data-layout]');
     if (l) { S.prefs.mineLayout = l.dataset.layout; save(); return render(); }
-    const t = e.target.closest('[data-together]');
-    if (t) { S.prefs.together = t.dataset.together === '1'; save(); return render(); }
+    const tg = e.target.closest('[data-together]');
+    if (tg) { S.prefs.together = tg.dataset.together === '1'; save(); return render(); }
+    if (e.target.closest('[data-past]')) { showPast = !showPast; return rerender(); }
+    const ok = e.target.closest('[data-diffok]');
+    if (ok) { delete sessionDiff[ok.dataset.diffok]; return rerender(); }
     const go = e.target.closest('[data-go]');
     if (go) return setTab(go.dataset.go);
     if (e.target.closest('[data-act="import"]')) openImport();
