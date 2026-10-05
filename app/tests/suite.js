@@ -316,7 +316,7 @@ const RICH = () => {
   await test('D2', 'אחרי הגיבוי ברקע, פתיחת האפליקציה מראה "מגובה" ולא מעלה שוב', async () => {
     const w0 = await writes(); await sleep(3500);
     const st = await A.status();
-    check('D2', 'אחרי הגיבוי ברקע, פתיחת האפליקציה מראה "מגובה" ולא מעלה שוב', (await writes()) === w0 && st.includes('✅'), st);
+    check('D2', 'אחרי הגיבוי ברקע, פתיחת האפליקציה מראה "מגובה" ולא מעלה שוב', (await writes()) === w0 && st.includes('גיבוי אחרון לענן'), st);
   });
   const I = await device('I', { ios: true }); devs.push(I);
   await test('D3', 'אייפון (בלי Background Sync): פתק ונעילת מסך → הגיבוי נשלח לפני הסגירה', async () => {
