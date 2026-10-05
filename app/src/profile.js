@@ -24,6 +24,17 @@ function renderProfile(view) {
     </div>
 
     <div class="card-box">
+      <h3>🏠 איפה אני ישן/ה</h3>
+      ${PLACE.tent ? (() => { const lm = tentLandmark(PLACE.tent); return `<p>האוהל מסומן במפה${lm ? ` · ליד ${esc(lm.name)}` : ''}.</p>
+      <button class="btn block" data-a="tent-go" style="margin-bottom:10px">${ICON.pin} ניווט לאוהל שלי</button>
+      <div class="btn-row">
+        <button class="btn coral sm" data-a="tent-share">${ICON.image} שליחת מיקום האוהל לחבר</button>
+        <button class="btn alt sm" data-a="tent-move">${ICON.edit} הזזה</button>
+      </div>`; })() : `<p>עוד לא סימנת את האוהל. מסמנים פעם אחת במפה, ואז אפשר לנווט אליו ולשלוח לחברים מפה עם המיקום.</p>
+      <button class="btn block" data-a="tent-move">${ICON.map} סימון האוהל במפה</button>`}
+    </div>
+
+    <div class="card-box">
       <h3>יומן סיקור</h3>
       <p>הפתקים והמדדים מכל ההופעות, לפי סדר הזמן. אפשר לייצא הכל.</p>
       <div class="btn-row">
@@ -81,6 +92,9 @@ function renderProfile(view) {
     const a = b.dataset.a;
     if (a === 'share') openShare();
     if (a === 'journal') openTimeline();
+    if (a === 'tent-go') goTo('tent');
+    if (a === 'tent-share') shareTentImage();
+    if (a === 'tent-move') { setTab('map'); picking = 'tent'; updateRoute(null); toast('הקישו על המקום של האוהל במפה'); }
     if (a === 'jexport') exportJournal('share');
     if (a === 'restore') openImport();
     if (a === 'bkpanel') openBackupPanel();

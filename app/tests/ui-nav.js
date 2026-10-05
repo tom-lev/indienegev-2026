@@ -72,6 +72,20 @@ const check = (name, ok, d = '') => { if (!ok) fails++; console.log(`${ok ? '✅
   check('לחיצה על הלוגו – פרופיל', await ev(() => tab === 'profile'));
   await ev(() => { setTab('mine'); openFriends(); }); await sleep(800);
   check('openFriends (אחרי הוספת חבר) – פרופיל', await ev(() => tab === 'profile'));
+  // האוהל מהפרופיל
+  await ev(() => { delete S.prefs.tent; save(); syncTent(); setTab('profile'); }); await sleep(300);
+  check('פרופיל בלי אוהל – כפתור "סימון האוהל במפה"', await ev(() => !!document.querySelector('#pscroll [data-a="tent-move"]') && !document.querySelector('#pscroll [data-a="tent-go"]')));
+  await page.click('#pscroll [data-a="tent-move"]'); await sleep(600);
+  check('סימון – עובר למפה במצב סימון אוהל', await ev(() => tab === 'map' && picking === 'tent'));
+  await ev(() => { picking = false; S.prefs.tent = { x: 40, y: 70 }; save(); syncTent(); setTab('profile'); }); await sleep(300);
+  const tp = await ev(() => document.querySelector('#pscroll').textContent);
+  check('פרופיל עם אוהל – כתוב ליד מה', /ליד /.test(tp));
+  check('כפתורי האוהל קיימים', await ev(() => ['tent-go', 'tent-share', 'tent-move'].every(a => !!document.querySelector(`#pscroll [data-a="${a}"]`))));
+  await page.click('#pscroll [data-a="tent-go"]'); await sleep(900);
+  check('"ניווט לאוהל שלי" – מפה עם יעד האוהל', await ev(() => tab === 'map' && mapFocus && mapFocus.dest === 'tent'));
+  await ev(() => popLayer()); await sleep(600);
+  check('יציאה מהניווט – חוזרים לפרופיל', await ev(() => tab === 'profile'));
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/nav-tent.png' });
   if (process.env.SHOTS) {
     await page.screenshot({ path: process.env.SHOTS + '/nav-profile.png' });
     await ev(() => setTab('mine')); await sleep(200);
