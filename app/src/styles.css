@@ -312,17 +312,23 @@ main#view { overflow: hidden; position: relative; min-height: 0; }
 /* לשונית פרופיל */
 .prof-card { display: flex; align-items: center; gap: 14px; padding: 14px; margin-bottom: 14px; border-radius: 18px; background: color-mix(in srgb, var(--fc) 18%, var(--cream)); }
 .prof-card .av.big { width: 64px; height: 64px; font-size: 34px; flex: none; border-width: 3px; }
+.av-edit { position: relative; cursor: pointer; }
+.av-edit i { position: absolute; bottom: -2px; inset-inline-start: -2px; width: 24px; height: 24px; border-radius: 50%; background: var(--ink); color: var(--paper); display: grid; place-items: center; box-shadow: 0 0 0 2px var(--paper); }
+.av-edit i svg { width: 13px; height: 13px; }
 .prof-name { flex: 1; min-width: 0; }
 .prof-name .text-in { margin: 4px 0 0; }
-.prof-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 4px; }
-.tile { background: var(--cream); border-radius: 16px; padding: 12px; display: flex; flex-direction: column; min-width: 0; }
-.tile h3 { display: flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 900; margin: 0 0 4px; }
-.tile h3 svg { width: 16px; height: 16px; }
-.tile p { font-size: 12.5px; color: var(--ink-2); margin: 0 0 10px; flex: 1; line-height: 1.35; }
-.tile .btn.sm { min-height: 38px; }
-.tile-acts { display: flex; justify-content: space-between; margin-top: 6px; }
-.tile-acts button { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 800; padding: 4px 2px; color: var(--ink); }
-.tile-acts svg { width: 14px; height: 14px; }
+.prof-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+.tile { background: var(--cream); border-radius: 16px; padding: 10px 8px; display: flex; flex-direction: column; align-items: center; text-align: center; min-width: 0; }
+.tile-i { font-size: 22px; line-height: 1; height: 26px; display: grid; place-items: center; }
+.tile-i svg { width: 22px; height: 22px; }
+.tile h3 { font-size: 13.5px; font-weight: 900; margin: 6px 0 8px; line-height: 1.2; flex: 1; }
+.tile-sub { display: block; font-size: 11px; font-weight: 600; color: var(--ink-2); margin-top: 2px; }
+.tile .btn.sm { min-height: 36px; padding: 0 6px; font-size: 13.5px; }
+.tile .btn.wa { background: #25d366; border-color: #1da851; color: #0b3b22; }
+.tile-acts { display: flex; justify-content: center; gap: 14px; margin-top: 6px; }
+.tile-acts button { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; color: var(--ink); }
+.tile-acts svg { width: 17px; height: 17px; }
+.link-btn { display: block; margin-top: 10px; font-size: 13px; font-weight: 800; color: var(--ink-2); text-decoration: underline; padding: 4px 0; }
 details.av-card > summary { list-style: none; display: flex; align-items: center; gap: 8px; cursor: pointer; }
 details.av-card > summary::-webkit-details-marker { display: none; }
 details.av-card > summary h3 { margin: 0; flex: 1; }

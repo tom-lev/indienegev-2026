@@ -47,10 +47,14 @@ const check = (name, ok, d = '') => { if (!ok) fails++; console.log(`${ok ? '✅
   await page.click('#gq'); await sleep(300);
   let rc = await ev(() => [...document.querySelectorAll('#results [data-recent]')].map(b => b.dataset.recent));
   check('חיפושים אחרונים: "של" נשמר אחרי פתיחת תוצאה', rc[0] === 'של', JSON.stringify(rc));
-  await page.type('#gq', 'אביב'); await page.keyboard.press('Enter'); await sleep(300);
+  await page.type('#gq', 'אביב', { delay: 60 }); await sleep(2000); // בלי Enter – רק הפסקה בהקלדה (כמו בטלפון)
   await page.click('.gs-x'); await sleep(500); await page.click('#gq'); await sleep(300);
   rc = await ev(() => [...document.querySelectorAll('#results [data-recent]')].map(b => b.dataset.recent));
-  check('Enter שומר; האחרון ראשון', rc[0] === 'אביב' && rc[1] === 'של', JSON.stringify(rc));
+  check('נשמר לבד אחרי הפסקה בהקלדה (בלי Enter); בלי "אב"/"אבי" באמצע; האחרון ראשון', rc[0] === 'אביב' && rc[1] === 'של' && rc.length === 2, JSON.stringify(rc));
+  await page.type('#gq', 'זזזזז'); await sleep(2000);
+  check('חיפוש בלי תוצאות לא נשמר', await ev(() => !S.recent.includes('זזזזז')));
+  await ev(() => { document.querySelector('#gq').value = ''; searchState.q = ''; searchRefresh(); });
+  check('החיפושים האחרונים בנתונים המסונכרנים', await ev(() => CC.items(S).recent && CC.items(S).recent[0] === 'אביב'));
   await page.click('#results [data-recent="של"]'); await sleep(300);
   check('לחיצה על חיפוש אחרון – ממלאת ומחפשת', await ev(() => document.querySelector('#gq').value === 'של' && searchState.q === 'של' && !document.querySelector('#results .recent') && document.querySelectorAll('#results .row').length > 0));
   await ev(() => { document.querySelector('#gq').value = ''; searchState.q = ''; searchRefresh(); }); await sleep(200);
@@ -84,10 +88,14 @@ const check = (name, ok, d = '') => { if (!ok) fails++; console.log(`${ok ? '✅
   check('פרופיל: שם, דמות, חברים, שיתוף, גיבוי, איפוס', s.name === 'תומר' && s.av === 11 && s.friends && s.add && s.share && s.bk && s.reset, JSON.stringify(s));
   await page.click('#pName', { clickCount: 3 }); await page.type('#pName', 'תומר ל'); await ev(() => document.querySelector('#pName').dispatchEvent(new Event('change')));
   check('שינוי שם מהפרופיל', await ev(() => S.name === 'תומר ל'));
-  check('לפני בחירה – מקטע הדמות פתוח', await ev(() => document.querySelector('.av-card').open));
+  check('לפני בחירה – בוחר הדמות פתוח', await ev(() => !!document.querySelector('.av-card .av-pick')));
   await page.click('#pscroll .av-opt[data-av="6"]'); await sleep(300);
-  check('אחרי בחירה – המקטע מתקפל ומציג את הדמות', await ev(() => !document.querySelector('.av-card').open && document.querySelector('.av-card summary').textContent.includes('🦊')));
-  check('בחירת דמות מהפרופיל (🦊) – מתעדכן בכרטיס', await ev(() => myAvatar() === 6 && document.querySelector('.prof-card .av').textContent.includes('🦊')));
+  check('אחרי בחירה – הבוחר נסגר, הדמות ליד השם', await ev(() => !document.querySelector('.av-card') && document.querySelector('.prof-card .av-edit').textContent.includes('🦊')));
+  await page.click('.prof-card .av-edit'); await sleep(300);
+  check('לחיצה על הדמות ליד השם – פותחת את הבוחר', await ev(() => !!document.querySelector('.av-card .av-pick')));
+  await page.click('.prof-card .av-edit'); await sleep(300);
+  check('לחיצה נוספת – סוגרת', await ev(() => !document.querySelector('.av-card')));
+  check('בחירת דמות מהפרופיל (🦊)', await ev(() => myAvatar() === 6));
   await page.setRequestInterception(true);
   let wa = null;
   const onReq = r => { if (r.url().startsWith('https://wa.me/')) { wa = decodeURIComponent(r.url()); r.abort(); } else r.continue(); };

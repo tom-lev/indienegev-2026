@@ -327,17 +327,23 @@ main#view { overflow: hidden; position: relative; min-height: 0; }
 /* לשונית פרופיל */
 .prof-card { display: flex; align-items: center; gap: 14px; padding: 14px; margin-bottom: 14px; border-radius: 18px; background: color-mix(in srgb, var(--fc) 18%, var(--cream)); }
 .prof-card .av.big { width: 64px; height: 64px; font-size: 34px; flex: none; border-width: 3px; }
+.av-edit { position: relative; cursor: pointer; }
+.av-edit i { position: absolute; bottom: -2px; inset-inline-start: -2px; width: 24px; height: 24px; border-radius: 50%; background: var(--ink); color: var(--paper); display: grid; place-items: center; box-shadow: 0 0 0 2px var(--paper); }
+.av-edit i svg { width: 13px; height: 13px; }
 .prof-name { flex: 1; min-width: 0; }
 .prof-name .text-in { margin: 4px 0 0; }
-.prof-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 4px; }
-.tile { background: var(--cream); border-radius: 16px; padding: 12px; display: flex; flex-direction: column; min-width: 0; }
-.tile h3 { display: flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 900; margin: 0 0 4px; }
-.tile h3 svg { width: 16px; height: 16px; }
-.tile p { font-size: 12.5px; color: var(--ink-2); margin: 0 0 10px; flex: 1; line-height: 1.35; }
-.tile .btn.sm { min-height: 38px; }
-.tile-acts { display: flex; justify-content: space-between; margin-top: 6px; }
-.tile-acts button { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 800; padding: 4px 2px; color: var(--ink); }
-.tile-acts svg { width: 14px; height: 14px; }
+.prof-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+.tile { background: var(--cream); border-radius: 16px; padding: 10px 8px; display: flex; flex-direction: column; align-items: center; text-align: center; min-width: 0; }
+.tile-i { font-size: 22px; line-height: 1; height: 26px; display: grid; place-items: center; }
+.tile-i svg { width: 22px; height: 22px; }
+.tile h3 { font-size: 13.5px; font-weight: 900; margin: 6px 0 8px; line-height: 1.2; flex: 1; }
+.tile-sub { display: block; font-size: 11px; font-weight: 600; color: var(--ink-2); margin-top: 2px; }
+.tile .btn.sm { min-height: 36px; padding: 0 6px; font-size: 13.5px; }
+.tile .btn.wa { background: #25d366; border-color: #1da851; color: #0b3b22; }
+.tile-acts { display: flex; justify-content: center; gap: 14px; margin-top: 6px; }
+.tile-acts button { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; color: var(--ink); }
+.tile-acts svg { width: 17px; height: 17px; }
+.link-btn { display: block; margin-top: 10px; font-size: 13px; font-weight: 800; color: var(--ink-2); text-decoration: underline; padding: 4px 0; }
 details.av-card > summary { list-style: none; display: flex; align-items: center; gap: 8px; cursor: pointer; }
 details.av-card > summary::-webkit-details-marker { display: none; }
 details.av-card > summary h3 { margin: 0; flex: 1; }
@@ -2352,20 +2358,29 @@ const searchState = { q: '', kind: 'all' };
 let searchRefresh = null; // רענון תוצאות בלבד, כדי לא לאבד פוקוס בשדה
 let searchOn = false, searchLayer = null;
 
-/* חיפושים אחרונים (5), נשמרים מקומית */
-const RECENT_KEY = 'indienegev-recent';
-const recentSearches = () => { try { return JSON.parse(localStorage.getItem(RECENT_KEY)) || []; } catch (e) { return []; } };
+/* חיפושים אחרונים (5) – חלק מהנתונים, כך שמסתנכרנים בין המכשירים.
+   נשמרים לבד: כשמפסיקים להקליד לרגע, כשפותחים תוצאה, ב"חפש"/Enter וביציאה מהחיפוש */
+const recentSearches = () => (Array.isArray(S.recent) ? S.recent : []);
+let recentTimer = null;
 function rememberSearch(q) {
+  clearTimeout(recentTimer);
   q = (q || '').trim();
-  if (q.length < 2) return;
-  const l = [q, ...recentSearches().filter(x => x !== q)].slice(0, 5);
-  try { localStorage.setItem(RECENT_KEY, JSON.stringify(l)); } catch (e) { /* */ }
+  if (q.length < 2 || !search(q, 'all').length) return; // רק חיפוש שמצא משהו
+  const cur = recentSearches();
+  // המשך הקלדה של אותו חיפוש ("אב" → "אביב") מחליף את הקודם במקום להוסיף
+  const rest = cur.filter((x, i) => x !== q && !(i === 0 && (q.startsWith(x) || x.startsWith(q))));
+  const l = [q, ...rest].slice(0, 5);
+  if (JSON.stringify(l) === JSON.stringify(cur)) return;
+  S.recent = l;
+  save();
 }
+function rememberSoon(q) { clearTimeout(recentTimer); recentTimer = setTimeout(() => rememberSearch(q), 1500); }
 
 function enterSearch() {
   if (searchOn) return;
   searchOn = true;
   searchLayer = pushLayer(() => {
+    rememberSearch(searchState.q);
     searchOn = false; searchLayer = null; searchState.q = '';
     const i = $('#gq');
     if (i) { i.value = ''; i.blur(); }
@@ -2402,9 +2417,10 @@ function renderSearch(view) {
   results.addEventListener('click', e => {
     const r = e.target.closest('[data-recent]');
     if (r) { searchState.q = r.dataset.recent; const i = $('#gq'); if (i) i.value = searchState.q; draw(); return; }
-    if (e.target.closest('[data-rclear]')) { try { localStorage.removeItem(RECENT_KEY); } catch (x) { /* */ } draw(); return; }
-    if (e.target.closest('[data-ev]')) rememberSearch(searchState.q); // פתיחת תוצאה = חיפוש ששווה לזכור
+    if (e.target.closest('[data-rclear]')) { S.recent = []; save(); draw(); return; }
   }, true);
+  // פתיחת תוצאה (גם בטלפון, שבו הלחיצה מתחילה ב-pointerdown) = חיפוש ששווה לזכור
+  results.addEventListener('pointerdown', e => { if (e.target.closest('[data-ev]')) rememberSearch(searchState.q); }, true);
   $('.chips', view).addEventListener('click', e => {
     const b = e.target.closest('[data-kind]');
     if (!b) return;
@@ -4110,6 +4126,10 @@ ${SITE_URL}`;
   location.href = 'https://wa.me/?text=' + encodeURIComponent(text);
 }
 
+/* בוחר הדמות נפתח בלחיצה על הדמות ליד השם; עד הבחירה הראשונה – פתוח */
+let avPickerOpen = false;
+const avOpen = () => avPickerOpen || !(S.avatar && (S.avatar.picked || !S.avatar.auto));
+
 function renderProfile(view) {
   const me = meLook();
   const n = Object.keys(S.picks).length;
@@ -4118,38 +4138,34 @@ function renderProfile(view) {
     : CC.on ? '<b>לא מחובר/ת</b> – בלי חשבון אין גיבוי לענן' : '';
   view.innerHTML = `<div class="scroll" id="pscroll"><div class="pad">
     <div class="prof-card" style="--fc:${me.color}">
-      <span class="av big">${me.emoji}</span>
+      <button class="av big av-edit" data-a="avatar" aria-label="החלפת הדמות" aria-expanded="${avOpen()}">${me.emoji}<i>${ICON.edit}</i></button>
       <div class="prof-name">
         <label class="field-l" for="pName">השם שלך (כך החברים רואים אותך)</label>
         <input id="pName" class="text-in" value="${esc(S.name)}" maxlength="24" placeholder="השם שלך">
       </div>
     </div>
-
-    ${(() => {
-      // אחרי שבחרת דמות בפעם הראשונה – המקטע מתקפל (פותחים בלחיצה כדי להחליף)
-      const picked = S.avatar && (S.avatar.picked || !S.avatar.auto);
-      return `<details class="card-box av-card" ${picked ? '' : 'open'}>
-        <summary><h3>הדמות שלך</h3>${picked ? `<span class="av sm" style="--fc:${me.color}">${me.emoji}</span><span class="av-sum">החלפה</span>` : ''}</summary>
-        <p>אפשר להחליף מתי שרוצים. דמות שחבר/ה כבר קיבל/ה – תפוסה.</p>${avatarPicker()}
-      </details>`;
-    })()}
+    ${avOpen() ? `<div class="card-box av-card"><h3>${myAvatar() == null || !(S.avatar.picked || !S.avatar.auto) ? 'בחר/י דמות' : 'החלפת הדמות'}</h3><p>כך החברים רואים אותך. דמות שחבר/ה כבר קיבל/ה – תפוסה.</p>${avatarPicker()}</div>` : ''}
 
     <div class="prof-tiles">
       <div class="tile">
-        <h3>${ICON.share} שיתוף הלוז</h3>
-        <p>לינק, QR או קוד · מתעדכן אצל החברים</p>
+        <div class="tile-i">${ICON.share}</div>
+        <h3>שיתוף הלוז</h3>
         <button class="btn block sm" data-a="share">שיתוף</button>
       </div>
       <div class="tile">
-        <h3>🏠 האוהל שלי</h3>
-        ${PLACE.tent ? (() => { const lm = tentLandmark(PLACE.tent); return `<p>${lm ? `ליד ${esc(lm.name)}` : 'מסומן במפה'}</p>
-        <button class="btn block sm" data-a="tent-go">${ICON.pin} ניווט</button>
-        <div class="tile-acts"><button data-a="tent-share">${ICON.image} שליחה</button><button data-a="tent-move">${ICON.edit} הזזה</button></div>`; })()
-        : `<p>עוד לא סומן · פעם אחת במפה</p>
-        <button class="btn block sm" data-a="tent-move">${ICON.map} סימון</button>`}
+        <div class="tile-i">🏠</div>
+        <h3>האוהל שלי${PLACE.tent && tentLandmark(PLACE.tent) ? `<small class="tile-sub">ליד ${esc(tentLandmark(PLACE.tent).name)}</small>` : ''}</h3>
+        ${PLACE.tent
+          ? `<button class="btn block sm" data-a="tent-go">ניווט</button>
+             <div class="tile-acts"><button data-a="tent-share" aria-label="שליחת מיקום האוהל">${ICON.image}</button><button data-a="tent-move" aria-label="הזזת האוהל">${ICON.edit}</button></div>`
+          : `<button class="btn block sm" data-a="tent-move">סימון</button>`}
+      </div>
+      <div class="tile">
+        <div class="tile-i">💬</div>
+        <h3>שליחת האפליקציה</h3>
+        <button class="btn block sm wa" data-a="appshare">וואטסאפ</button>
       </div>
     </div>
-    <button class="app-share" data-a="appshare">💬 שליחת האפליקציה לחבר בוואטסאפ</button>
 
     <div class="card-box">
       <h3>יומן סיקור</h3>
@@ -4172,6 +4188,7 @@ function renderProfile(view) {
         <button class="btn sm" data-a="bkpanel">💾 גיבוי ושחזור</button>
         <button class="btn alt sm" data-a="restore">${ICON.import} ייבוא לוז</button>
       </div>
+      ${typeof cloudAuth !== 'undefined' && cloudAuth ? '<button class="link-btn" data-a="signout">התנתקות / התחברות עם חשבון אחר</button>' : ''}
     </div>
 
     <div class="card-box">
@@ -4201,14 +4218,16 @@ function renderProfile(view) {
   const g = $('#pgbtn', sc);
   if (g) renderGoogleButton(g);
   $('#pName', sc).onchange = e => { S.name = e.target.value.trim().slice(0, 24); save(); };
-  bindAvatarPicker(sc, () => rerender());
+  bindAvatarPicker(sc, () => { avPickerOpen = false; rerender(); });
   bindFriends(sc, () => rerender());
   sc.addEventListener('click', async e => {
     const b = e.target.closest('[data-a]');
     if (!b) return;
     const a = b.dataset.a;
     if (a === 'share') openShare();
+    if (a === 'avatar') { avPickerOpen = !avOpen(); return rerender(); }
     if (a === 'appshare') shareApp();
+    if (a === 'signout') cloudSignOut();
     if (a === 'journal') openTimeline();
     if (a === 'tent-go') goTo('tent');
     if (a === 'tent-share') shareTentImage();
@@ -4670,6 +4689,7 @@ const CC = (() => {
     if (st.prefs && st.prefs.tent) m.tent = st.prefs.tent;
     if (st.name) m.name = st.name;
     if (st.avatar) m.avatar = st.avatar;
+    if (st.recent && st.recent.length) m.recent = st.recent;
     return m;
   }
   function implicitMt(key, v) { // מצבים ישנים בלי mt
@@ -4681,12 +4701,12 @@ const CC = (() => {
     const out = { ...base, picks: {}, ratings: {}, nope: {}, notes: [], friends: [], mt, tomb };
     const prefs = { ...(base.prefs || {}) }; delete prefs.tent;
     out.name = '';
-    delete out.avatar;
+    delete out.avatar; delete out.recent;
     for (const [key, v] of Object.entries(m)) {
       const i = key.indexOf(':'), pre = i > 0 ? key.slice(0, i) : key, id = i > 0 ? key.slice(i + 1) : '';
       if (pre === 'p') out.picks[id] = v; else if (pre === 'r') out.ratings[id] = v; else if (pre === 'x') out.nope[id] = v;
       else if (pre === 'n') out.notes.push(v); else if (pre === 'f') out.friends.push(v);
-      else if (key === 'tent') prefs.tent = v; else if (key === 'name') out.name = v; else if (key === 'avatar') out.avatar = v;
+      else if (key === 'tent') prefs.tent = v; else if (key === 'name') out.name = v; else if (key === 'avatar') out.avatar = v; else if (key === 'recent') out.recent = v;
     }
     out.notes.sort((a, b) => (a.at || 0) - (b.at || 0) || (a.id > b.id ? 1 : -1));
     out.prefs = prefs;
@@ -5260,6 +5280,11 @@ async function initBackup() {
   if (cloudAuth) pullCloud(); else maybeShowWelcome();
   refreshFriends();
   pingSeen();
+  try { // חיפושים אחרונים מהגרסה הקודמת (נשמרו רק במכשיר)
+    const old = JSON.parse(localStorage.getItem('indienegev-recent'));
+    if (Array.isArray(old) && old.length) { S.recent = [...new Set([...recentSearches(), ...old])].slice(0, 5); save(); }
+    localStorage.removeItem('indienegev-recent');
+  } catch (e) { /* */ }
 }
 
 
@@ -5840,6 +5865,7 @@ $('#top').addEventListener('input', e => {
   if (e.target.id !== 'gq') return;
   searchState.q = e.target.value;
   if (!searchOn) enterSearch(); else if (searchRefresh) searchRefresh();
+  rememberSoon(searchState.q);
 });
 $('#top').addEventListener('focusin', e => { if (e.target.id === 'gq') enterSearch(); });
 $('#top').addEventListener('keydown', e => { if (e.target.id === 'gq' && e.key === 'Enter') { rememberSearch(e.target.value); e.target.blur(); } }); // "חפש" במקלדת – סוגר את המקלדת

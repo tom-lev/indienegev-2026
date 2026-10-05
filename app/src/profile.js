@@ -8,6 +8,10 @@ ${SITE_URL}`;
   location.href = 'https://wa.me/?text=' + encodeURIComponent(text);
 }
 
+/* בוחר הדמות נפתח בלחיצה על הדמות ליד השם; עד הבחירה הראשונה – פתוח */
+let avPickerOpen = false;
+const avOpen = () => avPickerOpen || !(S.avatar && (S.avatar.picked || !S.avatar.auto));
+
 function renderProfile(view) {
   const me = meLook();
   const n = Object.keys(S.picks).length;
@@ -16,38 +20,34 @@ function renderProfile(view) {
     : CC.on ? '<b>לא מחובר/ת</b> – בלי חשבון אין גיבוי לענן' : '';
   view.innerHTML = `<div class="scroll" id="pscroll"><div class="pad">
     <div class="prof-card" style="--fc:${me.color}">
-      <span class="av big">${me.emoji}</span>
+      <button class="av big av-edit" data-a="avatar" aria-label="החלפת הדמות" aria-expanded="${avOpen()}">${me.emoji}<i>${ICON.edit}</i></button>
       <div class="prof-name">
         <label class="field-l" for="pName">השם שלך (כך החברים רואים אותך)</label>
         <input id="pName" class="text-in" value="${esc(S.name)}" maxlength="24" placeholder="השם שלך">
       </div>
     </div>
-
-    ${(() => {
-      // אחרי שבחרת דמות בפעם הראשונה – המקטע מתקפל (פותחים בלחיצה כדי להחליף)
-      const picked = S.avatar && (S.avatar.picked || !S.avatar.auto);
-      return `<details class="card-box av-card" ${picked ? '' : 'open'}>
-        <summary><h3>הדמות שלך</h3>${picked ? `<span class="av sm" style="--fc:${me.color}">${me.emoji}</span><span class="av-sum">החלפה</span>` : ''}</summary>
-        <p>אפשר להחליף מתי שרוצים. דמות שחבר/ה כבר קיבל/ה – תפוסה.</p>${avatarPicker()}
-      </details>`;
-    })()}
+    ${avOpen() ? `<div class="card-box av-card"><h3>${myAvatar() == null || !(S.avatar.picked || !S.avatar.auto) ? 'בחר/י דמות' : 'החלפת הדמות'}</h3><p>כך החברים רואים אותך. דמות שחבר/ה כבר קיבל/ה – תפוסה.</p>${avatarPicker()}</div>` : ''}
 
     <div class="prof-tiles">
       <div class="tile">
-        <h3>${ICON.share} שיתוף הלוז</h3>
-        <p>לינק, QR או קוד · מתעדכן אצל החברים</p>
+        <div class="tile-i">${ICON.share}</div>
+        <h3>שיתוף הלוז</h3>
         <button class="btn block sm" data-a="share">שיתוף</button>
       </div>
       <div class="tile">
-        <h3>🏠 האוהל שלי</h3>
-        ${PLACE.tent ? (() => { const lm = tentLandmark(PLACE.tent); return `<p>${lm ? `ליד ${esc(lm.name)}` : 'מסומן במפה'}</p>
-        <button class="btn block sm" data-a="tent-go">${ICON.pin} ניווט</button>
-        <div class="tile-acts"><button data-a="tent-share">${ICON.image} שליחה</button><button data-a="tent-move">${ICON.edit} הזזה</button></div>`; })()
-        : `<p>עוד לא סומן · פעם אחת במפה</p>
-        <button class="btn block sm" data-a="tent-move">${ICON.map} סימון</button>`}
+        <div class="tile-i">🏠</div>
+        <h3>האוהל שלי${PLACE.tent && tentLandmark(PLACE.tent) ? `<small class="tile-sub">ליד ${esc(tentLandmark(PLACE.tent).name)}</small>` : ''}</h3>
+        ${PLACE.tent
+          ? `<button class="btn block sm" data-a="tent-go">ניווט</button>
+             <div class="tile-acts"><button data-a="tent-share" aria-label="שליחת מיקום האוהל">${ICON.image}</button><button data-a="tent-move" aria-label="הזזת האוהל">${ICON.edit}</button></div>`
+          : `<button class="btn block sm" data-a="tent-move">סימון</button>`}
+      </div>
+      <div class="tile">
+        <div class="tile-i">💬</div>
+        <h3>שליחת האפליקציה</h3>
+        <button class="btn block sm wa" data-a="appshare">וואטסאפ</button>
       </div>
     </div>
-    <button class="app-share" data-a="appshare">💬 שליחת האפליקציה לחבר בוואטסאפ</button>
 
     <div class="card-box">
       <h3>יומן סיקור</h3>
@@ -70,6 +70,7 @@ function renderProfile(view) {
         <button class="btn sm" data-a="bkpanel">💾 גיבוי ושחזור</button>
         <button class="btn alt sm" data-a="restore">${ICON.import} ייבוא לוז</button>
       </div>
+      ${typeof cloudAuth !== 'undefined' && cloudAuth ? '<button class="link-btn" data-a="signout">התנתקות / התחברות עם חשבון אחר</button>' : ''}
     </div>
 
     <div class="card-box">
@@ -99,14 +100,16 @@ function renderProfile(view) {
   const g = $('#pgbtn', sc);
   if (g) renderGoogleButton(g);
   $('#pName', sc).onchange = e => { S.name = e.target.value.trim().slice(0, 24); save(); };
-  bindAvatarPicker(sc, () => rerender());
+  bindAvatarPicker(sc, () => { avPickerOpen = false; rerender(); });
   bindFriends(sc, () => rerender());
   sc.addEventListener('click', async e => {
     const b = e.target.closest('[data-a]');
     if (!b) return;
     const a = b.dataset.a;
     if (a === 'share') openShare();
+    if (a === 'avatar') { avPickerOpen = !avOpen(); return rerender(); }
     if (a === 'appshare') shareApp();
+    if (a === 'signout') cloudSignOut();
     if (a === 'journal') openTimeline();
     if (a === 'tent-go') goTo('tent');
     if (a === 'tent-share') shareTentImage();

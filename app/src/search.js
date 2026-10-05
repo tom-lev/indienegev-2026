@@ -5,20 +5,29 @@ const searchState = { q: '', kind: 'all' };
 let searchRefresh = null; // רענון תוצאות בלבד, כדי לא לאבד פוקוס בשדה
 let searchOn = false, searchLayer = null;
 
-/* חיפושים אחרונים (5), נשמרים מקומית */
-const RECENT_KEY = 'indienegev-recent';
-const recentSearches = () => { try { return JSON.parse(localStorage.getItem(RECENT_KEY)) || []; } catch (e) { return []; } };
+/* חיפושים אחרונים (5) – חלק מהנתונים, כך שמסתנכרנים בין המכשירים.
+   נשמרים לבד: כשמפסיקים להקליד לרגע, כשפותחים תוצאה, ב"חפש"/Enter וביציאה מהחיפוש */
+const recentSearches = () => (Array.isArray(S.recent) ? S.recent : []);
+let recentTimer = null;
 function rememberSearch(q) {
+  clearTimeout(recentTimer);
   q = (q || '').trim();
-  if (q.length < 2) return;
-  const l = [q, ...recentSearches().filter(x => x !== q)].slice(0, 5);
-  try { localStorage.setItem(RECENT_KEY, JSON.stringify(l)); } catch (e) { /* */ }
+  if (q.length < 2 || !search(q, 'all').length) return; // רק חיפוש שמצא משהו
+  const cur = recentSearches();
+  // המשך הקלדה של אותו חיפוש ("אב" → "אביב") מחליף את הקודם במקום להוסיף
+  const rest = cur.filter((x, i) => x !== q && !(i === 0 && (q.startsWith(x) || x.startsWith(q))));
+  const l = [q, ...rest].slice(0, 5);
+  if (JSON.stringify(l) === JSON.stringify(cur)) return;
+  S.recent = l;
+  save();
 }
+function rememberSoon(q) { clearTimeout(recentTimer); recentTimer = setTimeout(() => rememberSearch(q), 1500); }
 
 function enterSearch() {
   if (searchOn) return;
   searchOn = true;
   searchLayer = pushLayer(() => {
+    rememberSearch(searchState.q);
     searchOn = false; searchLayer = null; searchState.q = '';
     const i = $('#gq');
     if (i) { i.value = ''; i.blur(); }
@@ -55,9 +64,10 @@ function renderSearch(view) {
   results.addEventListener('click', e => {
     const r = e.target.closest('[data-recent]');
     if (r) { searchState.q = r.dataset.recent; const i = $('#gq'); if (i) i.value = searchState.q; draw(); return; }
-    if (e.target.closest('[data-rclear]')) { try { localStorage.removeItem(RECENT_KEY); } catch (x) { /* */ } draw(); return; }
-    if (e.target.closest('[data-ev]')) rememberSearch(searchState.q); // פתיחת תוצאה = חיפוש ששווה לזכור
+    if (e.target.closest('[data-rclear]')) { S.recent = []; save(); draw(); return; }
   }, true);
+  // פתיחת תוצאה (גם בטלפון, שבו הלחיצה מתחילה ב-pointerdown) = חיפוש ששווה לזכור
+  results.addEventListener('pointerdown', e => { if (e.target.closest('[data-ev]')) rememberSearch(searchState.q); }, true);
   $('.chips', view).addEventListener('click', e => {
     const b = e.target.closest('[data-kind]');
     if (!b) return;

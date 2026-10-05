@@ -133,6 +133,7 @@ $('#top').addEventListener('input', e => {
   if (e.target.id !== 'gq') return;
   searchState.q = e.target.value;
   if (!searchOn) enterSearch(); else if (searchRefresh) searchRefresh();
+  rememberSoon(searchState.q);
 });
 $('#top').addEventListener('focusin', e => { if (e.target.id === 'gq') enterSearch(); });
 $('#top').addEventListener('keydown', e => { if (e.target.id === 'gq' && e.key === 'Enter') { rememberSearch(e.target.value); e.target.blur(); } }); // "חפש" במקלדת – סוגר את המקלדת

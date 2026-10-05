@@ -103,6 +103,7 @@ const CC = (() => {
     if (st.prefs && st.prefs.tent) m.tent = st.prefs.tent;
     if (st.name) m.name = st.name;
     if (st.avatar) m.avatar = st.avatar;
+    if (st.recent && st.recent.length) m.recent = st.recent;
     return m;
   }
   function implicitMt(key, v) { // מצבים ישנים בלי mt
@@ -114,12 +115,12 @@ const CC = (() => {
     const out = { ...base, picks: {}, ratings: {}, nope: {}, notes: [], friends: [], mt, tomb };
     const prefs = { ...(base.prefs || {}) }; delete prefs.tent;
     out.name = '';
-    delete out.avatar;
+    delete out.avatar; delete out.recent;
     for (const [key, v] of Object.entries(m)) {
       const i = key.indexOf(':'), pre = i > 0 ? key.slice(0, i) : key, id = i > 0 ? key.slice(i + 1) : '';
       if (pre === 'p') out.picks[id] = v; else if (pre === 'r') out.ratings[id] = v; else if (pre === 'x') out.nope[id] = v;
       else if (pre === 'n') out.notes.push(v); else if (pre === 'f') out.friends.push(v);
-      else if (key === 'tent') prefs.tent = v; else if (key === 'name') out.name = v; else if (key === 'avatar') out.avatar = v;
+      else if (key === 'tent') prefs.tent = v; else if (key === 'name') out.name = v; else if (key === 'avatar') out.avatar = v; else if (key === 'recent') out.recent = v;
     }
     out.notes.sort((a, b) => (a.at || 0) - (b.at || 0) || (a.id > b.id ? 1 : -1));
     out.prefs = prefs;

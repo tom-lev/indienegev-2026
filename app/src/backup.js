@@ -319,4 +319,9 @@ async function initBackup() {
   if (cloudAuth) pullCloud(); else maybeShowWelcome();
   refreshFriends();
   pingSeen();
+  try { // חיפושים אחרונים מהגרסה הקודמת (נשמרו רק במכשיר)
+    const old = JSON.parse(localStorage.getItem('indienegev-recent'));
+    if (Array.isArray(old) && old.length) { S.recent = [...new Set([...recentSearches(), ...old])].slice(0, 5); save(); }
+    localStorage.removeItem('indienegev-recent');
+  } catch (e) { /* */ }
 }
