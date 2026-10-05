@@ -94,10 +94,10 @@ def build_assets():
                     for b in json.loads((CACHE / 'birds.json').read_text())]
     for b in out['birds']: del b['file']
     # דמות אדם מהציור (מועתקת – המקור נשאר במקומו), להולכים בשבילי הקמפינג
-    if not (CACHE / 'person0.webp').exists():
+    if not (CACHE / 'walk0.webp').exists():
         make_person()
-    with Image.open(CACHE / 'person0.webp') as pm:
-        out['person'] = {'w': pm.width, 'h': pm.height, 'src': 'data:image/webp;base64,' + base64.b64encode((CACHE / 'person0.webp').read_bytes()).decode()}
+    with Image.open(CACHE / 'walk0.webp') as pm:  # מחזור הליכה: 4 תמונות זו לצד זו
+        out['person'] = {'w': pm.width // 4, 'h': pm.height, 'src': 'data:image/webp;base64,' + base64.b64encode((CACHE / 'walk0.webp').read_bytes()).decode()}
     # רשת הליכה לחישוב מסלולים (נבנית מתמונת המפה)
     from walkgrid import build as build_walk, encode, CELL
     grid, (base_w, _) = build_walk(PROJECT / 'festival-map-2026-web-large.jpg')
@@ -130,7 +130,8 @@ def make_birds():
         grow = np.asarray(al.filter(ImageFilter.MaxFilter(5)).filter(ImageFilter.GaussianBlur(1.2))).astype(np.float32) / 255
         grow = np.clip(grow * 1.6, 0, 1)[..., None]
         a[y0:y1, x0:x1] = box * (1 - grow) + sky * grow  # מוחק את הציפור מהמפה
-        sprite = Image.fromarray(np.dstack([box, alpha * 255]).astype('uint8'), 'RGBA')
+        ink = np.median(box[alpha > 0.85], axis=0) * 0.55  # צבע הציפור, מוכהה לכמעט שחור (כמו שאר הדמויות בציור)
+        sprite = Image.fromarray(np.dstack([np.broadcast_to(ink, box.shape), alpha * 255]).astype('uint8'), 'RGBA')
         f = f'bird{n}.webp'
         sprite.save(CACHE / f, 'WEBP', lossless=True)
         birds.append({'x': x0, 'y': y0, 'w': x1 - x0, 'h': y1 - y0, 'file': f})
@@ -156,6 +157,37 @@ def make_person():
     rgb = np.broadcast_to(ink, box.shape)
     sprite = Image.fromarray(np.dstack([rgb, alpha * 255]).astype('uint8')[t:b, l:r], 'RGBA')
     sprite.save(CACHE / 'person0.webp', 'WEBP', lossless=True)
+    make_walk_sheet(sprite, tuple(int(v) for v in ink))
+
+
+def make_walk_sheet(sprite, ink):
+    """4 תמונות של הליכה: הגוף והראש מהדמות המצוירת, והרגליים מצוירות מחדש בכל תמונה בזווית אחרת
+    (פסיעה קדימה, רגליים ביחד, פסיעה הפוכה, ביחד). מצויר בהגדלה ×4 ומוקטן – קצוות רכים כמו מכחול."""
+    import math
+    from PIL import ImageDraw, ImageFilter
+    S = 4
+    w, h = sprite.size
+    hip = round(h * 0.6)                 # מכאן ומטה – רגליים
+    W, H = w + 10, h + 2                 # מקום לפסיעה
+    body = sprite.crop((0, 0, w, hip))
+    frames = []
+    # (זווית רגל שמאל, זווית רגל ימין, הרמה) – פסיעה כ-V הפוך, ובין הפסיעות רגל אחת מורמת מעט
+    for f, (a1, a2, lift) in enumerate([(-18, 14, 0), (-5, 4, 1), (-14, 18, 0), (-4, 5, 2)]):
+        big = Image.new('RGBA', (W * S, H * S), (0, 0, 0, 0))
+        big.alpha_composite(body.resize((w * S, hip * S), Image.LANCZOS), ((W - w) // 2 * S, 0))
+        d = ImageDraw.Draw(big)
+        cx, hy, L = W / 2 * S, (hip - 2) * S, (h - hip + 1) * S
+        for k, ang in enumerate((a1, a2)):
+            hx = cx + (-2.2 if k == 0 else 2.2) * S
+            ll = L * (0.86 if lift == k + 1 else 1)
+            fx, fy = hx + math.sin(math.radians(ang)) * ll, hy + math.cos(math.radians(ang)) * ll
+            d.line([(hx, hy), (fx, fy)], fill=ink + (255,), width=round(4.2 * S))
+            d.ellipse([fx - 2.6 * S, fy - 1.6 * S, fx + 2.6 * S, fy + 1.6 * S], fill=ink + (255,))  # כף רגל
+        frames.append(big.filter(ImageFilter.GaussianBlur(S * 0.35)).resize((W, H), Image.LANCZOS))
+    sheet = Image.new('RGBA', (W * 4, H), (0, 0, 0, 0))
+    for f, im in enumerate(frames):
+        sheet.alpha_composite(im, (f * W, 0))
+    sheet.save(CACHE / 'walk0.webp', 'WEBP', lossless=True)
 
 
 def icon_image(s, full_bleed=False):

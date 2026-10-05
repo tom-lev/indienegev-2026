@@ -411,7 +411,7 @@ const WALKERS = [['cook-campw', 'cook-camps', 0], ['wc-campw', 'cook-campw', 0.4
 function walkersHtml() {
   const p = ASSETS.person;
   if (!p) return '';
-  return WALKERS.map(() => `<div class="m-walker" style="width:${p.w}px;height:${p.h}px"><img src="${p.src}" width="${p.w}" height="${p.h}" alt=""></div>`).join('');
+  return WALKERS.map((_, i) => `<div class="m-walker" style="width:${p.w}px;height:${p.h}px"><i style="background-image:url(${p.src});--w:${p.w}px;animation-delay:${-i * 0.37}s"></i></div>`).join('');
 }
 function walkPeople(stage) {
   if (matchMedia('(prefers-reduced-motion: reduce)').matches || !ASSETS.person) return;
