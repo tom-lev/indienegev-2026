@@ -411,14 +411,16 @@ function flyBirds(stage) {
 const WALK_SPOTS = ['wc-campw', 'wc-camps', 'wc-fam', 'wc-plus', 'cook-shabbat', 'cook-campw', 'cook-camps', 'cook-acc', 'cook-fam',
   'water-campw', 'water-camp', 'water-camps', 'water-plus', 'shower-w', 'shower-s'];
 const walkerAt = [];   // איפה כל מטייל נמצא (נשמר בין רינדורים של המפה)
-const WALK_CYCLE = 1.9; // שניות לשני צעדים – טיול נינוח
-/* מהירות (פיקסלים במפה בשנייה) = שני צעדים בכל מחזור, לפי אורך הצעד של הדמות */
-const walkSpeed = i => { const p = ASSETS.person; return 2 * p.stride * (p.heights ? p.heights[i] : p.h) / WALK_CYCLE; };
+const WALK_SPEED = 17; // פיקסלים במפה בשנייה – טיול נינוח
+/* משך מחזור (שני צעדים) כך שהצעדים תואמים בדיוק למהירות – כף הרגל על הקרקע לא מחליקה */
+const walkCycle = i => { const p = ASSETS.person; return 2 * p.stride * (p.heights ? p.heights[i] : p.h) / WALK_SPEED; };
+/* שורה בגיליון: לכל דמות 3 מבטים – 0 מהצד, 1 מלפנים (הולך למטה), 2 מאחור (הולך למעלה) */
+const walkRowY = (i, view) => { const p = ASSETS.person; return `${((3 * i + view) / (p.rows - 1) * 100).toFixed(3)}%`; };
 function walkersHtml() {
   const p = ASSETS.person;
   if (!p) return '';
-  return Array.from({ length: p.rows || 1 }, (_, i) =>
-    `<div class="m-walker" style="width:${p.w}px;height:${p.h}px;opacity:0"><i style="background-image:url(${p.src});background-size:${p.frames * 100}% ${(p.rows || 1) * 100}%;background-position-y:${p.rows > 1 ? (i / (p.rows - 1) * 100).toFixed(2) : 0}%;--w:${p.w}px;--cyc:${WALK_CYCLE}s;animation-delay:${-i * 0.43}s"></i></div>`).join('');
+  return Array.from({ length: p.variants || 1 }, (_, i) =>
+    `<div class="m-walker" style="width:${p.w}px;height:${p.h}px;opacity:0"><i style="background-image:url(${p.src});background-size:${p.frames * 100}% ${p.rows * 100}%;background-position-y:${walkRowY(i, 0)};--w:${p.w}px;--cyc:${walkCycle(i).toFixed(2)}s;animation-delay:${-i * 0.43}s"></i></div>`).join('');
 }
 function walkPeople(stage) {
   if (matchMedia('(prefers-reduced-motion: reduce)').matches || !ASSETS.person) return;
@@ -435,18 +437,27 @@ function walkPeople(stage) {
       if (!r) { walkerAt[i] = to; return setTimeout(() => walk(to), 1000); }
       const pts = r.pts, acc = [0];
       for (let k = 1; k < pts.length; k++) acc.push(acc[k - 1] + Math.hypot(pts[k].x - pts[k - 1].x, pts[k].y - pts[k - 1].y));
-      const len = acc[acc.length - 1] || 1, frames = [];
-      let dir = pts.length > 1 && pts[1].x < pts[0].x ? -1 : 1; // 1 = פונה ימינה (כך מצויר), −1 = שמאלה
+      const len = acc[acc.length - 1] || 1, frames = [], rows = [];
+      let dir = 1, view = -1; // dir: 1 = פונה ימינה (כך מצויר), −1 = שמאלה
       pts.forEach((q, k) => {
-        const nx = pts[Math.min(k + 1, pts.length - 1)].x - q.x;
-        const nd = Math.abs(nx) > 2 ? Math.sign(nx) : dir;
+        const n = pts[Math.min(k + 1, pts.length - 1)], dx = n.x - q.x, dy = n.y - q.y;
+        // מבט לפי כיוון הקטע: אנכי בעיקר → מלפנים/מאחור; אחרת – מהצד, פונה לכיוון ההליכה
+        const nv = k === pts.length - 1 ? view : Math.abs(dy) > Math.abs(dx) * 1.2 ? (dy > 0 ? 1 : 2) : 0;
+        const nd = nv === 0 && Math.abs(dx) > 2 ? Math.sign(dx) : dir;
         const tr = `translate(${(q.x - p.w / 2).toFixed(0)}px, ${(q.y - p.h).toFixed(0)}px)`; // כפות הרגליים על השביל
-        frames.push({ offset: acc[k] / len, transform: `${tr} scaleX(${dir})` });
-        if (nd !== dir) { dir = nd; frames.push({ offset: acc[k] / len, transform: `${tr} scaleX(${dir})` }); }
+        const o = acc[k] / len;
+        if (k === 0) { view = nv; dir = nd; }
+        frames.push({ offset: o, transform: `${tr} scaleX(${view === 0 ? dir : 1})` });
+        if (nd !== dir || nv !== view) { dir = nd; view = nv; frames.push({ offset: o, transform: `${tr} scaleX(${view === 0 ? dir : 1})` }); }
+        if (!rows.length || rows[rows.length - 1].v !== view) rows.push({ offset: o, v: view });
       });
+      // מחליפים את המבט (שורה בגיליון) ברגעים שבהם הכיוון משתנה
+      const ik = rows.map(r => ({ offset: r.offset, backgroundPositionY: walkRowY(i, r.v), easing: 'step-end' }));
+      ik.push({ offset: 1, backgroundPositionY: walkRowY(i, rows[rows.length - 1].v) });
+      el.querySelector('i').animate(ik, { duration: len / WALK_SPEED * 1000, fill: 'forwards' });
       el.style.transform = frames[0].transform;
       el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 700, fill: 'forwards' });            // יוצא מהמקום
-      const a = el.animate(frames, { duration: len / walkSpeed(i) * 1000, easing: 'linear', fill: 'forwards' }); // הצעדים תואמים למהירות
+      const a = el.animate(frames, { duration: len / WALK_SPEED * 1000, easing: 'linear', fill: 'forwards' }); // הצעדים תואמים למהירות
       a.onfinish = () => {
         if (!alive()) return;
         walkerAt[i] = to;
