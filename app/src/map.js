@@ -362,7 +362,7 @@ function birdsHtml() {
    - מהירות משתנה: איטית בעלייה, מהירה בירידה
    שתי הציפורים הדומות (1, 2) עפות לאט יותר, כמו עופות דורסים שדואים. */
 const BIRD_PATHS = [[-260, 230, 1, 520], [1, 110, -260, 700], [1, 330, -260, 160]]; // [x0, y0, x1, y1]; 1 = קצה ימין של המפה
-const BIRD_SPEED = [40, 20.4, 18];  // פיקסלים במפה בשנייה (בערך)
+const BIRD_SPEED = [40, 23.5, 20.7];  // פיקסלים במפה בשנייה (בערך)
 function flyBirds(stage) {
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   stage.querySelectorAll('.m-bird').forEach((el, i) => {
@@ -406,48 +406,55 @@ function flyBirds(stage) {
     img.animate(kf, { duration: cycle * 1000, iterations: Infinity, delay: -((Date.now() + i * 900) % (cycle * 1000)) });
   });
 }
-/* אנשים קטנים (הדמות מהציור) הולכים הלוך-חזור בשבילי הקמפינג – על המסלולים האמיתיים של רשת ההליכה */
-const WALKERS = [['cook-campw', 'cook-camps', 0], ['wc-campw', 'cook-campw', 0.4]]; // [מאיפה, לאן, היסט בזמן]
+/* אנשים קטנים (בסגנון הדמויות שבציור) מטיילים בקמפינג: כל אחד הולך לשירותים / מתחם בישול / ברזייה / מקלחות,
+   "נכנס" (נעלם), אחרי זמן מה יוצא וממשיך למקום הבא – וחוזר חלילה. ההליכה היא על המסלולים האמיתיים של רשת ההליכה. */
+const WALK_SPOTS = ['wc-campw', 'wc-camps', 'wc-fam', 'wc-plus', 'cook-shabbat', 'cook-campw', 'cook-camps', 'cook-acc', 'cook-fam',
+  'water-campw', 'water-camp', 'water-camps', 'water-plus', 'shower-w', 'shower-s'];
+const walkerAt = [];   // איפה כל מטייל נמצא (נשמר בין רינדורים של המפה)
 function walkersHtml() {
   const p = ASSETS.person;
   if (!p) return '';
-  return WALKERS.map((_, i) => `<div class="m-walker" style="width:${p.w}px;height:${p.h}px"><i style="background-image:url(${p.src});--w:${p.w}px;animation-delay:${-i * 0.43}s"></i></div>`).join('');
+  return Array.from({ length: p.rows || 1 }, (_, i) =>
+    `<div class="m-walker" style="width:${p.w}px;height:${p.h}px;opacity:0"><i style="background-image:url(${p.src});background-size:${p.frames * 100}% ${(p.rows || 1) * 100}%;background-position-y:${p.rows > 1 ? (i / (p.rows - 1) * 100).toFixed(2) : 0}%;--w:${p.w}px;animation-delay:${-i * 0.43}s"></i></div>`).join('');
 }
 function walkPeople(stage) {
   if (matchMedia('(prefers-reduced-motion: reduce)').matches || !ASSETS.person) return;
   const p = ASSETS.person;
+  const spots = WALK_SPOTS.filter(id => PLACE[id]);
+  if (spots.length < 2) return;
+  const pick = (not) => { let s; do { s = spots[Math.floor(Math.random() * spots.length)]; } while (s === not && spots.length > 1); return s; };
+  const at = (el, id) => { const q = placeXY(PLACE[id]); return `translate(${(q.x - p.w / 2).toFixed(0)}px, ${(q.y - p.h).toFixed(0)}px)`; };
   stage.querySelectorAll('.m-walker').forEach((el, i) => {
-    const [from, to, off] = WALKERS[i];
-    const r = PLACE[from] && PLACE[to] && findRoute(from, to);
-    if (!r) { el.remove(); return; }
-    // הלוך וחזור כמסלול אחד – כך הדמות פונה תמיד לכיוון שהיא הולכת
-    const pts = [...r.pts, ...r.pts.slice(0, -1).reverse()];
-    const acc = [0];
-    for (let k = 1; k < pts.length; k++) acc.push(acc[k - 1] + Math.hypot(pts[k].x - pts[k - 1].x, pts[k].y - pts[k - 1].y));
-    const len = acc[acc.length - 1];
-    const frames = [];
-    let dir = 1; // 1 = פונה ימינה (כך מצויר מחזור ההליכה), −1 = שמאלה
-    pts.forEach((q, k) => {
-      const nx = pts[Math.min(k + 1, pts.length - 1)].x - q.x;
-      const nd = Math.abs(nx) > 2 ? Math.sign(nx) : dir; // בקטע כמעט אנכי – שומרים על הכיוון הקודם
-      // כפות הרגליים על השביל: הנקודה במסלול = מרכז תחתית הדמות
-      const tr = `translate(${(q.x - p.w / 2).toFixed(0)}px, ${(q.y - p.h).toFixed(0)}px)`;
-      frames.push({ offset: acc[k] / len, transform: `${tr} scaleX(${dir})` });
-      if (nd !== dir) { dir = nd; frames.push({ offset: acc[k] / len, transform: `${tr} scaleX(${dir})` }); } // מסתובב במקום
-    });
-    const duration = len / 10 * 1000; // כ-10 פיקסלים במפה בשנייה – טיול נינוח
-    el.animate(frames, { duration, iterations: Infinity, easing: 'linear', delay: -((Date.now() + off * duration) % duration) });
+    const alive = () => document.contains(el);
+    const walk = (from) => {
+      if (!alive()) return;
+      const to = pick(from), r = findRoute(from, to);
+      if (!r) { walkerAt[i] = to; return setTimeout(() => walk(to), 1000); }
+      const pts = r.pts, acc = [0];
+      for (let k = 1; k < pts.length; k++) acc.push(acc[k - 1] + Math.hypot(pts[k].x - pts[k - 1].x, pts[k].y - pts[k - 1].y));
+      const len = acc[acc.length - 1] || 1, frames = [];
+      let dir = pts.length > 1 && pts[1].x < pts[0].x ? -1 : 1; // 1 = פונה ימינה (כך מצויר), −1 = שמאלה
+      pts.forEach((q, k) => {
+        const nx = pts[Math.min(k + 1, pts.length - 1)].x - q.x;
+        const nd = Math.abs(nx) > 2 ? Math.sign(nx) : dir;
+        const tr = `translate(${(q.x - p.w / 2).toFixed(0)}px, ${(q.y - p.h).toFixed(0)}px)`; // כפות הרגליים על השביל
+        frames.push({ offset: acc[k] / len, transform: `${tr} scaleX(${dir})` });
+        if (nd !== dir) { dir = nd; frames.push({ offset: acc[k] / len, transform: `${tr} scaleX(${dir})` }); }
+      });
+      el.style.transform = frames[0].transform;
+      el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 700, fill: 'forwards' });            // יוצא מהמקום
+      const a = el.animate(frames, { duration: len / 10 * 1000, easing: 'linear', fill: 'forwards' }); // טיול נינוח
+      a.onfinish = () => {
+        if (!alive()) return;
+        walkerAt[i] = to;
+        el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 700, fill: 'forwards' });           // "נכנס" ונעלם
+        setTimeout(() => walk(to), 8000 + Math.random() * 22000);                                  // נשאר בפנים קצת
+      };
+    };
+    const start = walkerAt[i] || pick();
+    el.style.transform = at(el, start);
+    setTimeout(() => walk(start), 600 + i * 2500); // כל אחד יוצא בזמן אחר
   });
-}
-
-/* פתיחה קולנועית: פעם אחת בכל פתיחה של האפליקציה – מכל המפה אל ההופעה הקרובה בלוז שלך, או אל האוהל */
-let mapIntroDone = false;
-function mapIntroTarget() {
-  const t = now();
-  const next = myPicks().find(e => e.end > t);
-  if (next && next.start - t < 3 * HOUR) return PLACE[next.stage];
-  if (PLACE.tent) return PLACE.tent;
-  return next ? PLACE[next.stage] : null;
 }
 
 function renderMap(view) {
@@ -504,18 +511,11 @@ function renderMap(view) {
       else focusStage(stage, fs, true);
     }));
   } else {
-    const intro = !mapIntroDone && !map.s && mapIntroTarget();
     if (!map.s) fitHeight();
     clampMap();
     applyMap(stage);
     updateRoute(null);
-    if (intro) {
-      mapIntroDone = true;
-      // מתחילים מכל המפה, ואחרי רגע מתקרבים לאט ליעד
-      setTimeout(() => { if (tab !== 'map' || mapFocus || !document.contains(stage)) return; stage.classList.add('slow'); focusStage(stage, intro, true); setTimeout(() => stage.classList.remove('slow'), 2000); }, 450);
-    }
   }
-  mapIntroDone = true;
   flyBirds(stage);
   walkPeople(stage);
   bindMapGestures(wrap, stage);
