@@ -10,7 +10,8 @@ const check = (name, ok, d = '') => { if (!ok) fails++; console.log(`${ok ? '✅
   const page = await browser.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
-  page.on('dialog', d => d.accept());
+  let nextPrompt = null; // תשובה לחלון prompt הבא (אחרת – אישור רגיל)
+  page.on('dialog', d => { const v = nextPrompt; nextPrompt = null; v != null ? d.accept(v) : d.accept(); });
   await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 });
   await page.goto(APP, { waitUntil: 'load' }); await sleep(1200);
   const ev = (fn, ...a) => page.evaluate(fn, ...a);
@@ -109,10 +110,44 @@ const check = (name, ok, d = '') => { if (!ok) fails++; console.log(`${ok ? '✅
   await ev(() => popLayer()); await sleep(500);
   await ev(() => setTab('mine')); await sleep(200);
   check('בכותרת של "הלוז שלי" אין כפתור חברים', await ev(() => !document.querySelector('#top [data-act="friends"]')));
+  await ev(() => setTab('profile')); await sleep(200);
   await page.click('.logo-btn'); await sleep(300);
-  check('לחיצה על הלוגו – פרופיל', await ev(() => tab === 'profile'));
+  check('לחיצה על הלוגו – הלוז שלי', await ev(() => tab === 'mine' && S.prefs.mineView === 'me'));
   await ev(() => { setTab('mine'); openFriends(); }); await sleep(800);
   check('openFriends (אחרי הוספת חבר) – פרופיל', await ev(() => tab === 'profile'));
+  // רשימת ציוד
+  await ev(() => setTab('profile')); await sleep(300);
+  let gc = await ev(() => { const c = document.querySelector('.gear-card'); const cards = [...document.querySelectorAll('#pscroll .card-box h3')].map(h => h.textContent); return { t: c && c.textContent, before: cards.findIndex(t => /רשימת ציוד/.test(t)) < cards.findIndex(t => /יומן סיקור/.test(t)) }; });
+  check('פרופיל: "רשימת ציוד · ארזת 0 מתוך 71" מעל יומן סיקור', /ארזת 0 מתוך 71/.test(gc.t) && gc.before, JSON.stringify(gc));
+  await page.click('#pscroll [data-a="gear"]'); await sleep(500);
+  gc = await ev(() => ({ cats: document.querySelectorAll('.panel .gear-cat').length, rows: document.querySelectorAll('.panel .gear-row').length }));
+  check('הרשימה נטענה מראש: 9 קטגוריות, 71 פריטים', gc.cats === 9 && gc.rows === 71, JSON.stringify(gc));
+  await page.click('.panel .gear-row .gear-chk'); await sleep(200);
+  check('סימון "ארזתי"', await ev(() => gearStats().packed === 1 && /ארזת 1 מתוך 71/.test(document.querySelector('.panel .gear-head').textContent)));
+  await page.type('.panel .gear-cat:nth-of-type(2) .gear-add input', 'ערסל'); await page.keyboard.press('Enter'); await sleep(300);
+  gc = await ev(() => ({ has: [...document.querySelectorAll('.panel .gear-cat:nth-of-type(2) .gear-t')].some(t => t.textContent === 'ערסל'), focus: document.activeElement && document.activeElement.closest('.gear-add') && document.activeElement.closest('.gear-add').dataset.gadd, n: gearList().length }));
+  check('הוספת פריט בקטגוריה (Enter) – מופיע, והשדה נשאר מוכן להוספה הבאה', gc.has && gc.n === 72 && gc.focus === 'ישיבה', JSON.stringify(gc));
+  await ev(() => { const r = [...document.querySelectorAll('.panel .gear-row')].find(r => r.textContent.includes('ערסל')); r.querySelector('[data-gd]').click(); }); await sleep(300);
+  check('מחיקת פריט בלחיצה אחת', await ev(() => gearList().length === 71 && !gearList().some(g => g.text === 'ערסל')));
+  nextPrompt = 'צילום';
+  await page.click('.panel [data-g="addcat"]'); await sleep(400);
+  gc = await ev(() => ({ cats: [...document.querySelectorAll('.panel .gear-cat h3')].map(h => h.firstChild.textContent.trim()), focus: document.activeElement && document.activeElement.closest('.gear-add') && document.activeElement.closest('.gear-add').dataset.gadd }));
+  check('קטגוריה חדשה – מופיעה בסוף, והשדה שלה מוכן להוספה', gc.cats[gc.cats.length - 1] === 'צילום' && gc.focus === 'צילום', JSON.stringify(gc));
+  await page.keyboard.type('מצלמה'); await page.keyboard.press('Enter'); await sleep(300);
+  check('פריט בקטגוריה החדשה', await ev(() => gearList().some(g => g.cat === 'צילום' && g.text === 'מצלמה') && CC.items(S)['gc:צילום']));
+  await ev(() => [...document.querySelectorAll('.panel .gear-cat')].find(c => c.textContent.includes('צילום')).querySelector('[data-gcd]').click()); await sleep(400);
+  check('מחיקת קטגוריה שהוספתי (עם אישור) – כולל הפריטים שבה', await ev(() => !gearCats().includes('צילום') && !gearList().some(g => g.cat === 'צילום')));
+  check('לקטגוריות הקבועות אין כפתור מחיקה', await ev(() => !document.querySelector('.panel .gear-cat:first-of-type [data-gcd]')));
+  check('שיתוף כטקסט: קטגוריות + ✅/⬜', await ev(() => { const t = gearText(); return t.includes('*אוהל ושינה*') && t.includes('✅') && t.includes('⬜ שק שינה'); }));
+  check('נשמר בנתונים המסונכרנים (פריט לכל שורה)', await ev(() => Object.keys(CC.items(S)).filter(k => k.startsWith('g:')).length === 71 && CC.items(S).gearInit === true));
+  await ev(() => popLayer()); await sleep(500);
+  await ev(() => { profFold.friends = false; profFold.account = false; render(); }); await sleep(200); // מבטל פתיחה מבדיקה קודמת באותו סשן
+  check('חברים וחשבון – מקופלים כברירת מחדל', await ev(() => [...document.querySelectorAll('#pscroll details.fold')].length === 2 && [...document.querySelectorAll('#pscroll details.fold')].every(d => !d.open)));
+  check('השם והאוהל באותה שורה', await ev(() => { const a = document.querySelector('.prof-top .prof-card').getBoundingClientRect(), b = document.querySelector('.prof-top .tent-tile').getBoundingClientRect(); return Math.abs(a.top - b.top) < 4; }));
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/prof3.png' });
+  await ev(() => { setTab('mine'); openFriends(); }); await sleep(800);
+  check('openFriends פותח את מקטע החברים', await ev(() => document.querySelector('#friends').open));
+
   // האוהל מהפרופיל
   await ev(() => { delete S.prefs.tent; save(); syncTent(); setTab('profile'); }); await sleep(300);
   check('פרופיל בלי אוהל – כפתור "סימון האוהל במפה"', await ev(() => !!document.querySelector('#pscroll [data-a="tent-move"]') && !document.querySelector('#pscroll [data-a="tent-go"]')));

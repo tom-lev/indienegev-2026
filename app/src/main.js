@@ -51,7 +51,7 @@ function renderHeader() {
       <h1>${t.title}</h1>${netPill()}
       ${mineBtns}
       ${cloudIcon()}
-      <button class="logo-btn" data-act="profile" aria-label="פרופיל והגדרות"><img src="${ASSETS.wordmark}" alt="inDnegev"></button>
+      <button class="logo-btn" data-act="home" aria-label="הלוז שלי"><img src="${ASSETS.wordmark}" alt="inDnegev"></button>
     </div>
     <div class="gsearch">
       <label class="field">${ICON.search}<span class="sr">חיפוש</span>
@@ -126,6 +126,7 @@ $('#top').addEventListener('click', e => {
   if (!a) return;
   if (a.dataset.act === 'share') openShare();
   if (a.dataset.act === 'journal') openTimeline();
+  if (a.dataset.act === 'home') { const go = () => { S.prefs.mineView = 'me'; setTab('mine'); }; if (searchOn) closeAllLayers().then(go); else go(); }
   if (a.dataset.act === 'profile') { if (searchOn) closeAllLayers().then(() => setTab('profile')); else setTab('profile'); }
   if (a.dataset.act === 'search-close') exitSearch();
 });

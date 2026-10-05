@@ -10,6 +10,7 @@ ${SITE_URL}`;
 
 /* בוחר הדמות נפתח בלחיצה על הדמות ליד השם; עד הבחירה הראשונה – פתוח */
 let avPickerOpen = false;
+const profFold = { friends: false, account: false }; // "חברים" ו"חשבון וגיבוי" – מקופלים כברירת מחדל
 const avOpen = () => avPickerOpen || !(S.avatar && (S.avatar.picked || !S.avatar.auto));
 
 function renderProfile(view) {
@@ -18,12 +19,24 @@ function renderProfile(view) {
   const acct = typeof cloudAuth !== 'undefined' && cloudAuth
     ? `מחובר/ת כ-<b>${esc(cloudAuth.name || cloudAuth.email || '')}</b>${cloudAuth.email ? ` <span dir="ltr">(${esc(cloudAuth.email)})</span>` : ''}`
     : CC.on ? '<b>לא מחובר/ת</b> – בלי חשבון אין גיבוי לענן' : '';
+  ensureGear();
   view.innerHTML = `<div class="scroll" id="pscroll"><div class="pad">
-    <div class="prof-card" style="--fc:${me.color}">
-      <button class="av big av-edit" data-a="avatar" aria-label="החלפת הדמות" aria-expanded="${avOpen()}">${me.emoji}<i>${ICON.edit}</i></button>
-      <div class="prof-name">
-        <label class="field-l" for="pName">השם שלך (כך החברים רואים אותך)</label>
-        <input id="pName" class="text-in" value="${esc(S.name)}" maxlength="24" placeholder="השם שלך">
+    <div class="prof-top">
+      <div class="prof-card" style="--fc:${me.color}">
+        <button class="av big av-edit" data-a="avatar" aria-label="החלפת הדמות" aria-expanded="${avOpen()}">${me.emoji}<i>${ICON.edit}</i></button>
+        <div class="prof-name">
+          <label class="field-l" for="pName">השם שלך</label>
+          <input id="pName" class="text-in" value="${esc(S.name)}" maxlength="24" placeholder="השם שלך">
+        </div>
+      </div>
+      <div class="tile tent-tile">
+        <div class="tile-i">🏠</div>
+        <h3>האוהל שלי</h3>
+        <small class="tile-sub">${PLACE.tent ? (tentLandmark(PLACE.tent) ? `מסומן במפה · ליד ${esc(tentLandmark(PLACE.tent).name)}` : 'מסומן במפה') : 'איפה האוהל שלך במפה?'}</small>
+        ${PLACE.tent
+          ? `<button class="btn block sm" data-a="tent-go">${ICON.pin} ניווט</button>
+             <div class="tile-acts"><button data-a="tent-share" aria-label="שליחת מפה עם האוהל">${ICON.image}</button><button data-a="tent-move" aria-label="הזזת הסימון במפה">${ICON.edit}</button></div>`
+          : `<button class="btn block sm" data-a="tent-move">${ICON.map} סימון במפה</button>`}
       </div>
     </div>
     ${avOpen() ? `<div class="card-box av-card"><h3>${myAvatar() == null || !(S.avatar.picked || !S.avatar.auto) ? 'בחר/י דמות' : 'החלפת הדמות'}</h3><p>כך החברים רואים אותך. דמות שחבר/ה כבר קיבל/ה – תפוסה.</p>${avatarPicker()}</div>` : ''}
@@ -35,19 +48,13 @@ function renderProfile(view) {
         <button class="btn block sm" data-a="share">שיתוף</button>
       </div>
       <div class="tile">
-        <div class="tile-i">🏠</div>
-        <h3>האוהל שלי${PLACE.tent && tentLandmark(PLACE.tent) ? `<small class="tile-sub">ליד ${esc(tentLandmark(PLACE.tent).name)}</small>` : ''}</h3>
-        ${PLACE.tent
-          ? `<button class="btn block sm" data-a="tent-go">ניווט</button>
-             <div class="tile-acts"><button data-a="tent-share" aria-label="שליחת מיקום האוהל">${ICON.image}</button><button data-a="tent-move" aria-label="הזזת האוהל">${ICON.edit}</button></div>`
-          : `<button class="btn block sm" data-a="tent-move">סימון</button>`}
-      </div>
-      <div class="tile">
         <div class="tile-i">💬</div>
         <h3>שליחת האפליקציה</h3>
         <button class="btn block sm wa" data-a="appshare">וואטסאפ</button>
       </div>
     </div>
+
+    ${gearCard()}
 
     <div class="card-box">
       <h3>יומן סיקור</h3>
@@ -58,11 +65,14 @@ function renderProfile(view) {
       </div>
     </div>
 
-    <h3 class="section-t" id="friends">חברים ${S.friends.length ? `<span class="chip soft">${S.friends.length}</span>` : ''}</h3>
-    ${friendsBlock()}
+    <details class="fold" id="friends" data-fold="friends" ${profFold.friends ? 'open' : ''}>
+      <summary><h3>חברים</h3><span>${S.friends.length ? `${S.friends.length} ברשימה` : 'עוד אין'}</span></summary>
+      <div class="fold-b">${friendsBlock()}</div>
+    </details>
 
-    <h3 class="section-t">חשבון וגיבוי</h3>
-    <div class="card-box">
+    <details class="fold" data-fold="account" ${profFold.account ? 'open' : ''}>
+      <summary><h3>חשבון וגיבוי</h3><span>${typeof cloudAuth !== 'undefined' && cloudAuth ? (isBackedUp() ? '✅ מגובה' : '⏳ ממתין') : '⚠️ לא מחובר'}</span></summary>
+    <div class="fold-b">
       ${acct ? `<p style="margin:0 0 6px">${acct}</p>` : ''}
       ${CC.on && !(typeof cloudAuth !== 'undefined' && cloudAuth) ? '<div class="gbtn" id="pgbtn" style="margin:6px 0 10px"></div>' : ''}
       <p style="margin:0 0 10px;font-size:14px;color:var(--ink-2)">${storageOK ? '' : '<b>בדפדפן הזה השמירה לא עובדת!</b> '}${isBackedUp() ? '✅ כל השינויים מגובים' : hasData() ? '⚠️ יש שינויים שלא גובו' : 'אין עדיין נתונים'}${lastBackupAt() ? ` · גיבוי אחרון ${agoText(lastBackupAt())}` : ''}</p>
@@ -72,6 +82,7 @@ function renderProfile(view) {
       </div>
       ${typeof cloudAuth !== 'undefined' && cloudAuth ? '<button class="link-btn" data-a="signout">התנתקות / התחברות עם חשבון אחר</button>' : ''}
     </div>
+    </details>
 
     <div class="card-box">
       <h3>בלי קליטה</h3>
@@ -97,6 +108,7 @@ function renderProfile(view) {
   </div></div>`;
 
   const sc = $('#pscroll');
+  sc.querySelectorAll('details[data-fold]').forEach(d => d.addEventListener('toggle', () => { profFold[d.dataset.fold] = d.open; }));
   const g = $('#pgbtn', sc);
   if (g) renderGoogleButton(g);
   $('#pName', sc).onchange = e => { S.name = e.target.value.trim().slice(0, 24); save(); };
@@ -111,6 +123,8 @@ function renderProfile(view) {
     if (a === 'appshare') shareApp();
     if (a === 'signout') cloudSignOut();
     if (a === 'journal') openTimeline();
+    if (a === 'gear') openGear();
+    if (a === 'gear-share') { ensureGear(); shareGear(); }
     if (a === 'tent-go') goTo('tent');
     if (a === 'tent-share') shareTentImage();
     if (a === 'tent-move') { setTab('map'); picking = 'tent'; updateRoute(null); toast('הקישו על המקום של האוהל במפה'); }

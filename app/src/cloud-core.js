@@ -104,6 +104,9 @@ const CC = (() => {
     if (st.name) m.name = st.name;
     if (st.avatar) m.avatar = st.avatar;
     if (st.recent && st.recent.length) m.recent = st.recent;
+    for (const g of st.gear || []) m['g:' + g.id] = g;
+    for (const c of st.gearCats || []) m['gc:' + c.name] = c;
+    if (st.gearInit) m.gearInit = true;
     return m;
   }
   function implicitMt(key, v) { // מצבים ישנים בלי mt
@@ -115,12 +118,12 @@ const CC = (() => {
     const out = { ...base, picks: {}, ratings: {}, nope: {}, notes: [], friends: [], mt, tomb };
     const prefs = { ...(base.prefs || {}) }; delete prefs.tent;
     out.name = '';
-    delete out.avatar; delete out.recent;
+    delete out.avatar; delete out.recent; delete out.gearInit; out.gear = []; out.gearCats = [];
     for (const [key, v] of Object.entries(m)) {
       const i = key.indexOf(':'), pre = i > 0 ? key.slice(0, i) : key, id = i > 0 ? key.slice(i + 1) : '';
       if (pre === 'p') out.picks[id] = v; else if (pre === 'r') out.ratings[id] = v; else if (pre === 'x') out.nope[id] = v;
       else if (pre === 'n') out.notes.push(v); else if (pre === 'f') out.friends.push(v);
-      else if (key === 'tent') prefs.tent = v; else if (key === 'name') out.name = v; else if (key === 'avatar') out.avatar = v; else if (key === 'recent') out.recent = v;
+      else if (key === 'tent') prefs.tent = v; else if (key === 'name') out.name = v; else if (key === 'avatar') out.avatar = v; else if (key === 'recent') out.recent = v; else if (pre === 'g') out.gear.push(v); else if (pre === 'gc') out.gearCats.push(v); else if (key === 'gearInit') out.gearInit = true;
     }
     out.notes.sort((a, b) => (a.at || 0) - (b.at || 0) || (a.id > b.id ? 1 : -1));
     out.prefs = prefs;

@@ -192,6 +192,7 @@ function ago(ms) {
 /* מעבר לרשימת החברים (בלשונית "פרופיל") */
 function openFriends() {
   closeAllLayers().then(() => {
+    profFold.friends = true;
     setTab('profile');
     const el = $('#friends');
     if (el) el.scrollIntoView({ block: 'start' });

@@ -317,7 +317,13 @@ main#view { overflow: hidden; position: relative; min-height: 0; }
 .av-edit i svg { width: 13px; height: 13px; }
 .prof-name { flex: 1; min-width: 0; }
 .prof-name .text-in { margin: 4px 0 0; }
-.prof-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+.prof-top { display: grid; grid-template-columns: 1fr 118px; gap: 8px; margin-bottom: 8px; align-items: stretch; }
+.prof-top .prof-card { margin: 0; padding: 10px; gap: 10px; }
+.prof-top .prof-card .av.big { width: 54px; height: 54px; font-size: 28px; }
+.prof-top .text-in { padding: 8px 10px; font-size: 15px; }
+.tent-tile .tile-sub { margin: 0 0 8px; line-height: 1.25; }
+.tent-tile h3 { flex: none; margin-bottom: 2px; }
+.prof-tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 14px; }
 .tile { background: var(--cream); border-radius: 16px; padding: 10px 8px; display: flex; flex-direction: column; align-items: center; text-align: center; min-width: 0; }
 .tile-i { font-size: 22px; line-height: 1; height: 26px; display: grid; place-items: center; }
 .tile-i svg { width: 22px; height: 22px; }
@@ -336,6 +342,36 @@ details.av-card[open] > summary { margin-bottom: 8px; }
 details.av-card[open] .av-sum { display: none; }
 .av-sum { font-size: 13px; font-weight: 800; text-decoration: underline; color: var(--ink-2); }
 .app-share { display: block; margin: 10px auto 0; padding: 6px 10px; font-size: 13.5px; font-weight: 800; color: #1f8f4e; text-decoration: underline; }
+.gear-card .gear-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.gear-card .gear-top span { font-size: 13px; font-weight: 700; color: var(--ink-2); }
+.gear-bar { height: 7px; border-radius: 999px; background: rgba(21,63,76,.12); overflow: hidden; margin: 6px 0 12px; }
+.gear-bar i { display: block; height: 100%; background: #3aa66b; border-radius: inherit; }
+.gear-head { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+.gear-head > div { flex: 1; }
+.gear-head .gear-bar { margin: 6px 0 0; }
+.gear-hint { font-size: 12.5px; color: var(--ink-2); margin: 6px 0 12px; }
+.gear-cat { margin-bottom: 16px; }
+.gear-cat h3 { display: flex; justify-content: space-between; font-size: 15.5px; font-weight: 900; margin: 0 0 6px; padding-bottom: 4px; border-bottom: 2px solid var(--ink); }
+.gear-cat h3 span { font-size: 13px; color: var(--ink-2); }
+.gear-row { display: flex; align-items: center; gap: 8px; min-height: 42px; border-bottom: 1px solid var(--line); }
+.gear-chk { flex: none; width: 26px; height: 26px; border-radius: 8px; border: 2px solid var(--ink); display: grid; place-items: center; font-weight: 900; font-size: 15px; }
+.gear-row.on .gear-chk { background: #3aa66b; border-color: #3aa66b; color: #fff; }
+.gear-t { flex: 1; font-size: 15px; font-weight: 600; padding: 8px 0; cursor: pointer; }
+.gear-row.on .gear-t { text-decoration: line-through; color: var(--ink-3); }
+.gear-x { flex: none; width: 32px; height: 32px; display: grid; place-items: center; color: var(--ink-3); font-size: 15px; }
+.gear-x svg { width: 15px; height: 15px; }
+.gear-add { display: flex; gap: 6px; margin-top: 6px; }
+.gear-add input { flex: 1; min-width: 0; border: 1.5px dashed var(--line-2); border-radius: 10px; padding: 9px 10px; font: inherit; font-size: 14.5px; background: transparent; color: var(--ink); }
+.gear-add button { font-size: 13.5px; font-weight: 800; padding: 0 10px; border-radius: 10px; background: var(--ink); color: var(--paper); }
+details.fold { margin: 0 0 12px; border-radius: 16px; background: var(--cream); }
+details.fold > summary { list-style: none; display: flex; align-items: center; gap: 8px; padding: 13px 14px; cursor: pointer; }
+details.fold > summary::-webkit-details-marker { display: none; }
+details.fold > summary h3 { margin: 0; flex: 1; font-size: 16px; font-weight: 900; }
+details.fold > summary span { font-size: 13px; font-weight: 700; color: var(--ink-2); }
+details.fold > summary::after { content: '▾'; font-size: 14px; color: var(--ink-2); transition: transform .15s; }
+details.fold[open] > summary::after { transform: rotate(180deg); }
+.fold-b { padding: 0 14px 14px; }
+.fold-b .card-box { background: transparent; padding: 0; margin: 0; }
 .pop-line { margin: 6px 0 2px; font-size: 13.5px; font-weight: 700; color: var(--ink-2); }
 .recent { margin: 2px 0 14px; }
 .recent-h { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 800; color: var(--ink-2); margin-bottom: 6px; }

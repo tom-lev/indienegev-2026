@@ -281,16 +281,18 @@ async function device(label) {
   if (C.errors.length) A.errors.push(...C.errors);
 
   // התנתקות / החלפת חשבון מהפרופיל
-  await C.ev(() => setTab('profile')); await sleep(300);
+  await C.ev(() => { profFold.account = true; setTab('profile'); }); await sleep(300);
   check('בפרופיל: "התנתקות / התחברות עם חשבון אחר"', await C.ev(() => !!document.querySelector('#pscroll [data-a="signout"]')));
   await C.page.click('#pscroll [data-a="signout"]'); await sleep(800);
   check('התנתקות – מסך ההתחברות חוזר, הנתונים נשארים', await C.ev(() => !cloudAuth && !!document.querySelector('.welcome') && S.friends.length === 1));
   // חיפושים אחרונים מסתנכרנים בין המכשירים של אותו משתמש
-  await A.ev(() => { rememberSearch('אביב'); rememberSearch('נונו'); cloudNow(); }); await sleep(2500);
+  await A.ev(() => { ensureGear(); S.gear = S.gear.filter(g => g.id !== 'd0-0'); S.gear.find(g => g.id === 'd0-1').packed = true; S.gear.push({ id: 'utest', cat: 'ישיבה', text: 'ערסל', o: 99 }); save(); rememberSearch('אביב'); rememberSearch('נונו'); cloudNow(); }); await sleep(2500);
   const A2 = await device('A2');
   await A2.ev(() => onGoogleCredential({ credential: 'user:alice' })); await sleep(3000);
   const rec2 = await A2.ev(() => S.recent || []);
   check('חיפושים אחרונים עוברים למכשיר אחר של אותו משתמש', rec2[0] === 'נונו' && rec2[1] === 'אביב', JSON.stringify(rec2));
+  const g2 = await A2.ev(() => { ensureGear(); return { hasTent: S.gear.some(g => g.id === 'd0-0'), packed: (S.gear.find(g => g.id === 'd0-1') || {}).packed, hammock: S.gear.some(g => g.text === 'ערסל'), n: S.gear.length }; });
+  check('רשימת ציוד במכשיר אחר: מה שנמחק לא חוזר, הסימון והפריט החדש עברו', !g2.hasTent && g2.packed === true && g2.hammock && g2.n === 71, JSON.stringify(g2));
   await A2.browser.close();
   check('אין שגיאות JS', !A.errors.length && !B.errors.length, [...A.errors, ...B.errors].join(' | '));
   console.log(fails ? `\n${fails} FAILED` : '\nALL PASSED');
