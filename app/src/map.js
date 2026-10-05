@@ -375,6 +375,31 @@ function flyBirds(stage) {
     el.animate(frames, { duration, iterations: Infinity, delay: -((Date.now() + i * 17000) % duration) });
   });
 }
+/* אנשים קטנים (הדמות מהציור) הולכים הלוך-חזור בשבילי הקמפינג – על המסלולים האמיתיים של רשת ההליכה */
+const WALKERS = [['cook-campw', 'cook-camps', 0], ['wc-campw', 'cook-campw', 0.4]]; // [מאיפה, לאן, היסט בזמן]
+function walkersHtml() {
+  const p = ASSETS.person;
+  if (!p) return '';
+  return WALKERS.map(() => `<div class="m-walker" style="width:${p.w}px;height:${p.h}px"><img src="${p.src}" width="${p.w}" height="${p.h}" alt=""></div>`).join('');
+}
+function walkPeople(stage) {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches || !ASSETS.person) return;
+  const p = ASSETS.person;
+  stage.querySelectorAll('.m-walker').forEach((el, i) => {
+    const [from, to, off] = WALKERS[i];
+    const r = PLACE[from] && PLACE[to] && findRoute(from, to);
+    if (!r) { el.remove(); return; }
+    const pts = r.pts;
+    let len = 0;
+    const acc = [0];
+    for (let k = 1; k < pts.length; k++) { len += Math.hypot(pts[k].x - pts[k - 1].x, pts[k].y - pts[k - 1].y); acc.push(len); }
+    // כפות הרגליים על השביל: הנקודה במסלול = מרכז תחתית הדמות
+    const frames = pts.map((q, k) => ({ offset: acc[k] / len, transform: `translate(${(q.x - p.w / 2).toFixed(0)}px, ${(q.y - p.h).toFixed(0)}px)` }));
+    const duration = len / 10 * 1000; // כ-10 פיקסלים במפה בשנייה – טיול נינוח
+    el.animate(frames, { duration, iterations: Infinity, direction: 'alternate', easing: 'linear', delay: -((Date.now() + off * duration) % (duration * 2)) });
+  });
+}
+
 /* פתיחה קולנועית: פעם אחת בכל פתיחה של האפליקציה – מכל המפה אל ההופעה הקרובה בלוז שלך, או אל האוהל */
 let mapIntroDone = false;
 function mapIntroTarget() {
@@ -408,6 +433,7 @@ function renderMap(view) {
   view.innerHTML = `<div class="mapwrap" id="mapwrap">
     <div class="mapstage" id="mapstage" style="width:${MAP_W}px;height:${MAP_H}px">
       <img src="${ASSETS.map}" width="${MAP_W}" height="${MAP_H}" alt="מפת הפסטיבל אינדינגב 2026">
+      ${walkersHtml()}
       ${birdsHtml()}
       <svg class="route" id="route" viewBox="0 0 ${MAP_W} ${MAP_H}" width="${MAP_W}" height="${MAP_H}" aria-hidden="true"></svg>
       ${marks}
@@ -451,6 +477,7 @@ function renderMap(view) {
   }
   mapIntroDone = true;
   flyBirds(stage);
+  walkPeople(stage);
   bindMapGestures(wrap, stage);
   // מסגרת המפה לא נגללת לעולם (פוקוס על כפתור מחוץ למסך יכול לגלול אותה)
   wrap.addEventListener('scroll', () => { wrap.scrollLeft = 0; wrap.scrollTop = 0; });

@@ -576,6 +576,11 @@ details.fold[open] .fold-ch svg { transform: rotate(-90deg); }
 .mapstage.anim { transition: transform .7s cubic-bezier(.2,.8,.2,1); }
 .mapstage.anim.slow { transition: transform 1.8s cubic-bezier(.45,.05,.2,1); }
 /* ציפורים מהציור – מרחפות ומנפנפות */
+/* אנשים הולכים בקמפינג: צעדים קטנים (קפיצה עדינה ונדנוד) */
+.m-walker { position: absolute; left: 0; top: 0; pointer-events: none; will-change: transform; }
+.m-walker img { display: block; transform-origin: 50% 100%; animation: walk-step .9s ease-in-out infinite alternate; }
+@keyframes walk-step { from { transform: translateY(0) rotate(-2deg); } to { transform: translateY(-1.5px) rotate(2deg); } }
+@media (prefers-reduced-motion: reduce) { .m-walker img { animation: none; } }
 .m-bird { position: absolute; pointer-events: none; will-change: transform; z-index: 1; }
 .m-bird img { display: block; width: 100%; height: auto; transform-origin: 50% 70%; animation: bird-flap .75s ease-in-out infinite; }
 @keyframes bird-glide { from { transform: translate(0, 0); } to { transform: translate(var(--dx), var(--dy)); } }

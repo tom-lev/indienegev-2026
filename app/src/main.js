@@ -13,7 +13,7 @@ let viewDay = null;
 function currentViewDay() {
   if (viewDay) return viewDay;
   const live = logicalDay(now());
-  viewDay = (isLive() || simTime != null) && live ? live : (S.prefs.day || 'thu');
+  viewDay = (isLive() || simTime != null) && live ? live : 'thu'; // לפני הפסטיבל – חמישי; בפסטיבל – היום של עכשיו
   return viewDay;
 }
 

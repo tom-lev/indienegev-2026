@@ -93,6 +93,11 @@ def build_assets():
     out['birds'] = [dict(b, src='data:image/webp;base64,' + base64.b64encode((CACHE / b['file']).read_bytes()).decode())
                     for b in json.loads((CACHE / 'birds.json').read_text())]
     for b in out['birds']: del b['file']
+    # דמות אדם מהציור (מועתקת – המקור נשאר במקומו), להולכים בשבילי הקמפינג
+    if not (CACHE / 'person0.webp').exists():
+        make_person()
+    with Image.open(CACHE / 'person0.webp') as pm:
+        out['person'] = {'w': pm.width, 'h': pm.height, 'src': 'data:image/webp;base64,' + base64.b64encode((CACHE / 'person0.webp').read_bytes()).decode()}
     # רשת הליכה לחישוב מסלולים (נבנית מתמונת המפה)
     from walkgrid import build as build_walk, encode, CELL
     grid, (base_w, _) = build_walk(PROJECT / 'festival-map-2026-web-large.jpg')
@@ -131,6 +136,26 @@ def make_birds():
         birds.append({'x': x0, 'y': y0, 'w': x1 - x0, 'h': y1 - y0, 'file': f})
     Image.fromarray(a.clip(0, 255).astype('uint8')).save(CACHE / 'map-sky.webp', 'WEBP', quality=70, method=6)
     (CACHE / 'birds.json').write_text(json.dumps(birds))
+
+
+PERSON = (2506, 700, 2540, 768)  # דמות שהולכת לבד, ליד מתחם הצימוד (במפה ברוחב 3200)
+
+
+def make_person():
+    """מעתיק דמות אדם מהציור לשכבה שקופה: כהה מהרקע הוורוד = הדמות."""
+    import numpy as np
+    im = Image.open(CACHE / 'map.webp').convert('RGB')
+    x0, y0, x1, y1 = PERSON
+    box = np.asarray(im.crop(PERSON)).astype(np.float32)
+    lum = box @ np.array([0.3, 0.59, 0.11], dtype=np.float32)
+    bg_l = float(np.percentile(lum, 80))
+    alpha = np.clip((bg_l - lum - 55) / 45, 0, 1)
+    ys, xs = np.nonzero(alpha > 0.3)
+    t, b, l, r = ys.min(), ys.max() + 1, xs.min(), xs.max() + 1
+    ink = np.median(box[alpha > 0.9], axis=0)  # צבע הדיו של הדמות (בלי הוורוד שמסביב)
+    rgb = np.broadcast_to(ink, box.shape)
+    sprite = Image.fromarray(np.dstack([rgb, alpha * 255]).astype('uint8')[t:b, l:r], 'RGBA')
+    sprite.save(CACHE / 'person0.webp', 'WEBP', lossless=True)
 
 
 def icon_image(s, full_bleed=False):
