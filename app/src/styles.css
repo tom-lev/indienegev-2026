@@ -603,27 +603,27 @@ details.fold[open] .fold-ch svg { transform: rotate(-90deg); }
   pointer-events: none;
 }
 .pulse i {
-  position: absolute; left: -46px; top: -46px; width: 92px; height: 92px;
+  position: absolute; left: -30px; top: -30px; width: 60px; height: 60px;
   border-radius: 50%;
-  border: 5px solid var(--c);
-  box-shadow: 0 0 0 2px var(--ink), inset 0 0 0 2px var(--ink);
-  animation: ring 2.1s cubic-bezier(.2,.6,.3,1) infinite;
+  border: 2.5px solid var(--c);
+  animation: ring 3s ease-out infinite;
   opacity: 0;
 }
-.pulse i:nth-child(2) { animation-delay: .7s; }
-.pulse i:nth-child(3) { animation-delay: 1.4s; }
+.pulse i:nth-child(2) { animation-delay: 1.5s; }
+.pulse i:nth-child(3) { display: none; }
+/* היעד: טבעת דקה וקבועה + גל עדין שמתרחב ודועך */
 .pulse b {
-  position: absolute; left: -40px; top: -40px; width: 80px; height: 80px;
+  position: absolute; left: -24px; top: -24px; width: 48px; height: 48px;
   border-radius: 50%;
-  border: 4px solid var(--ink);
-  box-shadow: 0 0 0 4px var(--c);
+  border: 2.5px solid var(--ink);
+  box-shadow: 0 0 0 2px var(--c);
 }
 @keyframes ring {
-  0% { transform: scale(.75); opacity: .95; }
-  100% { transform: scale(2.3); opacity: 0; }
+  0% { transform: scale(.85); opacity: .55; }
+  100% { transform: scale(1.9); opacity: 0; }
 }
 .m-label {
-  position: absolute; left: 0; top: -62px;
+  position: absolute; left: 0; top: -40px;
   transform: translate(-50%, -100%);
   background: var(--paper); color: var(--ink);
   border: 2.5px solid var(--ink);
