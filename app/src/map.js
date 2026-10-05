@@ -488,7 +488,7 @@ function smokerHtml() {
   if (!m) return '';
   const x = m.at[0] / 100 * MAP_W, y = m.at[1] / 100 * MAP_H;
   return `<div class="m-smoker" style="left:${(x - m.cx * m.w).toFixed(0)}px;top:${(y - m.foot * m.h).toFixed(0)}px;width:${m.w}px;height:${m.h}px">
-    <i style="background-image:url(${m.src});background-size:${m.frames * 100}% 100%"></i><b class="ember"></b></div><div class="m-smoke-layer"></div>`;
+    <i style="background-image:url(${m.src});background-size:${m.frames * 100}% ${(m.rows || 1) * 100}%"></i><b class="ember"></b></div><div class="m-smoke-layer"></div>`;
 }
 let smokeRAF = 0;
 function smokePeople(stage) {
@@ -514,31 +514,42 @@ function smokePeople(stage) {
     }
     p.animate(kf, { duration: dur, easing: 'linear' }).onfinish = () => p.remove();
   };
-  // מחזור עישון אחד (שניות): מנוחה, הרמה, שאיפה, הורדה
-  let cyc = null, t0 = performance.now(), nextPuff = 0, exhaled = false;
-  const newCycle = t => { cyc = { rest: 3 + Math.random() * 3, up: 0.9, hold: 1.1 + Math.random() * 0.6, down: 0.9 }; t0 = t; exhaled = false; };
+  // מחזור עישון אחד (שניות): מנוחה, הרמה, שאיפה, הורדה. מדי כמה מחזורים – קם, מעשן בעמידה, ומתיישב
+  const rowY = r => `${((m.rows || 1) > 1 ? r / (m.rows - 1) * 100 : 0).toFixed(1)}%`;
+  let pose = 'sit', cyc = null, t0 = performance.now(), nextPuff = 0, exhaled = false, left = 3 + Math.floor(Math.random() * 4), tr0 = 0;
+  const newCycle = (t, standing) => { cyc = { rest: standing ? 1.2 + Math.random() * 1.5 : 3 + Math.random() * 3, up: 0.9, hold: 1.1 + Math.random() * 0.6, down: 0.9 }; t0 = t; exhaled = false; };
+  const RISE = 1.4; // שניות לקום / לשבת
   const tick = t => {
     if (!document.contains(stage)) return;
-    if (!cyc) newCycle(t);
-    const s = (t - t0) / 1000, c = cyc;
-    let a = 0;
-    if (s < c.rest) a = 0;
-    else if (s < c.rest + c.up) a = (s - c.rest) / c.up;
-    else if (s < c.rest + c.up + c.hold) a = 1;
-    else if (s < c.rest + c.up + c.hold + c.down) a = 1 - (s - c.rest - c.up - c.hold) / c.down;
-    else { newCycle(t); a = 0; }
-    const f = Math.round(a * (m.frames - 1));
-    inner.style.backgroundPosition = `${-f * m.w}px 0`;
-    const tip = m.tips[f], inhale = a === 1;
+    if (!cyc) newCycle(t, false);
+    let row = pose === 'stand' ? 1 : 0, f = 0, a = 0;
+    if (pose === 'rise' || pose === 'lower') {
+      // קם (או מתיישב – אותן תמונות בסדר הפוך)
+      const u = Math.min(1, (t - tr0) / 1000 / RISE);
+      row = 2; f = Math.round((pose === 'rise' ? u : 1 - u) * (m.frames - 1));
+      if (u >= 1) { pose = pose === 'rise' ? 'stand' : 'sit'; left = pose === 'stand' ? 1 + Math.floor(Math.random() * 2) : 3 + Math.floor(Math.random() * 4); newCycle(t, pose === 'stand'); }
+    } else {
+      const s = (t - t0) / 1000, c = cyc;
+      if (s < c.rest) a = 0;
+      else if (s < c.rest + c.up) a = (s - c.rest) / c.up;
+      else if (s < c.rest + c.up + c.hold) a = 1;
+      else if (s < c.rest + c.up + c.hold + c.down) a = 1 - (s - c.rest - c.up - c.hold) / c.down;
+      else if (--left <= 0) { pose = pose === 'sit' ? 'rise' : 'lower'; tr0 = t; a = 0; }  // מספיק – קם / מתיישב
+      else { newCycle(t, pose === 'stand'); a = 0; }
+      f = Math.round(a * (m.frames - 1));
+      // נשיפה: כשהיד יורדת – כמה משבים גדולים מהפה
+      if (!exhaled && s > c.rest + c.up + c.hold + c.down * 0.4 && s < c.rest + c.up + c.hold + c.down) {
+        exhaled = true;
+        const mo = m.mouths ? m.mouths[row] : m.mouth;
+        for (let k = 0; k < 4; k++) setTimeout(() => document.contains(stage) && puff(ox + mo[0] + 2, oy + mo[1], true), k * 170);
+      }
+    }
+    inner.style.backgroundPosition = `${-f * m.w}px ${rowY(row)}`;
+    const tip = (m.rows ? m.tips[row] : m.tips)[f], inhale = a === 1;
     // רק הגחלת זוהרת (ומתלהטת בשאיפה) – לא כל הדמות
     ember.style.transform = `translate(${tip[0].toFixed(1)}px, ${tip[1].toFixed(1)}px)`;
     ember.classList.toggle('hot', inhale);
     if (t >= nextPuff) { puff(ox + tip[0], oy + tip[1], false); nextPuff = t + (inhale ? 700 : 420 + Math.random() * 200); }
-    // נשיפה: כשהיד יורדת – כמה משבים גדולים מהפה
-    if (!exhaled && s > c.rest + c.up + c.hold + c.down * 0.4) {
-      exhaled = true;
-      for (let k = 0; k < 4; k++) setTimeout(() => document.contains(stage) && puff(ox + m.mouth[0] + 2, oy + m.mouth[1], true), k * 170);
-    }
     smokeRAF = requestAnimationFrame(tick);
   };
   smokeRAF = requestAnimationFrame(tick);

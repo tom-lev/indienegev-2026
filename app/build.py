@@ -360,18 +360,22 @@ SMOKER_AT = (20.72, 33.52)  # בתוך גוש ירוק כהה בצפון הקמ�
 
 
 def make_smoker(ink):
-    """דמות יושבת על כיסא קמפינג ומעשנת (מבט מהצד, פונה ימינה). 9 תמונות של תנועת היד מהברך אל הפה.
-    מחזיר את מיקומי קצה הסיגריה בכל תמונה ואת מיקום הפה – לעשן שעולה (ב-JS)."""
+    """המעשן (מבט מהצד, פונה ימינה), שלוש שורות בגיליון:
+    0 – יושב על כיסא הקמפינג ומעשן (9 תמונות: היד מהברך אל הפה),
+    1 – עומד ליד הכיסא ומעשן (9 תמונות: היד מהמותן אל הפה),
+    2 – קם/מתיישב (9 תמונות: מישיבה לעמידה – נוטה קדימה, הירך עולה מעל כפות הרגליים, הרגליים מתיישרות).
+    כל התנוחות משלד אחד: הרגליים מחושבות מהירך אל כפות הרגליים (קינמטיקה הפוכה). מחזיר את מיקומי קצה הסיגריה והפה."""
     import math
     from PIL import ImageDraw, ImageFilter
     S, H = 8, SMOKER_H
     Hs = H * S
-    TW, TH = round(H * 0.62), round(H * 0.82)
-    gy = TH * 0.95 * S
+    TW, TH = round(H * 0.62), round(H * 1.12)
+    gy = TH * 0.96 * S
     cx = TW * 0.42 * S
     col = ink + (255,)
     chair = (40, 58, 64, 255)
     cig, ember = (238, 232, 214, 255), (255, 118, 40, 255)
+    Lt, Ls = 0.255 * Hs, 0.235 * Hs
 
     def seg(d, a, b, wa, wb, c=col):
         dx, dy = b[0] - a[0], b[1] - a[1]
@@ -382,51 +386,78 @@ def make_smoker(ink):
         for q, r in ((a, wa / 2), (b, wb / 2)):
             d.ellipse([q[0] - r, q[1] - r, q[0] + r, q[1] + r], fill=c)
 
+    def knee_ik(Hp, Ap):
+        dx, dy = Ap[0] - Hp[0], Ap[1] - Hp[1]
+        d = min(math.hypot(dx, dy), (Lt + Ls) * 0.999)
+        th = math.atan2(dy, dx)
+        al = math.acos(max(-1, min(1, (Lt * Lt + d * d - Ls * Ls) / (2 * Lt * d))))
+        return (Hp[0] + Lt * math.cos(th - al), Hp[1] + Lt * math.sin(th - al))
+
     lerp = lambda a, b, t: (a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t)
-    sheet = Image.new('RGBA', (TW * SMOKER_FRAMES, TH), (0, 0, 0, 0))
-    tips = []
-    for f in range(SMOKER_FRAMES):
-        a = f / (SMOKER_FRAMES - 1)
-        e = (1 - math.cos(math.pi * a)) / 2                       # תנועה רכה
+    ease = lambda t: (1 - math.cos(math.pi * t)) / 2
+    seat_y = gy - 0.25 * Hs
+    sit_hip, sit_ank = (cx - 0.07 * Hs, seat_y - 0.03 * Hs), (cx + 0.19 * Hs, gy - 0.02 * Hs)
+    stand_ank = (cx + 0.15 * Hs, gy - 0.02 * Hs)                         # עומד ממש לפני הכיסא
+    stand_hip = (stand_ank[0] - 0.01 * Hs, gy - 0.02 * Hs - (Lt + Ls) * 0.985)
+
+    def frame(hip, ank, ank2, lean_deg, arm_e, rest_hand):
+        """ציור תנוחה: ירך, קרסוליים (קרוב/רחוק), נטיית הגוף, מצב היד (0 = מנוחה, 1 = בפה)"""
         big = Image.new('RGBA', (TW * S, TH * S), (0, 0, 0, 0))
         d = ImageDraw.Draw(big)
-        seat_y = gy - 0.25 * Hs
-        # כיסא קמפינג: רגליים מוצלבות, מושב, משענת
+        # כיסא קמפינג (נשאר במקום)
         seg(d, (cx - 0.12 * Hs, gy), (cx + 0.1 * Hs, seat_y), 0.018 * Hs, 0.018 * Hs, chair)
         seg(d, (cx + 0.1 * Hs, gy), (cx - 0.12 * Hs, seat_y), 0.018 * Hs, 0.018 * Hs, chair)
         seg(d, (cx - 0.14 * Hs, seat_y), (cx + 0.12 * Hs, seat_y), 0.03 * Hs, 0.03 * Hs, chair)
         seg(d, (cx - 0.14 * Hs, seat_y), (cx - 0.19 * Hs, seat_y - 0.26 * Hs), 0.028 * Hs, 0.028 * Hs, chair)
-        # הדמות
-        hip = (cx - 0.07 * Hs, seat_y - 0.03 * Hs)
-        knee = (cx + 0.16 * Hs, seat_y - 0.045 * Hs)
-        ank = (cx + 0.19 * Hs, gy - 0.02 * Hs)
-        lean = math.radians(180 + 8 - 3 * e)                      # נשען מעט אחורה; מתקרב קצת קדימה כשמעשן
+        lean = math.radians(180 - lean_deg)                               # חיובי = קדימה
         sh = (hip[0] + math.sin(lean) * 0.3 * Hs, hip[1] + math.cos(lean) * 0.3 * Hs)
         hc = (sh[0] + math.sin(lean) * 0.1 * Hs + 0.01 * Hs, sh[1] + math.cos(lean) * 0.1 * Hs)
-        seg(d, sh, hip, 0.15 * Hs, 0.13 * Hs)                     # גוף
+        for a2 in (ank2, ank):                                            # הרגל הרחוקה קודם
+            kn = knee_ik(hip, a2)
+            seg(d, hip, kn, 0.08 * Hs, 0.06 * Hs)
+            seg(d, kn, a2, 0.06 * Hs, 0.045 * Hs)
+            seg(d, a2, (a2[0] + 0.08 * Hs, a2[1] + 0.005 * Hs), 0.045 * Hs, 0.03 * Hs)
+        seg(d, sh, hip, 0.15 * Hs, 0.13 * Hs)
         d.ellipse([sh[0] - 0.075 * Hs, sh[1] - 0.025 * Hs, sh[0] + 0.075 * Hs, sh[1] + 0.06 * Hs], fill=col)
-        seg(d, hip, knee, 0.08 * Hs, 0.06 * Hs)                   # ירך
-        seg(d, knee, ank, 0.06 * Hs, 0.045 * Hs)                  # שוק
-        seg(d, ank, (ank[0] + 0.08 * Hs, ank[1] + 0.005 * Hs), 0.045 * Hs, 0.03 * Hs)
-        seg(d, sh, (sh[0] + 0.01 * Hs, sh[1] - 0.035 * Hs), 0.055 * Hs, 0.05 * Hs)  # צוואר
+        seg(d, sh, (sh[0] + math.sin(lean) * 0.035 * Hs, sh[1] + math.cos(lean) * 0.035 * Hs), 0.055 * Hs, 0.05 * Hs)
         d.ellipse([hc[0] - 0.068 * Hs, hc[1] - 0.075 * Hs, hc[0] + 0.068 * Hs, hc[1] + 0.068 * Hs], fill=col)
         mouth = (hc[0] + 0.07 * Hs, hc[1] + 0.03 * Hs)
-        # יד המעשנת: מהברך אל הפה
+        e = ease(arm_e)
         el = lerp((sh[0] + 0.07 * Hs, sh[1] + 0.17 * Hs), (sh[0] + 0.13 * Hs, sh[1] + 0.1 * Hs), e)
-        hand = lerp((knee[0] - 0.03 * Hs, knee[1] - 0.04 * Hs), (mouth[0] + 0.005 * Hs, mouth[1] + 0.01 * Hs), e)
+        hand = lerp(rest_hand(sh), (mouth[0] + 0.005 * Hs, mouth[1] + 0.01 * Hs), e)
         seg(d, sh, el, 0.05 * Hs, 0.04 * Hs)
         seg(d, el, hand, 0.04 * Hs, 0.035 * Hs)
-        # סיגריה (קדימה מהיד) וגחלת בקצה
         ang = math.radians(-8 - 25 * e)
         tip = (hand[0] + math.cos(ang) * 0.065 * Hs, hand[1] + math.sin(ang) * 0.065 * Hs)
         seg(d, hand, tip, 0.016 * Hs, 0.016 * Hs, cig)
         d.ellipse([tip[0] - 0.012 * Hs, tip[1] - 0.012 * Hs, tip[0] + 0.012 * Hs, tip[1] + 0.012 * Hs], fill=ember)
         img = big.filter(ImageFilter.GaussianBlur(S * 0.25)).resize((TW, TH), Image.LANCZOS)
-        sheet.alpha_composite(img, (f * TW, 0))
-        tips.append([round(tip[0] / S, 1), round(tip[1] / S, 1)])
+        return img, [round(tip[0] / S, 1), round(tip[1] / S, 1)], [round(mouth[0] / S, 1), round(mouth[1] / S, 1)]
+
+    sit_rest = lambda sh: (sit_hip[0] + 0.2 * Hs, sit_hip[1] - 0.06 * Hs)   # היד על הברך
+    stand_rest = lambda sh: (sh[0] + 0.06 * Hs, sh[1] + 0.3 * Hs)            # היד ליד המותן
+    sheet = Image.new('RGBA', (TW * SMOKER_FRAMES, TH * 3), (0, 0, 0, 0))
+    tips, mouths = [[], [], []], [None, None, None]
+    for f in range(SMOKER_FRAMES):
+        a = f / (SMOKER_FRAMES - 1)
+        rows = [
+            frame(sit_hip, sit_ank, (sit_ank[0] - 0.03 * Hs, sit_ank[1]), -8 + 3 * ease(a), a, sit_rest),
+            frame(stand_hip, stand_ank, (stand_ank[0] - 0.06 * Hs, stand_ank[1]), 2, a, stand_rest),
+        ]
+        # קם: נוטה קדימה (שיא באמצע), הירך עוברת מעל כפות הרגליים, הרגליים מתיישרות
+        u = ease(a)
+        hip = lerp(sit_hip, stand_hip, u)
+        hip = (hip[0] + 0.05 * Hs * math.sin(math.pi * u), hip[1])
+        ank = lerp(sit_ank, stand_ank, min(1, u * 2))
+        rows.append(frame(hip, ank, (ank[0] - 0.03 * Hs - 0.03 * Hs * u, ank[1]), -8 + 34 * math.sin(math.pi * u) + 10 * u, 0,
+                          lambda sh, u=u: lerp(sit_rest(sh), stand_rest(sh), u)))
+        for r, (img, tip, mouth) in enumerate(rows):
+            sheet.alpha_composite(img, (f * TW, r * TH))
+            tips[r].append(tip)
+            mouths[r] = mouth
     sheet.save(CACHE / 'smoker0.webp', 'WEBP', lossless=True)
-    return {'w': TW, 'h': TH, 'frames': SMOKER_FRAMES, 'tips': tips, 'mouth': [round(mouth[0] / S, 1), round(mouth[1] / S, 1)],
-            'foot': 0.95, 'cx': 0.42, 'at': SMOKER_AT}
+    return {'w': TW, 'h': TH, 'frames': SMOKER_FRAMES, 'rows': 3, 'tips': tips, 'mouths': mouths,
+            'foot': 0.96, 'cx': 0.42, 'at': SMOKER_AT}
 
 
 def icon_image(s, full_bleed=False):
