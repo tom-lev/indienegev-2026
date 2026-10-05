@@ -46,9 +46,9 @@ async function device(label, { ios = false } = {}) {
 }
 /* מחכה שהענן יכיל בדיוק את המצב המקומי */
 async function waitSynced(dev, uid, ms = 9000) {
-  const t0 = Date.now(), fp = await dev.fp();
+  const t0 = Date.now();
   while (Date.now() - t0 < ms) {
-    const s = await srv();
+    const s = await srv(), fp = await dev.fp(); // המצב העדכני במכשיר (הספירה מוסיפה "מה נספר" לפני ההעלאה)
     if (s.docs[uid] && s.docs[uid].fp === fp) return true;
     await sleep(300);
   }
