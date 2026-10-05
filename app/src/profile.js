@@ -23,6 +23,15 @@ function renderProfile(view) {
       <button class="btn block" data-a="share">${ICON.share} שיתוף הלוז שלי</button>
     </div>
 
+    <div class="card-box">
+      <h3>יומן סיקור</h3>
+      <p>הפתקים והמדדים מכל ההופעות, לפי סדר הזמן. אפשר לייצא הכל.</p>
+      <div class="btn-row">
+        <button class="btn sm" data-a="journal">${ICON.note} פתיחת היומן</button>
+        <button class="btn alt sm" data-a="jexport">${ICON.share} ייצוא</button>
+      </div>
+    </div>
+
     <h3 class="section-t" id="friends">חברים ${S.friends.length ? `<span class="chip soft">${S.friends.length}</span>` : ''}</h3>
     ${friendsBlock()}
 
@@ -71,6 +80,8 @@ function renderProfile(view) {
     if (!b) return;
     const a = b.dataset.a;
     if (a === 'share') openShare();
+    if (a === 'journal') openTimeline();
+    if (a === 'jexport') exportJournal('share');
     if (a === 'restore') openImport();
     if (a === 'bkpanel') openBackupPanel();
     if (a === 'reset' && confirm('למחוק את כל הבחירות והחברים? (נשמרת גרסה קודמת בגיבוי ושחזור)')) {

@@ -925,7 +925,14 @@ details.journal .jm { font-size: 12.5px; font-weight: 700; color: var(--ink-2); 
 .gbtn { min-height: 44px; display: flex; justify-content: center; }
 
 /* שורת הגיבוי בכותרת (בכל המסכים) */
-.top .cloud-status { margin: 8px 0 0; padding: 4px 10px; font-size: 12px; border-radius: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cloud-status.cloud-ico, .cloud-status.cloud-ico.warn { position: relative; width: 34px; height: 34px; display: inline-grid; place-items: center; border-radius: 50%; color: var(--ink-2); flex: none; background: none; padding: 0; margin: 0; }
+.cloud-ico svg { width: 24px; height: 24px; }
+.cloud-ico i { position: absolute; bottom: 3px; inset-inline-end: 1px; min-width: 15px; height: 15px; padding: 0 2px; border-radius: 999px; display: grid; place-items: center;
+  font-style: normal; font-size: 10px; font-weight: 900; line-height: 1; background: #3aa66b; color: #fff; box-shadow: 0 0 0 2px var(--paper); }
+.cloud-ico.pend i { background: var(--ink-3); }
+.cloud-status.cloud-ico.warn { color: var(--danger); }
+.cloud-ico.warn i { background: var(--danger); }
+.top .cloud-status.cloud-line { margin: 8px 0 0; padding: 4px 10px; font-size: 12px; border-radius: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* מסך פתיחה – התחברות */
 .welcome {
   position: fixed; inset: 0; z-index: 90; background: var(--paper);
@@ -1544,6 +1551,7 @@ const ICON = {
   mine: svg('<path d="m12 3 2.6 5.6 6 .7-4.4 4.1 1.2 6L12 16.4 6.6 19.4l1.2-6L3.4 9.3l6-.7z"/>'),
   search: svg('<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>'),
   user: svg('<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/>'),
+  cloud: svg('<path d="M7 18.5h10.5a4 4 0 0 0 .4-8 6 6 0 0 0-11.6-1.3A4.7 4.7 0 0 0 7 18.5z"/>'),
   map: svg('<path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"/><path d="M9 4v14M15 6v14"/>'),
   pin: svg('<path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>'),
   share: svg('<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/>'),
@@ -3958,6 +3966,15 @@ function renderProfile(view) {
       <button class="btn block" data-a="share">${ICON.share} שיתוף הלוז שלי</button>
     </div>
 
+    <div class="card-box">
+      <h3>יומן סיקור</h3>
+      <p>הפתקים והמדדים מכל ההופעות, לפי סדר הזמן. אפשר לייצא הכל.</p>
+      <div class="btn-row">
+        <button class="btn sm" data-a="journal">${ICON.note} פתיחת היומן</button>
+        <button class="btn alt sm" data-a="jexport">${ICON.share} ייצוא</button>
+      </div>
+    </div>
+
     <h3 class="section-t" id="friends">חברים ${S.friends.length ? `<span class="chip soft">${S.friends.length}</span>` : ''}</h3>
     ${friendsBlock()}
 
@@ -4006,6 +4023,8 @@ function renderProfile(view) {
     if (!b) return;
     const a = b.dataset.a;
     if (a === 'share') openShare();
+    if (a === 'journal') openTimeline();
+    if (a === 'jexport') exportJournal('share');
     if (a === 'restore') openImport();
     if (a === 'bkpanel') openBackupPanel();
     if (a === 'reset' && confirm('למחוק את כל הבחירות והחברים? (נשמרת גרסה קודמת בגיבוי ושחזור)')) {
@@ -5297,8 +5316,8 @@ function closeWelcome() {
 }
 
 /* ───────── שורת מצב (בכל המסכים) ───────── */
-function cloudStatus() {
-  if (!CC.on) return '';
+/* מצב הגיבוי: { cls: ''|'pend'|'warn', icon, text } */
+function cloudInfo() {
   let icon, text, cls = '';
   if (!cloudAuth) {
     icon = '⚠️'; cls = 'warn'; text = 'אין גיבוי – צריך להתחבר';
@@ -5307,11 +5326,24 @@ function cloudStatus() {
     if (s.error && /להתחבר/.test(s.error)) { icon = '⚠️'; cls = 'warn'; text = 'צריך להתחבר מחדש כדי להמשיך לגבות'; }
     else if (s.error && !cloudBackedUp()) { icon = '⚠️'; cls = 'warn'; text = `לא גובה${s.at ? ` מאז ${agoText(s.at)}` : ''} · ${s.error}`; }
     else if (s.at) {
-      icon = cloudBackedUp() ? '✅' : '☁️';
+      icon = cloudBackedUp() ? '✅' : '☁️'; cls = cloudBackedUp() ? '' : 'pend';
       text = cloudBackedUp() ? `גיבוי אחרון לענן: ${agoText(s.at)}` : `גיבוי אחרון: ${agoText(s.at)} · יש שינויים שיגובו כשתהיה קליטה`;
-    } else { icon = '☁️'; text = 'הגיבוי יתבצע כשתהיה קליטה'; }
+    } else { icon = '☁️'; cls = 'pend'; text = 'הגיבוי יתבצע כשתהיה קליטה'; }
   }
-  return `<button class="cloud-status ${cls}" data-cloudpanel>${icon} ${esc(text)}</button>`;
+  return { cls, icon, text };
+}
+/* אייקון ענן קטן בכותרת (בכל המסכים): ✓ מגובה · ⋯ ממתין לקליטה · ! בעיה. לחיצה – גיבוי ושחזור */
+function cloudIcon() {
+  if (!CC.on) return '';
+  const { cls, text } = cloudInfo();
+  const mark = cls === 'warn' ? '!' : cls === 'pend' ? '⋯' : '✓';
+  return `<button class="cloud-ico cloud-status ${cls}" data-cloudpanel aria-label="${esc(text)}" title="${esc(text)}">${ICON.cloud}<i>${mark}</i><span class="sr">${esc(text)}</span></button>`;
+}
+/* שורת מצב מלאה – רק כשיש בעיה */
+function cloudStatus() {
+  if (!CC.on) return '';
+  const { cls, icon, text } = cloudInfo();
+  return cls === 'warn' ? `<button class="cloud-status cloud-line warn" data-cloudpanel>${icon} ${esc(text)}</button>` : '';
 }
 
 /* קטע הענן במסך "גיבוי ושחזור" */
@@ -5488,6 +5520,7 @@ function renderHeader() {
     <div class="top-row">
       <h1>${t.title}</h1>${netPill()}
       ${mineBtns}
+      ${cloudIcon()}
       <button class="logo-btn" data-act="profile" aria-label="פרופיל והגדרות"><img src="${ASSETS.wordmark}" alt="inDnegev"></button>
     </div>
     <div class="gsearch">

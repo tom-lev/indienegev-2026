@@ -287,8 +287,8 @@ function closeWelcome() {
 }
 
 /* ───────── שורת מצב (בכל המסכים) ───────── */
-function cloudStatus() {
-  if (!CC.on) return '';
+/* מצב הגיבוי: { cls: ''|'pend'|'warn', icon, text } */
+function cloudInfo() {
   let icon, text, cls = '';
   if (!cloudAuth) {
     icon = '⚠️'; cls = 'warn'; text = 'אין גיבוי – צריך להתחבר';
@@ -297,11 +297,24 @@ function cloudStatus() {
     if (s.error && /להתחבר/.test(s.error)) { icon = '⚠️'; cls = 'warn'; text = 'צריך להתחבר מחדש כדי להמשיך לגבות'; }
     else if (s.error && !cloudBackedUp()) { icon = '⚠️'; cls = 'warn'; text = `לא גובה${s.at ? ` מאז ${agoText(s.at)}` : ''} · ${s.error}`; }
     else if (s.at) {
-      icon = cloudBackedUp() ? '✅' : '☁️';
+      icon = cloudBackedUp() ? '✅' : '☁️'; cls = cloudBackedUp() ? '' : 'pend';
       text = cloudBackedUp() ? `גיבוי אחרון לענן: ${agoText(s.at)}` : `גיבוי אחרון: ${agoText(s.at)} · יש שינויים שיגובו כשתהיה קליטה`;
-    } else { icon = '☁️'; text = 'הגיבוי יתבצע כשתהיה קליטה'; }
+    } else { icon = '☁️'; cls = 'pend'; text = 'הגיבוי יתבצע כשתהיה קליטה'; }
   }
-  return `<button class="cloud-status ${cls}" data-cloudpanel>${icon} ${esc(text)}</button>`;
+  return { cls, icon, text };
+}
+/* אייקון ענן קטן בכותרת (בכל המסכים): ✓ מגובה · ⋯ ממתין לקליטה · ! בעיה. לחיצה – גיבוי ושחזור */
+function cloudIcon() {
+  if (!CC.on) return '';
+  const { cls, text } = cloudInfo();
+  const mark = cls === 'warn' ? '!' : cls === 'pend' ? '⋯' : '✓';
+  return `<button class="cloud-ico cloud-status ${cls}" data-cloudpanel aria-label="${esc(text)}" title="${esc(text)}">${ICON.cloud}<i>${mark}</i><span class="sr">${esc(text)}</span></button>`;
+}
+/* שורת מצב מלאה – רק כשיש בעיה */
+function cloudStatus() {
+  if (!CC.on) return '';
+  const { cls, icon, text } = cloudInfo();
+  return cls === 'warn' ? `<button class="cloud-status cloud-line warn" data-cloudpanel>${icon} ${esc(text)}</button>` : '';
 }
 
 /* קטע הענן במסך "גיבוי ושחזור" */

@@ -50,6 +50,7 @@ function renderHeader() {
     <div class="top-row">
       <h1>${t.title}</h1>${netPill()}
       ${mineBtns}
+      ${cloudIcon()}
       <button class="logo-btn" data-act="profile" aria-label="פרופיל והגדרות"><img src="${ASSETS.wordmark}" alt="inDnegev"></button>
     </div>
     <div class="gsearch">
