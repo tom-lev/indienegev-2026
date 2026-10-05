@@ -50,6 +50,10 @@ service cloud.firestore {
       allow get: if true;
       allow write: if request.auth != null && request.auth.uid == uid;
     }
+    match /votes/{uid} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
   }
 }
 ```

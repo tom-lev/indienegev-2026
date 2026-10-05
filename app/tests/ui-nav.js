@@ -42,10 +42,33 @@ const check = (name, ok, d = '') => { if (!ok) fails++; console.log(`${ok ? '✅
   check('לחיצה על תוצאה פותחת את פרטי ההופעה', await ev(() => !!sheetEl));
   await ev(() => popLayer()); await sleep(500);
   check('סגירת הפרטים – חוזרים לתוצאות', await ev(() => searchOn && !!document.querySelector('#results .row')));
+  // חיפושים אחרונים: פתיחת תוצאה שומרת את החיפוש
+  await page.click('.gs-x'); await sleep(600);
+  await page.click('#gq'); await sleep(300);
+  let rc = await ev(() => [...document.querySelectorAll('#results [data-recent]')].map(b => b.dataset.recent));
+  check('חיפושים אחרונים: "של" נשמר אחרי פתיחת תוצאה', rc[0] === 'של', JSON.stringify(rc));
+  await page.type('#gq', 'אביב'); await page.keyboard.press('Enter'); await sleep(300);
+  await page.click('.gs-x'); await sleep(500); await page.click('#gq'); await sleep(300);
+  rc = await ev(() => [...document.querySelectorAll('#results [data-recent]')].map(b => b.dataset.recent));
+  check('Enter שומר; האחרון ראשון', rc[0] === 'אביב' && rc[1] === 'של', JSON.stringify(rc));
+  await page.click('#results [data-recent="של"]'); await sleep(300);
+  check('לחיצה על חיפוש אחרון – ממלאת ומחפשת', await ev(() => document.querySelector('#gq').value === 'של' && searchState.q === 'של' && !document.querySelector('#results .recent') && document.querySelectorAll('#results .row').length > 0));
+  await ev(() => { document.querySelector('#gq').value = ''; searchState.q = ''; searchRefresh(); }); await sleep(200);
+  await page.click('#results [data-rclear]'); await sleep(200);
+  check('"ניקוי" מוחק את החיפושים האחרונים', await ev(() => !document.querySelector('#results .recent')));
+  await ev(() => { document.querySelector('#gq').value = 'ש'; searchState.q = 'ש'; searchRefresh(); });
   // ביטול
   await page.click('.gs-x'); await sleep(600);
   s = await ev(() => ({ on: searchOn, tab, v: document.querySelector('#gq').value, grid: !!document.querySelector('#gscroll, #lscroll') }));
   check('"ביטול" – חוזרים ללוז המלא, השדה מתנקה', !s.on && s.tab === 'grid' && s.v === '' && s.grid, JSON.stringify(s));
+  // גלילה אוטומטית להופעה הבאה בכניסה ל"הלוז שלי"
+  await ev(() => { const th = BY_START.filter(e => e.day === 'thu'); S.picks = {}; th.forEach((e, i) => { if (i % 2 === 0) S.picks[e.id] = 2; }); save();
+    const mid = th.filter((e, i) => i % 2 === 0); setSim(mid[Math.floor(mid.length * 0.75)].start - 60000); viewDay = 'thu'; showPast = true; S.prefs.mineView = 'me'; S.prefs.mineLayout = 'list'; setTab('mine'); }); await sleep(400);
+  const sc = await ev(() => { const s = document.querySelector('#mscroll'); const t = now(); const row = [...s.querySelectorAll('.row[data-ev]')].find(r => EV[r.dataset.ev].end > t); const rt = row.getBoundingClientRect().top - s.getBoundingClientRect().top; return { top: s.scrollTop, rowVisible: rt >= 0 && rt < s.clientHeight * 0.6 }; });
+  check('כניסה ל"הלוז שלי" – גלילה להופעה הבאה', sc.top > 0 && sc.rowVisible, JSON.stringify(sc));
+  await ev(() => { setTab('grid'); viewDay = 'fri'; setTab('mine'); }); await sleep(300);
+  check('ביום אחר – בלי גלילה', await ev(() => document.querySelector('#mscroll').scrollTop === 0));
+  await ev(() => { simTime = null; showPast = false; S.picks = { [BY_START[0].id]: 2 }; save(); viewDay = null; setTab('grid'); }); await sleep(300);
   // כפתור "חזרה" של הטלפון סוגר את החיפוש
   await page.click('#gq'); await page.type('#gq', 'a'); await sleep(300);
   await page.goBack().catch(() => {}); await sleep(600);
@@ -63,6 +86,14 @@ const check = (name, ok, d = '') => { if (!ok) fails++; console.log(`${ok ? '✅
   check('שינוי שם מהפרופיל', await ev(() => S.name === 'תומר ל'));
   await page.click('#pscroll .av-opt[data-av="6"]'); await sleep(300);
   check('בחירת דמות מהפרופיל (🦊) – מתעדכן בכרטיס', await ev(() => myAvatar() === 6 && document.querySelector('.prof-card .av').textContent.includes('🦊')));
+  await page.setRequestInterception(true);
+  let wa = null;
+  const onReq = r => { if (r.url().startsWith('https://wa.me/')) { wa = decodeURIComponent(r.url()); r.abort(); } else r.continue(); };
+  page.on('request', onReq);
+  await page.click('#pscroll [data-a="appshare"]'); await sleep(800);
+  page.off('request', onReq); await page.setRequestInterception(false);
+  check('"שליחת האפליקציה בוואטסאפ" – פותח וואטסאפ עם קישור לאתר', !!wa && wa.includes('https://tom-lev.github.io/indienegev-2026/'), (wa || '').slice(0, 60));
+  await page.goto(APP, { waitUntil: 'load' }); await sleep(1200); await ev(() => { closeWelcome(); setTab('profile'); }); await sleep(300);
   await page.click('#pscroll [data-a="share"]'); await sleep(500);
   check('"שיתוף הלוז שלי" פותח את מסך השיתוף', await ev(() => /שיתוף הלוז שלי/.test((document.querySelector('.panel h2') || {}).textContent || '')));
   await ev(() => popLayer()); await sleep(500);

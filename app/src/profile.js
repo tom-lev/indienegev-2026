@@ -1,5 +1,13 @@
 /* לשונית "פרופיל": השם, הדמות, שיתוף, חברים, חשבון וגיבוי, בלי קליטה, עזרה ואיפוס */
 
+/* שליחת קישור לאפליקציה בוואטסאפ */
+function shareApp() {
+  const text = `הלוז שלי לאינדינגב 2026 🦋
+אפליקציה לבניית הלוז, התנגשויות, לוז משותף עם חברים ומפה עם ניווט (עובדת גם בלי קליטה):
+${SITE_URL}`;
+  location.href = 'https://wa.me/?text=' + encodeURIComponent(text);
+}
+
 function renderProfile(view) {
   const me = meLook();
   const n = Object.keys(S.picks).length;
@@ -21,6 +29,7 @@ function renderProfile(view) {
       <h3>שיתוף הלוז שלי</h3>
       <p>לינק, QR (בלי קליטה) או קוד. אצל החברים הלוז מתעדכן לבד.</p>
       <button class="btn block" data-a="share">${ICON.share} שיתוף הלוז שלי</button>
+      <button class="app-share" data-a="appshare">💬 שליחת האפליקציה לחבר בוואטסאפ</button>
     </div>
 
     <div class="card-box">
@@ -91,6 +100,7 @@ function renderProfile(view) {
     if (!b) return;
     const a = b.dataset.a;
     if (a === 'share') openShare();
+    if (a === 'appshare') shareApp();
     if (a === 'journal') openTimeline();
     if (a === 'tent-go') goTo('tent');
     if (a === 'tent-share') shareTentImage();

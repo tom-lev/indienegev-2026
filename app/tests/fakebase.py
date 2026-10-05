@@ -11,6 +11,7 @@ from urllib.parse import parse_qs, urlparse
 lock = threading.Lock()
 DOCS = {}          # uid -> {'body': str, 'updated': float}
 SHARES = {}        # uid -> body (לוז חי: קריאה לכולם, כתיבה לבעלים)
+VOTES = {}         # uid -> body (פופולריות: קריאה/רשימה למחוברים, כתיבה לבעלים)
 TOKENS = {}        # idToken -> (uid, exp)
 REFRESH = {}       # refreshToken -> uid
 REVOKED = set()
@@ -80,7 +81,7 @@ class H(BaseHTTPRequestHandler):
             cmd = json.loads(b)
             with lock:
                 if cmd.get('reset'):
-                    DOCS.clear(); SHARES.clear(); TOKENS.clear(); REFRESH.clear(); REVOKED.clear(); LOG.clear()
+                    DOCS.clear(); SHARES.clear(); VOTES.clear(); TOKENS.clear(); REFRESH.clear(); REVOKED.clear(); LOG.clear()
                     MODE.update({'down': False, 'slow': 0, 'err': 0, 'tokenTtl': 3600})
                 for k in ('down', 'slow', 'err', 'tokenTtl'):
                     if k in cmd: MODE[k] = cmd[k]
@@ -140,6 +141,10 @@ class H(BaseHTTPRequestHandler):
             return 403, f'{who} -> {uid}'
         return None, None
 
+    def votes_path(self):
+        p = urlparse(self.path).path
+        return p[len('/fs/votes'):] if p.startswith('/fs/votes') else None
+
     def share_uid(self):
         p = urlparse(self.path).path
         return p[len('/fs/shares/'):] if p.startswith('/fs/shares/') else None
@@ -147,6 +152,14 @@ class H(BaseHTTPRequestHandler):
     def do_PATCH(self):
         b = self.body()
         if self.gate(): return
+        vp = self.votes_path()
+        if vp is not None:
+            vu = vp.lstrip('/')
+            code, why = self.rules(vu)
+            if code: return self.reply(code, {'error': {'status': 'PERMISSION_DENIED'}})
+            with lock:
+                VOTES[vu] = b; LOG.append(f'votes write {vu}')
+            return self.reply(200, json.loads(b))
         su = self.share_uid()
         if su is not None:
             code, why = self.rules(su)
@@ -193,6 +206,14 @@ class H(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.gate(): return
+        vp = self.votes_path()
+        if vp is not None:
+            who, why = self.who()
+            if who is None: return self.reply(403, {'error': {'status': 'PERMISSION_DENIED'}})
+            with lock:
+                docs = [dict(json.loads(v), name=f'votes/{k}') for k, v in VOTES.items()]
+                LOG.append('votes list')
+            return self.reply(200, {'documents': docs})
         su = self.share_uid()
         if su is not None:
             with lock:

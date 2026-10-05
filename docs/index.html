@@ -329,6 +329,14 @@ main#view { overflow: hidden; position: relative; min-height: 0; }
 .prof-card .av.big { width: 64px; height: 64px; font-size: 34px; flex: none; border-width: 3px; }
 .prof-name { flex: 1; min-width: 0; }
 .prof-name .text-in { margin: 4px 0 0; }
+.app-share { display: block; margin: 10px auto 0; padding: 6px 10px; font-size: 13.5px; font-weight: 800; color: #1f8f4e; text-decoration: underline; }
+.pop-line { margin: 6px 0 2px; font-size: 13.5px; font-weight: 700; color: var(--ink-2); }
+.recent { margin: 2px 0 14px; }
+.recent-h { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 800; color: var(--ink-2); margin-bottom: 6px; }
+.recent-h button { font-size: 12.5px; font-weight: 700; text-decoration: underline; color: var(--ink-2); }
+.recent-l { display: flex; flex-wrap: wrap; gap: 6px; }
+.recent-l button { display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; border-radius: 999px; background: var(--cream); font-size: 13.5px; font-weight: 700; }
+.recent-l svg { width: 14px; height: 14px; opacity: .6; }
 .who-tabs button { position: relative; }
 .new-dot { position: absolute; top: 2px; inset-inline-end: 4px; width: 9px; height: 9px; border-radius: 50%; background: var(--coral); box-shadow: 0 0 0 2px var(--paper); }
 .diff-box { margin: -4px 0 12px; padding: 10px 12px; border-radius: 14px; background: rgba(244,111,106,.12); font-size: 13.5px; line-height: 1.5; }
@@ -2040,6 +2048,16 @@ function headCard(sel) {
 }
 
 let showPast = false; // "הופעות שהיו" פתוחות
+/* כניסה ל"הלוז שלי" ביום הנוכחי: גלילה להופעה שקורה עכשיו / הבאה (אם היא לא כבר נראית) */
+function scrollMineToNow() {
+  const sc = $('#mscroll');
+  if (!sc || logicalDay(now()) !== currentViewDay()) return;
+  const t = now();
+  const row = [...sc.querySelectorAll('.row[data-ev]')].find(r => EV[r.dataset.ev] && EV[r.dataset.ev].end > t);
+  if (!row) return;
+  const top = row.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop;
+  if (top > sc.clientHeight * 0.55) sc.scrollTop = Math.max(0, top - 70);
+}
 /* רואים את השינויים בלוז של חבר → מסמנים כנראה (השינויים נשארים גלויים עד "הבנתי") */
 function markFriendSeen(f) {
   const d = friendDiff(f);
@@ -2172,6 +2190,32 @@ function openEvent(ev) {
   openSheet(body => renderEventSheet(body, ev));
 }
 
+/* כמה משתמשים בחרו את ההופעה (מכל המשתמשים, בלי שמות). נשמר מקומית – מוצג גם בלי קליטה */
+const POP_KEY = 'indienegev-pop';
+let popData = (() => { try { return JSON.parse(localStorage.getItem(POP_KEY)); } catch (e) { return null; } })();
+let popBusy = false;
+async function refreshPopular(force = false) {
+  if (typeof CC === 'undefined' || !CC.on || !cloudAuth || !navigator.onLine || popBusy) return;
+  if (!force && popData && Date.now() - popData.at < 15 * MIN) return;
+  popBusy = true;
+  try {
+    popData = await CC.fetchPopular();
+    try { localStorage.setItem(POP_KEY, JSON.stringify(popData)); } catch (e) { /* */ }
+    refreshSheet(false);
+  } catch (e) { /* עוד לא עודכנו חוקי האבטחה / אין קליטה – ננסה בפעם הבאה */ }
+  finally { popBusy = false; }
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshPopular(); });
+function popLine(ev) {
+  refreshPopular();
+  if (!popData || popData.n < 2) return '';
+  const [all, must] = popData.c[ev.id] || [0, 0];
+  if (!all) return `<div class="pop-line">עוד אף אחד לא בחר · מתוך ${popData.n} משתמשים</div>`;
+  const day = EVENTS.filter(e => e.day === ev.day && popData.c[e.id]).map(e => popData.c[e.id][0]);
+  const rank = day.filter(x => x > all).length + 1;
+  return `<div class="pop-line">🔥 ${all} ${all === 1 ? 'בחר/ה' : 'בחרו'}${must ? ` (${must} חייב)` : ''} מתוך ${popData.n} משתמשים${rank <= 10 ? ` · ${rank === 1 ? 'הכי פופולרית' : `מקום ${rank}`} ב${dayLabel(ev.day)}` : ''}</div>`;
+}
+
 function renderEventSheet(body, ev) {
   const st = STAGE[ev.stage];
   const lv = level(ev.id);
@@ -2209,6 +2253,7 @@ function renderEventSheet(body, ev) {
     <div class="ev-tags">${tags}</div>
     <h2 class="ev-name">${esc(ev.name)}</h2>
     <div class="ev-meta">יום ${dayLabel(ev.day)} · ${timeRange(ev)} · ${fmtDur(dur(ev))}</div>
+    ${popLine(ev)}
     ${ev.desc ? `<p class="ev-desc">${esc(ev.desc)}</p>` : ''}
     ${sub}
     <div class="levels" role="group" aria-label="רמת עניין">
@@ -2292,6 +2337,16 @@ const searchState = { q: '', kind: 'all' };
 let searchRefresh = null; // רענון תוצאות בלבד, כדי לא לאבד פוקוס בשדה
 let searchOn = false, searchLayer = null;
 
+/* חיפושים אחרונים (5), נשמרים מקומית */
+const RECENT_KEY = 'indienegev-recent';
+const recentSearches = () => { try { return JSON.parse(localStorage.getItem(RECENT_KEY)) || []; } catch (e) { return []; } };
+function rememberSearch(q) {
+  q = (q || '').trim();
+  if (q.length < 2) return;
+  const l = [q, ...recentSearches().filter(x => x !== q)].slice(0, 5);
+  try { localStorage.setItem(RECENT_KEY, JSON.stringify(l)); } catch (e) { /* */ }
+}
+
 function enterSearch() {
   if (searchOn) return;
   searchOn = true;
@@ -2319,13 +2374,22 @@ function renderSearch(view) {
   const results = $('#results');
   const draw = () => {
     const res = search(searchState.q, searchState.kind);
+    const rec = searchState.q.trim() ? [] : recentSearches();
+    const recHtml = rec.length ? `<div class="recent"><div class="recent-h"><span>חיפושים אחרונים</span><button data-rclear>ניקוי</button></div>
+      <div class="recent-l">${rec.map(q => `<button data-recent="${esc(q)}">${ICON.search}${esc(q)}</button>`).join('')}</div></div>` : '';
     const head = searchState.q.trim()
       ? (res.length ? `${res.length} תוצאות` : '')
       : `כל האמנים והאירועים (${res.length}) · א–ת`;
-    results.innerHTML = res.length
+    results.innerHTML = recHtml + (res.length
       ? `<div class="result-meta">${head}</div>` + res.map(r => eventRow(r.ev, { hl: r.hl, hint: r.hint, showDay: true })).join('')
-      : `<div class="empty"><h2>לא מצאנו</h2><p>אין אמן או אירוע בשם "${esc(searchState.q)}".<br>אפשר לנסות חלק מהשם, בעברית או באנגלית.</p></div>`;
+      : `<div class="empty"><h2>לא מצאנו</h2><p>אין אמן או אירוע בשם "${esc(searchState.q)}".<br>אפשר לנסות חלק מהשם, בעברית או באנגלית.</p></div>`);
   };
+  results.addEventListener('click', e => {
+    const r = e.target.closest('[data-recent]');
+    if (r) { searchState.q = r.dataset.recent; const i = $('#gq'); if (i) i.value = searchState.q; draw(); return; }
+    if (e.target.closest('[data-rclear]')) { try { localStorage.removeItem(RECENT_KEY); } catch (x) { /* */ } draw(); return; }
+    if (e.target.closest('[data-ev]')) rememberSearch(searchState.q); // פתיחת תוצאה = חיפוש ששווה לזכור
+  }, true);
   $('.chips', view).addEventListener('click', e => {
     const b = e.target.closest('[data-kind]');
     if (!b) return;
@@ -4023,6 +4087,14 @@ function bindFriends(root, refresh) {
 /* ── profile.js ── */
 /* לשונית "פרופיל": השם, הדמות, שיתוף, חברים, חשבון וגיבוי, בלי קליטה, עזרה ואיפוס */
 
+/* שליחת קישור לאפליקציה בוואטסאפ */
+function shareApp() {
+  const text = `הלוז שלי לאינדינגב 2026 🦋
+אפליקציה לבניית הלוז, התנגשויות, לוז משותף עם חברים ומפה עם ניווט (עובדת גם בלי קליטה):
+${SITE_URL}`;
+  location.href = 'https://wa.me/?text=' + encodeURIComponent(text);
+}
+
 function renderProfile(view) {
   const me = meLook();
   const n = Object.keys(S.picks).length;
@@ -4044,6 +4116,7 @@ function renderProfile(view) {
       <h3>שיתוף הלוז שלי</h3>
       <p>לינק, QR (בלי קליטה) או קוד. אצל החברים הלוז מתעדכן לבד.</p>
       <button class="btn block" data-a="share">${ICON.share} שיתוף הלוז שלי</button>
+      <button class="app-share" data-a="appshare">💬 שליחת האפליקציה לחבר בוואטסאפ</button>
     </div>
 
     <div class="card-box">
@@ -4114,6 +4187,7 @@ function renderProfile(view) {
     if (!b) return;
     const a = b.dataset.a;
     if (a === 'share') openShare();
+    if (a === 'appshare') shareApp();
     if (a === 'journal') openTimeline();
     if (a === 'tent-go') goTo('tent');
     if (a === 'tent-share') shareTentImage();
@@ -4708,6 +4782,43 @@ const CC = (() => {
     await set('share', { uid: a.uid, fp: h, at: Date.now() });
     return true;
   }
+  /* ───────── פופולריות ─────────
+     כל משתמש מחובר שומר אוטומטית ב-votes/<uid> רק את רשימת ההופעות שלו (בלי שם, דמות או פתקים).
+     כל משתמש מחובר יכול לקרוא את כל הרשימות – וכך לספור כמה בחרו כל הופעה, בלי לדעת מי. */
+  async function publishVotes(a, st) {
+    const s = canon(st.picks || {});
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+    const pub = (await get('votes')) || {};
+    if (pub.uid === a.uid && pub.fp === h) return false;
+    const r = await req(`${ep.fs}/votes/${encodeURIComponent(a.uid)}`, { method: 'PATCH', headers: { Authorization: `Bearer ${a.idToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields: { picks: { stringValue: JSON.stringify(st.picks || {}) } } }) });
+    if (!r.ok) throw new Error(`שגיאה ${r.status}`);
+    await set('votes', { uid: a.uid, fp: h });
+    return true;
+  }
+  /* ספירה: { n: מספר משתמשים, c: { id: [כולם, חייב] } } */
+  async function fetchPopular() {
+    const a = await auth();
+    const c = {};
+    let n = 0, token = '';
+    for (let page = 0; page < 40; page++) {
+      const r = await req(`${ep.fs}/votes?pageSize=300${token ? '&pageToken=' + encodeURIComponent(token) : ''}`, { headers: { Authorization: `Bearer ${a.idToken}` } }, 15000);
+      if (!r.ok) throw new Error(`שגיאה ${r.status}`);
+      const j = await r.json();
+      for (const d of j.documents || []) {
+        let p = {};
+        try { p = JSON.parse(d.fields.picks.stringValue || '{}'); } catch (e) { continue; }
+        if (!Object.keys(p).length) continue;
+        n++;
+        for (const [id, lv] of Object.entries(p)) { const x = c[id] || (c[id] = [0, 0]); x[0]++; if (lv === 2) x[1]++; }
+      }
+      if (!j.nextPageToken) break;
+      token = j.nextPageToken;
+    }
+    return { n, c, at: Date.now() };
+  }
+
   /* "נראה לאחרונה": מעדכן רק את שדה הזמן במסמך הלוז החי (אחרי שכבר פורסם) */
   async function touchShare() {
     const a = await auth();
@@ -4763,6 +4874,7 @@ const CC = (() => {
       await set('cloud', { fp: mfp, at: Date.now(), error: null, updateTime });
       await set('owner', a.uid);
       await publishShare(a, merged).catch(() => {}); // לא חוסם את הגיבוי (למשל לפני שעודכנו חוקי האבטחה)
+      await publishVotes(a, merged).catch(() => {});
       // אם בזמן הסנכרון נשמר במכשיר משהו חדש (עריכה תוך כדי בקשה) – ממזגים אותו, לא דורסים
       let out = merged, again = false;
       const latestRaw = await get('state');
@@ -4801,7 +4913,7 @@ const CC = (() => {
     return { text: JSON.stringify({ app: 'indienegev-2026', kind: 'backup', v: 1, createdAt: remote.updatedAt, state: remote.state }), updatedAt: remote.updatedAt };
   }
 
-  return { on, cfg, get, set, del, fp, sync, upload, download, history, size, signInWithGoogleToken, auth, buildUpload, fetchShare, publishShare, touchShare, lww, stampEdits, replaceStamped, items, clean };
+  return { on, cfg, get, set, del, fp, sync, upload, download, history, size, signInWithGoogleToken, auth, buildUpload, fetchShare, publishShare, touchShare, publishVotes, fetchPopular, lww, stampEdits, replaceStamped, items, clean };
 })();
 
 
@@ -5651,7 +5763,7 @@ function render() {
   const view = $('#view');
   if (searchOn) renderSearch(view);
   else if (tab === 'grid') renderSchedule(view);
-  else if (tab === 'mine') renderMine(view);
+  else if (tab === 'mine') { renderMine(view); scrollMineToNow(); }
   else if (tab === 'profile') renderProfile(view);
   else if (tab === 'map') renderMap(view);
   else renderNow(view);
@@ -5709,7 +5821,7 @@ $('#top').addEventListener('input', e => {
   if (!searchOn) enterSearch(); else if (searchRefresh) searchRefresh();
 });
 $('#top').addEventListener('focusin', e => { if (e.target.id === 'gq') enterSearch(); });
-$('#top').addEventListener('keydown', e => { if (e.target.id === 'gq' && e.key === 'Enter') e.target.blur(); }); // "חפש" במקלדת – סוגר את המקלדת
+$('#top').addEventListener('keydown', e => { if (e.target.id === 'gq' && e.key === 'Enter') { rememberSearch(e.target.value); e.target.blur(); } }); // "חפש" במקלדת – סוגר את המקלדת
 
 /* עדכון שוטף: מסך "עכשיו" וקו הזמן בגריד */
 setInterval(() => {

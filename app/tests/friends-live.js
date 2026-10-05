@@ -175,6 +175,24 @@ async function device(label) {
   check('ביום אחר – בלי קיפול', await B.ev(() => !document.querySelector('.past-row')));
   await B.ev(() => { simTime = null; S.picks = {}; save(); render(); });
 
+  // ───── פופולריות (אוטומטי, בלי שמות) ─────
+  await A.ev(() => { S.picks = { [BY_START[10].id]: 2, [BY_START[11].id]: 1 }; save(); cloudNow(); }); await sleep(2500);
+  await B.ev(() => { S.picks = { [BY_START[10].id]: 1 }; save(); cloudNow(); }); await sleep(2500);
+  let st = await srv();
+  check('רשימת ההופעות נשלחת אוטומטית בגיבוי (votes)', st.log.includes('votes write uid-alice') && st.log.includes('votes write uid-bob'));
+  await B.ev(async () => { await refreshPopular(true); openEvent(BY_START[10]); }); await sleep(800);
+  const pl = await B.ev(() => (document.querySelector('.sheet .pop-line, .pop-line') || {}).textContent || '');
+  check('בפרטי ההופעה: "🔥 2 בחרו (1 חייב) מתוך 2 משתמשים"', /2 בחרו/.test(pl) && /1 חייב/.test(pl) && /מתוך 2/.test(pl), pl);
+  await B.ev(() => closeSheet()); await sleep(700); // סגירה דרך ההיסטוריה – מחכים לפני פתיחה חדשה
+  await B.ev(() => openEvent(BY_START[11])); await sleep(600);
+  const pl1 = await B.ev(() => { const l = [...document.querySelectorAll('.pop-line')]; return l.length ? l[l.length - 1].textContent : ''; });
+  check('הופעה שרק אחד בחר: "1 בחר/ה"', /1 בחר\/ה/.test(pl1), pl1);
+  await B.ev(() => closeSheet()); await sleep(300);
+  check('הנתונים שנשלחים – בלי שם ובלי פתקים', await B.ev(async () => { const a = await CC.auth(); const r = await fetch(CC.cfg.endpoints.fs + '/votes', { headers: { Authorization: 'Bearer ' + a.idToken } }); const t = await r.text(); return !t.includes('אליס') && !t.includes('notes') && t.includes('picks'); }));
+  check('בלי התחברות – אי אפשר לקרוא את הספירה', (await fetch('http://localhost:8766/fs/votes')).status === 403);
+  await B.ev(() => { S.picks = {}; save(); });
+  await A.ev(() => { S.picks = {}; save(); });
+
   // ───── דמויות ─────
   await A.ev(() => { S.friends = []; save(); setMyAvatar(0); cloudNow(); }); await sleep(2500);
   const codeAv = await A.ev(() => encodeShare(S.name, S.picks, cloudAuth.uid, myAvatar()));

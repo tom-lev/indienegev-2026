@@ -237,6 +237,43 @@ const CC = (() => {
     await set('share', { uid: a.uid, fp: h, at: Date.now() });
     return true;
   }
+  /* ───────── פופולריות ─────────
+     כל משתמש מחובר שומר אוטומטית ב-votes/<uid> רק את רשימת ההופעות שלו (בלי שם, דמות או פתקים).
+     כל משתמש מחובר יכול לקרוא את כל הרשימות – וכך לספור כמה בחרו כל הופעה, בלי לדעת מי. */
+  async function publishVotes(a, st) {
+    const s = canon(st.picks || {});
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+    const pub = (await get('votes')) || {};
+    if (pub.uid === a.uid && pub.fp === h) return false;
+    const r = await req(`${ep.fs}/votes/${encodeURIComponent(a.uid)}`, { method: 'PATCH', headers: { Authorization: `Bearer ${a.idToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields: { picks: { stringValue: JSON.stringify(st.picks || {}) } } }) });
+    if (!r.ok) throw new Error(`שגיאה ${r.status}`);
+    await set('votes', { uid: a.uid, fp: h });
+    return true;
+  }
+  /* ספירה: { n: מספר משתמשים, c: { id: [כולם, חייב] } } */
+  async function fetchPopular() {
+    const a = await auth();
+    const c = {};
+    let n = 0, token = '';
+    for (let page = 0; page < 40; page++) {
+      const r = await req(`${ep.fs}/votes?pageSize=300${token ? '&pageToken=' + encodeURIComponent(token) : ''}`, { headers: { Authorization: `Bearer ${a.idToken}` } }, 15000);
+      if (!r.ok) throw new Error(`שגיאה ${r.status}`);
+      const j = await r.json();
+      for (const d of j.documents || []) {
+        let p = {};
+        try { p = JSON.parse(d.fields.picks.stringValue || '{}'); } catch (e) { continue; }
+        if (!Object.keys(p).length) continue;
+        n++;
+        for (const [id, lv] of Object.entries(p)) { const x = c[id] || (c[id] = [0, 0]); x[0]++; if (lv === 2) x[1]++; }
+      }
+      if (!j.nextPageToken) break;
+      token = j.nextPageToken;
+    }
+    return { n, c, at: Date.now() };
+  }
+
   /* "נראה לאחרונה": מעדכן רק את שדה הזמן במסמך הלוז החי (אחרי שכבר פורסם) */
   async function touchShare() {
     const a = await auth();
@@ -292,6 +329,7 @@ const CC = (() => {
       await set('cloud', { fp: mfp, at: Date.now(), error: null, updateTime });
       await set('owner', a.uid);
       await publishShare(a, merged).catch(() => {}); // לא חוסם את הגיבוי (למשל לפני שעודכנו חוקי האבטחה)
+      await publishVotes(a, merged).catch(() => {});
       // אם בזמן הסנכרון נשמר במכשיר משהו חדש (עריכה תוך כדי בקשה) – ממזגים אותו, לא דורסים
       let out = merged, again = false;
       const latestRaw = await get('state');
@@ -330,13 +368,13 @@ const CC = (() => {
     return { text: JSON.stringify({ app: 'indienegev-2026', kind: 'backup', v: 1, createdAt: remote.updatedAt, state: remote.state }), updatedAt: remote.updatedAt };
   }
 
-  return { on, cfg, get, set, del, fp, sync, upload, download, history, size, signInWithGoogleToken, auth, buildUpload, fetchShare, publishShare, touchShare, lww, stampEdits, replaceStamped, items, clean };
+  return { on, cfg, get, set, del, fp, sync, upload, download, history, size, signInWithGoogleToken, auth, buildUpload, fetchShare, publishShare, touchShare, publishVotes, fetchPopular, lww, stampEdits, replaceStamped, items, clean };
 })();
 
 /* Service Worker – האפליקציה נפתחת מהעותק השמור בטלפון, גם בלי קליטה.
    אסטרטגיה: מטמון קודם (פתיחה מיידית גם בקליטה חלשה). עדכון גרסה מגיע כ-SW חדש
    (הקובץ הזה משתנה בכל בנייה בגלל VERSION), שמחכה עד שהמשתמש מאשר רענון. */
-const VERSION = 'e90f692975e6';
+const VERSION = 'dfdb2ea978b9';
 const CACHE = 'indn26-' + VERSION;
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 

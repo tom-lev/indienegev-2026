@@ -95,6 +95,16 @@ function headCard(sel) {
 }
 
 let showPast = false; // "הופעות שהיו" פתוחות
+/* כניסה ל"הלוז שלי" ביום הנוכחי: גלילה להופעה שקורה עכשיו / הבאה (אם היא לא כבר נראית) */
+function scrollMineToNow() {
+  const sc = $('#mscroll');
+  if (!sc || logicalDay(now()) !== currentViewDay()) return;
+  const t = now();
+  const row = [...sc.querySelectorAll('.row[data-ev]')].find(r => EV[r.dataset.ev] && EV[r.dataset.ev].end > t);
+  if (!row) return;
+  const top = row.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop;
+  if (top > sc.clientHeight * 0.55) sc.scrollTop = Math.max(0, top - 70);
+}
 /* רואים את השינויים בלוז של חבר → מסמנים כנראה (השינויים נשארים גלויים עד "הבנתי") */
 function markFriendSeen(f) {
   const d = friendDiff(f);

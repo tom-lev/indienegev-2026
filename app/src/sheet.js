@@ -4,6 +4,32 @@ function openEvent(ev) {
   openSheet(body => renderEventSheet(body, ev));
 }
 
+/* כמה משתמשים בחרו את ההופעה (מכל המשתמשים, בלי שמות). נשמר מקומית – מוצג גם בלי קליטה */
+const POP_KEY = 'indienegev-pop';
+let popData = (() => { try { return JSON.parse(localStorage.getItem(POP_KEY)); } catch (e) { return null; } })();
+let popBusy = false;
+async function refreshPopular(force = false) {
+  if (typeof CC === 'undefined' || !CC.on || !cloudAuth || !navigator.onLine || popBusy) return;
+  if (!force && popData && Date.now() - popData.at < 15 * MIN) return;
+  popBusy = true;
+  try {
+    popData = await CC.fetchPopular();
+    try { localStorage.setItem(POP_KEY, JSON.stringify(popData)); } catch (e) { /* */ }
+    refreshSheet(false);
+  } catch (e) { /* עוד לא עודכנו חוקי האבטחה / אין קליטה – ננסה בפעם הבאה */ }
+  finally { popBusy = false; }
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshPopular(); });
+function popLine(ev) {
+  refreshPopular();
+  if (!popData || popData.n < 2) return '';
+  const [all, must] = popData.c[ev.id] || [0, 0];
+  if (!all) return `<div class="pop-line">עוד אף אחד לא בחר · מתוך ${popData.n} משתמשים</div>`;
+  const day = EVENTS.filter(e => e.day === ev.day && popData.c[e.id]).map(e => popData.c[e.id][0]);
+  const rank = day.filter(x => x > all).length + 1;
+  return `<div class="pop-line">🔥 ${all} ${all === 1 ? 'בחר/ה' : 'בחרו'}${must ? ` (${must} חייב)` : ''} מתוך ${popData.n} משתמשים${rank <= 10 ? ` · ${rank === 1 ? 'הכי פופולרית' : `מקום ${rank}`} ב${dayLabel(ev.day)}` : ''}</div>`;
+}
+
 function renderEventSheet(body, ev) {
   const st = STAGE[ev.stage];
   const lv = level(ev.id);
@@ -41,6 +67,7 @@ function renderEventSheet(body, ev) {
     <div class="ev-tags">${tags}</div>
     <h2 class="ev-name">${esc(ev.name)}</h2>
     <div class="ev-meta">יום ${dayLabel(ev.day)} · ${timeRange(ev)} · ${fmtDur(dur(ev))}</div>
+    ${popLine(ev)}
     ${ev.desc ? `<p class="ev-desc">${esc(ev.desc)}</p>` : ''}
     ${sub}
     <div class="levels" role="group" aria-label="רמת עניין">

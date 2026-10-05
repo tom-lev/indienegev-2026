@@ -77,7 +77,7 @@ function render() {
   const view = $('#view');
   if (searchOn) renderSearch(view);
   else if (tab === 'grid') renderSchedule(view);
-  else if (tab === 'mine') renderMine(view);
+  else if (tab === 'mine') { renderMine(view); scrollMineToNow(); }
   else if (tab === 'profile') renderProfile(view);
   else if (tab === 'map') renderMap(view);
   else renderNow(view);
@@ -135,7 +135,7 @@ $('#top').addEventListener('input', e => {
   if (!searchOn) enterSearch(); else if (searchRefresh) searchRefresh();
 });
 $('#top').addEventListener('focusin', e => { if (e.target.id === 'gq') enterSearch(); });
-$('#top').addEventListener('keydown', e => { if (e.target.id === 'gq' && e.key === 'Enter') e.target.blur(); }); // "חפש" במקלדת – סוגר את המקלדת
+$('#top').addEventListener('keydown', e => { if (e.target.id === 'gq' && e.key === 'Enter') { rememberSearch(e.target.value); e.target.blur(); } }); // "חפש" במקלדת – סוגר את המקלדת
 
 /* עדכון שוטף: מסך "עכשיו" וקו הזמן בגריד */
 setInterval(() => {

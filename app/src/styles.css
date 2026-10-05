@@ -314,6 +314,14 @@ main#view { overflow: hidden; position: relative; min-height: 0; }
 .prof-card .av.big { width: 64px; height: 64px; font-size: 34px; flex: none; border-width: 3px; }
 .prof-name { flex: 1; min-width: 0; }
 .prof-name .text-in { margin: 4px 0 0; }
+.app-share { display: block; margin: 10px auto 0; padding: 6px 10px; font-size: 13.5px; font-weight: 800; color: #1f8f4e; text-decoration: underline; }
+.pop-line { margin: 6px 0 2px; font-size: 13.5px; font-weight: 700; color: var(--ink-2); }
+.recent { margin: 2px 0 14px; }
+.recent-h { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 800; color: var(--ink-2); margin-bottom: 6px; }
+.recent-h button { font-size: 12.5px; font-weight: 700; text-decoration: underline; color: var(--ink-2); }
+.recent-l { display: flex; flex-wrap: wrap; gap: 6px; }
+.recent-l button { display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; border-radius: 999px; background: var(--cream); font-size: 13.5px; font-weight: 700; }
+.recent-l svg { width: 14px; height: 14px; opacity: .6; }
 .who-tabs button { position: relative; }
 .new-dot { position: absolute; top: 2px; inset-inline-end: 4px; width: 9px; height: 9px; border-radius: 50%; background: var(--coral); box-shadow: 0 0 0 2px var(--paper); }
 .diff-box { margin: -4px 0 12px; padding: 10px 12px; border-radius: 14px; background: rgba(244,111,106,.12); font-size: 13.5px; line-height: 1.5; }
