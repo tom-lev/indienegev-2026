@@ -350,8 +350,7 @@ function openTentSheet() {
 }
 
 /* ───────── חיים על המפה ─────────
-   הציפורים שבציור (נחתכו מהמפה בבנייה) – מרחפות ומנפנפות במקומן.
-   אבק מדבר ביום / גחליליות בלילה – שכבה עדינה מעל המפה, לא לחיצה. */
+   הציפורים שבציור (נחתכו מהמפה בבנייה) – עפות על פני המפה ומנפנפות. */
 function birdsHtml() {
   return (ASSETS.birds || []).map((b, i) =>
     `<div class="m-bird" style="left:${b.x}px;top:${b.y}px;width:${b.w}px"><img src="${b.src}" width="${b.w}" height="${b.h}" alt="" style="animation-delay:${-i * 0.5}s"></div>`).join('');
@@ -364,23 +363,17 @@ function flyBirds(stage) {
     const b = ASSETS.birds[i], p = BIRD_PATHS[i % BIRD_PATHS.length];
     const X = v => (v === 1 ? MAP_W + 260 : v);
     const [x0, y0, x1, y1] = [X(p[0]), p[1], X(p[2]), p[3]];
+    // מסלול מתפתל: גלים בשני הצירים בתדירויות שונות – הציפור מסתובבת, עולה ויורדת, לא עפה בקו ישר
     const frames = [];
-    for (let k = 0; k <= 24; k++) {
-      const t = k / 24, x = x0 + (x1 - x0) * t, y = y0 + (y1 - y0) * t + Math.sin(t * Math.PI * 4 + i * 1.7) * 45;
+    for (let k = 0; k <= 60; k++) {
+      const t = k / 60, ph = i * 1.7;
+      const x = x0 + (x1 - x0) * t + Math.sin(t * Math.PI * 5 + ph) * 140 + Math.sin(t * Math.PI * 11 + ph) * 35;
+      const y = y0 + (y1 - y0) * t + Math.sin(t * Math.PI * 3 + ph) * 120 + Math.cos(t * Math.PI * 8 + ph) * 45;
       frames.push({ transform: `translate(${(x - b.x).toFixed(0)}px, ${(y - b.y).toFixed(0)}px)` });
     }
     const duration = 48000 + i * 9000;
     el.animate(frames, { duration, iterations: Infinity, delay: -((Date.now() + i * 17000) % duration) });
   });
-}
-function ambientHtml() {
-  const h = new Date(now()).getHours(), night = h >= 18 || h < 6;
-  let dots = '';
-  for (let i = 0; i < (night ? 18 : 26); i++) {
-    const r = (k) => ((Math.sin(i * 97.3 + k * 13.7) + 1) / 2); // פיזור קבוע (בלי לקפוץ בכל רינדור)
-    dots += `<i style="left:${(r(1) * 100).toFixed(1)}%;top:${(r(2) * 100).toFixed(1)}%;--d:${(night ? 5 : 14) + r(3) * (night ? 6 : 12)}s;--dx:${((r(4) - .5) * (night ? 60 : 260)).toFixed(0)}px;--dy:${((r(5) - .5) * (night ? 50 : 70)).toFixed(0)}px;--s:${(night ? 4 : 3 + r(7) * 4).toFixed(1)}px;animation-delay:${(-r(6) * 20).toFixed(1)}s"></i>`;
-  }
-  return `<div class="m-amb ${night ? 'night' : 'day'}" aria-hidden="true">${dots}</div>`;
 }
 /* פתיחה קולנועית: פעם אחת בכל פתיחה של האפליקציה – מכל המפה אל ההופעה הקרובה בלוז שלך, או אל האוהל */
 let mapIntroDone = false;
@@ -421,7 +414,6 @@ function renderMap(view) {
       ${destMark}
       <div id="places"></div>
     </div>
-    ${ambientHtml()}
     <div class="map-ui zoom">
       <button data-z="in" aria-label="הגדלה">${ICON.plus}</button>
       <button data-z="out" aria-label="הקטנה">${ICON.minus}</button>
