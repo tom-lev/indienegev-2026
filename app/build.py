@@ -106,6 +106,12 @@ def build_assets():
         ink = tuple(sorted(px)[len(px) // 2][:3])
         (CACHE / 'smoker.json').write_text(json.dumps(make_smoker(ink)))
     out['smoker'] = dict(json.loads((CACHE / 'smoker.json').read_text()), src='data:image/webp;base64,' + base64.b64encode((CACHE / 'smoker0.webp').read_bytes()).decode())
+    # שחקני פריזבי
+    if not (CACHE / 'frisbee.json').exists():
+        with Image.open(CACHE / 'walk0.webp') as wk:
+            px = [c for c in wk.convert('RGBA').getdata() if c[3] > 250]
+        (CACHE / 'frisbee.json').write_text(json.dumps(make_frisbee(tuple(sorted(px)[len(px) // 2][:3]))))
+    out['frisbee'] = dict(json.loads((CACHE / 'frisbee.json').read_text()), src='data:image/webp;base64,' + base64.b64encode((CACHE / 'frisbee0.webp').read_bytes()).decode())
     # רשת הליכה לחישוב מסלולים (נבנית מתמונת המפה)
     from walkgrid import build as build_walk, encode, CELL
     grid, (base_w, _) = build_walk(PROJECT / 'festival-map-2026-web-large.jpg')
@@ -534,6 +540,64 @@ def make_smoker(ink):
     sheet.save(CACHE / 'smoker0.webp', 'WEBP', lossless=True)
     return {'w': TW, 'h': TH, 'frames': SMOKER_FRAMES, 'rows': 3, 'tips': tips, 'mouths': mouths,
             'foot': 0.96, 'cx': 0.42, 'at': SMOKER_AT}
+
+
+FRISBEE_H = 57
+FRISBEE_POSES = 6   # 0 עומד · 1 הכנה (היד לאחור) · 2 שחרור (היד קדימה) · 3 המשך תנועה · 4 הושטה לתפיסה · 5 תפס (היד ליד החזה)
+
+
+def make_frisbee(ink):
+    """שחקן פריזבי (מבט מהצד, פונה ימינה): 6 תנוחות של זריקה ותפיסה, בסגנון המטיילים.
+    מחזיר את מיקום היד בכל תנוחה – משם הפריזבי יוצא ואליה הוא מגיע."""
+    import math
+    from PIL import ImageDraw, ImageFilter
+    S, H = 8, FRISBEE_H
+    Hs = H * S
+    TW, TH = round(H * 0.8), round(H * 1.12)
+    gy = TH * 0.96 * S
+    cx = TW * 0.45 * S
+    col = ink + (255,)
+
+    def seg(d, a, b, wa, wb):
+        dx, dy = b[0] - a[0], b[1] - a[1]
+        n = math.hypot(dx, dy) or 1
+        nx, ny = -dy / n, dx / n
+        d.polygon([(a[0] + nx * wa / 2, a[1] + ny * wa / 2), (b[0] + nx * wb / 2, b[1] + ny * wb / 2),
+                   (b[0] - nx * wb / 2, b[1] - ny * wb / 2), (a[0] - nx * wa / 2, a[1] - ny * wa / 2)], fill=col)
+        for q, r in ((a, wa / 2), (b, wb / 2)):
+            d.ellipse([q[0] - r, q[1] - r, q[0] + r, q[1] + r], fill=col)
+    at = lambda o, deg, L: (o[0] + math.sin(math.radians(deg)) * L, o[1] + math.cos(math.radians(deg)) * L)
+    # (נטייה, כיפוף ברכיים, זווית הזרוע העליונה, זווית האמה) – מעלות מהאנך כלפי מטה, חיובי = קדימה
+    poses = [(2, 0.0, 6, 20), (-6, 0.4, -80, -105), (12, 0.55, 95, 90), (16, 0.45, 60, 40), (6, 0.2, 120, 150), (3, 0.15, 40, 150)]
+    sheet = Image.new('RGBA', (TW * FRISBEE_POSES, TH), (0, 0, 0, 0))
+    hands = []
+    for f, (lean, kb, ua, fa) in enumerate(poses):
+        big = Image.new('RGBA', (TW * S, TH * S), (0, 0, 0, 0))
+        d = ImageDraw.Draw(big)
+        Lt, Ls = 0.255 * Hs, 0.235 * Hs
+        hipH = (Lt + Ls) * (0.985 - 0.07 * kb)
+        hip = (cx, gy - hipH - 0.02 * Hs)
+        for sx in (-0.085, 0.07):                                   # עמידה בפיסוק קל (רגל קדימה, רגל אחורה)
+            ank = (cx + sx * Hs, gy - 0.02 * Hs)
+            mid = ((hip[0] + ank[0]) / 2 + 0.03 * Hs * kb, (hip[1] + ank[1]) / 2)
+            seg(d, hip, mid, 0.075 * Hs, 0.055 * Hs); seg(d, mid, ank, 0.055 * Hs, 0.042 * Hs)
+            seg(d, ank, (ank[0] + 0.08 * Hs, ank[1]), 0.045 * Hs, 0.03 * Hs)
+        sh = at(hip, 180 - lean, 0.3 * Hs)
+        # היד הרחוקה – רפויה בצד
+        el2 = at(sh, -10, 0.17 * Hs); seg(d, sh, el2, 0.05 * Hs, 0.04 * Hs); seg(d, el2, at(el2, 10, 0.15 * Hs), 0.04 * Hs, 0.034 * Hs)
+        d.polygon([(sh[0] - 0.075 * Hs, sh[1] + 0.01 * Hs), (sh[0] + 0.075 * Hs, sh[1] + 0.01 * Hs), (hip[0] + 0.062 * Hs, hip[1]), (hip[0] - 0.062 * Hs, hip[1])], fill=col)
+        d.ellipse([sh[0] - 0.075 * Hs, sh[1] - 0.02 * Hs, sh[0] + 0.075 * Hs, sh[1] + 0.06 * Hs], fill=col)
+        neck = at(sh, 180 - lean, 0.035 * Hs); seg(d, sh, neck, 0.055 * Hs, 0.05 * Hs)
+        hc = at(neck, 180 - lean, 0.068 * Hs)
+        d.ellipse([hc[0] - 0.068 * Hs, hc[1] - 0.075 * Hs, hc[0] + 0.068 * Hs, hc[1] + 0.068 * Hs], fill=col)
+        # היד הזורקת/התופסת
+        el = at(sh, ua, 0.17 * Hs); hand = at(el, fa, 0.15 * Hs)
+        seg(d, sh, el, 0.05 * Hs, 0.04 * Hs); seg(d, el, hand, 0.04 * Hs, 0.034 * Hs)
+        img = big.filter(ImageFilter.GaussianBlur(S * 0.28)).resize((TW, TH), Image.LANCZOS)
+        sheet.alpha_composite(img, (f * TW, 0))
+        hands.append([round(hand[0] / S, 1), round(hand[1] / S, 1)])
+    sheet.save(CACHE / 'frisbee0.webp', 'WEBP', lossless=True)
+    return {'w': TW, 'h': TH, 'frames': FRISBEE_POSES, 'hands': hands, 'foot': 0.96, 'cx': 0.45}
 
 
 def icon_image(s, full_bleed=False):

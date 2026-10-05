@@ -595,6 +595,12 @@ details.fold[open] .fold-ch svg { transform: rotate(-90deg); }
 .m-z-layer { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; }
 .m-z { position: absolute; font: 900 7px/1 Rubik, system-ui, sans-serif; color: #3a1c18; will-change: transform, opacity; }
 @media (prefers-reduced-motion: reduce) { .m-sleeper .bag { animation: none; } }
+/* פריזבי */
+.m-fplayer { position: absolute; pointer-events: none; }
+.m-fplayer::before { content: ''; position: absolute; left: 24%; right: 30%; top: calc(96% - 3px); height: 5px; border-radius: 50%; background: rgba(30, 40, 20, .26); filter: blur(1.2px); }
+.m-fplayer i { position: absolute; inset: 0; background-repeat: no-repeat; }
+.m-frisbee { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; z-index: 2; }
+.m-frisbee svg { display: block; overflow: visible; }
 /* הבלון של הנודד: נקודת הקשירה (ביד) היא ראש הסיבוב */
 .m-balloon { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; }
 .m-balloon svg { position: absolute; left: -8px; top: -24px; overflow: visible; }

@@ -526,6 +526,55 @@ function sleepZ(stage) {
     ], { duration: 3200, easing: 'ease-out' }).onfinish = () => z.remove();
   }, 1700);
 }
+/* ───────── פריזבי ─────────
+   שניים עומדים על השביל ליד מתחם הבישול הדרומי, זה מול זה. אחד מתכונן וזורק, הפריזבי עף בקשת ומסתובב,
+   השני מושיט יד ותופס, מחכה רגע – וזורק בחזרה. */
+const FRISBEE_AT = [{ x: 838, y: 1333 }, { x: 948, y: 1329 }]; // על השביל האופקי (פיקסלים במפה ברוחב 3200)
+function frisbeeHtml() {
+  const f = ASSETS.frisbee;
+  if (!f) return '';
+  return FRISBEE_AT.map((q, k) => {
+    const x = q.x * MAP_W / 3200, y = q.y * MAP_H / 1647;
+    return `<div class="m-fplayer" style="left:${(x - f.cx * f.w).toFixed(0)}px;top:${(y - f.foot * f.h).toFixed(0)}px;width:${f.w}px;height:${f.h}px;${k ? 'transform:scaleX(-1);transform-origin:' + (f.cx * 100) + '% 0' : ''}">
+      <i style="background-image:url(${f.src});background-size:${f.frames * 100}% 100%"></i></div>`;
+  }).join('') + `<div class="m-frisbee"><svg width="10" height="6" viewBox="-5 -3 10 6" aria-hidden="true"><ellipse rx="4.4" ry="1.7" fill="#f4cc6e" stroke="#c0902a" stroke-width=".6"/></svg></div>`;
+}
+let frisRAF = 0;
+function playFrisbee(stage) {
+  cancelAnimationFrame(frisRAF);
+  const f = ASSETS.frisbee, pl = [...stage.querySelectorAll('.m-fplayer')], disc = stage.querySelector('.m-frisbee');
+  if (!f || pl.length < 2 || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const inner = pl.map(p => p.querySelector('i'));
+  const handAt = (k, pose) => { // מיקום היד במפה (השחקן השני הפוך)
+    const p = pl[k], hx = f.hands[pose][0], hy = f.hands[pose][1], left = parseFloat(p.style.left), top = parseFloat(p.style.top);
+    return { x: k ? left + f.cx * f.w * 2 - hx : left + hx, y: top + hy };
+  };
+  const setPose = (k, pose) => { inner[k].style.backgroundPosition = `${-pose * f.w}px 0`; };
+  // ציר זמן לזריקה אחת (שניות): הכנה, שחרור, טיסה, תפיסה, המתנה
+  const T = { wind: 0.55, rel: 0.18, fly: 1.35, hold: 1.4 };
+  const total = T.wind + T.rel + T.fly + T.hold;
+  let t0 = performance.now(), thrower = 0;
+  const tick = t => {
+    if (!document.contains(stage)) return;
+    let s = (t - t0) / 1000;
+    if (s >= total) { t0 = t; s = 0; thrower = 1 - thrower; }
+    const a = thrower, b = 1 - thrower;
+    let pa = 0, pb = 0, dpos = null, spin = 0;
+    if (s < T.wind) { pa = 1; pb = 0; dpos = handAt(a, 1); }                                   // מתכונן – הפריזבי ביד מאחור
+    else if (s < T.wind + T.rel) { pa = 2; pb = 0; dpos = handAt(a, 2); }                       // משחרר
+    else if (s < T.wind + T.rel + T.fly) {                                                     // טיסה בקשת
+      const u = (s - T.wind - T.rel) / T.fly, A = handAt(a, 2), B = handAt(b, 4);
+      pa = u < 0.35 ? 3 : 0; pb = u > 0.55 ? 4 : 0;
+      const e = u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2;                          // מאט מעט באמצע
+      dpos = { x: A.x + (B.x - A.x) * (0.15 * u + 0.85 * e), y: A.y + (B.y - A.y) * u - 16 * Math.sin(Math.PI * u) };
+      spin = u * 14;
+    } else { pa = 0; pb = s < T.wind + T.rel + T.fly + 0.5 ? 5 : 0; dpos = handAt(b, pb === 5 ? 5 : 0); } // תפס, ואחר כך מחזיק
+    setPose(a, pa); setPose(b, pb);
+    disc.style.transform = `translate(${(dpos.x - 5).toFixed(1)}px, ${(dpos.y - 3).toFixed(1)}px) scaleX(${(0.75 + 0.25 * Math.cos(spin)).toFixed(2)})`;
+    frisRAF = requestAnimationFrame(tick);
+  };
+  frisRAF = requestAnimationFrame(tick);
+}
 let smokeRAF = 0;
 function smokePeople(stage) {
   cancelAnimationFrame(smokeRAF);
@@ -788,6 +837,7 @@ function renderMap(view) {
       <img src="${ASSETS.map}" width="${MAP_W}" height="${MAP_H}" alt="מפת הפסטיבל אינדינגב 2026">
       ${smokerHtml()}
       ${sleeperHtml()}
+      ${frisbeeHtml()}
       ${walkersHtml()}
       ${birdsHtml()}
       <svg class="route" id="route" viewBox="0 0 ${MAP_W} ${MAP_H}" width="${MAP_W}" height="${MAP_H}" aria-hidden="true"></svg>
@@ -828,6 +878,7 @@ function renderMap(view) {
   walkPeople(stage);
   smokePeople(stage);
   sleepZ(stage);
+  playFrisbee(stage);
   bindMapGestures(wrap, stage);
   // מסגרת המפה לא נגללת לעולם (פוקוס על כפתור מחוץ למסך יכול לגלול אותה)
   wrap.addEventListener('scroll', () => { wrap.scrollLeft = 0; wrap.scrollTop = 0; });
