@@ -362,7 +362,7 @@ function birdsHtml() {
    - מהירות משתנה: איטית בעלייה, מהירה בירידה
    שתי הציפורים הדומות (1, 2) עפות לאט יותר, כמו עופות דורסים שדואים. */
 const BIRD_PATHS = [[-260, 230, 1, 520], [1, 110, -260, 700], [1, 330, -260, 160]]; // [x0, y0, x1, y1]; 1 = קצה ימין של המפה
-const BIRD_SPEED = [40, 22, 20];  // פיקסלים במפה בשנייה (בערך)
+const BIRD_SPEED = [40, 20.4, 18];  // פיקסלים במפה בשנייה (בערך)
 function flyBirds(stage) {
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   stage.querySelectorAll('.m-bird').forEach((el, i) => {
