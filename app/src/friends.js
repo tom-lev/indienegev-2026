@@ -43,7 +43,7 @@ function ensureAvatar() {
   return true;
 }
 function setMyAvatar(i) {
-  S.avatar = { i, auto: false, at: Date.now() };
+  S.avatar = { i, auto: false, at: Date.now(), picked: true };
   resolveAvatars();
   save();
   rerender();
@@ -59,7 +59,7 @@ function yieldAvatar(av, src, theirAt, name) {
   const used = new Set([av, ...takenAvatars().keys(), ...S.friends.map(f => f.avatar).filter(validAv)]);
   const i = freeAvatar(used);
   if (i == null) return false;
-  S.avatar = { i, auto: true, at: Date.now() };
+  S.avatar = { i, auto: true, at: Date.now(), ...(S.avatar.picked ? { picked: true } : {}) };
   toast(`${AVATARS[av][0]} כבר של ${name || 'חבר/ה'} · קיבלת ${AVATARS[i][0]} (אפשר להחליף במסך החברים)`);
   return true;
 }

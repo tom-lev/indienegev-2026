@@ -84,7 +84,9 @@ const check = (name, ok, d = '') => { if (!ok) fails++; console.log(`${ok ? '✅
   check('פרופיל: שם, דמות, חברים, שיתוף, גיבוי, איפוס', s.name === 'תומר' && s.av === 11 && s.friends && s.add && s.share && s.bk && s.reset, JSON.stringify(s));
   await page.click('#pName', { clickCount: 3 }); await page.type('#pName', 'תומר ל'); await ev(() => document.querySelector('#pName').dispatchEvent(new Event('change')));
   check('שינוי שם מהפרופיל', await ev(() => S.name === 'תומר ל'));
+  check('לפני בחירה – מקטע הדמות פתוח', await ev(() => document.querySelector('.av-card').open));
   await page.click('#pscroll .av-opt[data-av="6"]'); await sleep(300);
+  check('אחרי בחירה – המקטע מתקפל ומציג את הדמות', await ev(() => !document.querySelector('.av-card').open && document.querySelector('.av-card summary').textContent.includes('🦊')));
   check('בחירת דמות מהפרופיל (🦊) – מתעדכן בכרטיס', await ev(() => myAvatar() === 6 && document.querySelector('.prof-card .av').textContent.includes('🦊')));
   await page.setRequestInterception(true);
   let wa = null;

@@ -314,6 +314,21 @@ main#view { overflow: hidden; position: relative; min-height: 0; }
 .prof-card .av.big { width: 64px; height: 64px; font-size: 34px; flex: none; border-width: 3px; }
 .prof-name { flex: 1; min-width: 0; }
 .prof-name .text-in { margin: 4px 0 0; }
+.prof-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 4px; }
+.tile { background: var(--cream); border-radius: 16px; padding: 12px; display: flex; flex-direction: column; min-width: 0; }
+.tile h3 { display: flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 900; margin: 0 0 4px; }
+.tile h3 svg { width: 16px; height: 16px; }
+.tile p { font-size: 12.5px; color: var(--ink-2); margin: 0 0 10px; flex: 1; line-height: 1.35; }
+.tile .btn.sm { min-height: 38px; }
+.tile-acts { display: flex; justify-content: space-between; margin-top: 6px; }
+.tile-acts button { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 800; padding: 4px 2px; color: var(--ink); }
+.tile-acts svg { width: 14px; height: 14px; }
+details.av-card > summary { list-style: none; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+details.av-card > summary::-webkit-details-marker { display: none; }
+details.av-card > summary h3 { margin: 0; flex: 1; }
+details.av-card[open] > summary { margin-bottom: 8px; }
+details.av-card[open] .av-sum { display: none; }
+.av-sum { font-size: 13px; font-weight: 800; text-decoration: underline; color: var(--ink-2); }
 .app-share { display: block; margin: 10px auto 0; padding: 6px 10px; font-size: 13.5px; font-weight: 800; color: #1f8f4e; text-decoration: underline; }
 .pop-line { margin: 6px 0 2px; font-size: 13.5px; font-weight: 700; color: var(--ink-2); }
 .recent { margin: 2px 0 14px; }

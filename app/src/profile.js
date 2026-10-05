@@ -23,25 +23,31 @@ function renderProfile(view) {
       </div>
     </div>
 
-    <div class="card-box"><h3>הדמות שלך</h3><p>אפשר להחליף מתי שרוצים. דמות שחבר/ה כבר קיבל/ה – תפוסה.</p>${avatarPicker()}</div>
+    ${(() => {
+      // אחרי שבחרת דמות בפעם הראשונה – המקטע מתקפל (פותחים בלחיצה כדי להחליף)
+      const picked = S.avatar && (S.avatar.picked || !S.avatar.auto);
+      return `<details class="card-box av-card" ${picked ? '' : 'open'}>
+        <summary><h3>הדמות שלך</h3>${picked ? `<span class="av sm" style="--fc:${me.color}">${me.emoji}</span><span class="av-sum">החלפה</span>` : ''}</summary>
+        <p>אפשר להחליף מתי שרוצים. דמות שחבר/ה כבר קיבל/ה – תפוסה.</p>${avatarPicker()}
+      </details>`;
+    })()}
 
-    <div class="card-box">
-      <h3>שיתוף הלוז שלי</h3>
-      <p>לינק, QR (בלי קליטה) או קוד. אצל החברים הלוז מתעדכן לבד.</p>
-      <button class="btn block" data-a="share">${ICON.share} שיתוף הלוז שלי</button>
-      <button class="app-share" data-a="appshare">💬 שליחת האפליקציה לחבר בוואטסאפ</button>
+    <div class="prof-tiles">
+      <div class="tile">
+        <h3>${ICON.share} שיתוף הלוז</h3>
+        <p>לינק, QR או קוד · מתעדכן אצל החברים</p>
+        <button class="btn block sm" data-a="share">שיתוף</button>
+      </div>
+      <div class="tile">
+        <h3>🏠 האוהל שלי</h3>
+        ${PLACE.tent ? (() => { const lm = tentLandmark(PLACE.tent); return `<p>${lm ? `ליד ${esc(lm.name)}` : 'מסומן במפה'}</p>
+        <button class="btn block sm" data-a="tent-go">${ICON.pin} ניווט</button>
+        <div class="tile-acts"><button data-a="tent-share">${ICON.image} שליחה</button><button data-a="tent-move">${ICON.edit} הזזה</button></div>`; })()
+        : `<p>עוד לא סומן · פעם אחת במפה</p>
+        <button class="btn block sm" data-a="tent-move">${ICON.map} סימון</button>`}
+      </div>
     </div>
-
-    <div class="card-box">
-      <h3>🏠 איפה אני ישן/ה</h3>
-      ${PLACE.tent ? (() => { const lm = tentLandmark(PLACE.tent); return `<p>האוהל מסומן במפה${lm ? ` · ליד ${esc(lm.name)}` : ''}.</p>
-      <button class="btn block" data-a="tent-go" style="margin-bottom:10px">${ICON.pin} ניווט לאוהל שלי</button>
-      <div class="btn-row">
-        <button class="btn coral sm" data-a="tent-share">${ICON.image} שליחת מיקום האוהל לחבר</button>
-        <button class="btn alt sm" data-a="tent-move">${ICON.edit} הזזה</button>
-      </div>`; })() : `<p>עוד לא סימנת את האוהל. מסמנים פעם אחת במפה, ואז אפשר לנווט אליו ולשלוח לחברים מפה עם המיקום.</p>
-      <button class="btn block" data-a="tent-move">${ICON.map} סימון האוהל במפה</button>`}
-    </div>
+    <button class="app-share" data-a="appshare">💬 שליחת האפליקציה לחבר בוואטסאפ</button>
 
     <div class="card-box">
       <h3>יומן סיקור</h3>

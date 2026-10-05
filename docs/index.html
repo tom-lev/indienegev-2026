@@ -329,6 +329,21 @@ main#view { overflow: hidden; position: relative; min-height: 0; }
 .prof-card .av.big { width: 64px; height: 64px; font-size: 34px; flex: none; border-width: 3px; }
 .prof-name { flex: 1; min-width: 0; }
 .prof-name .text-in { margin: 4px 0 0; }
+.prof-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 4px; }
+.tile { background: var(--cream); border-radius: 16px; padding: 12px; display: flex; flex-direction: column; min-width: 0; }
+.tile h3 { display: flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 900; margin: 0 0 4px; }
+.tile h3 svg { width: 16px; height: 16px; }
+.tile p { font-size: 12.5px; color: var(--ink-2); margin: 0 0 10px; flex: 1; line-height: 1.35; }
+.tile .btn.sm { min-height: 38px; }
+.tile-acts { display: flex; justify-content: space-between; margin-top: 6px; }
+.tile-acts button { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 800; padding: 4px 2px; color: var(--ink); }
+.tile-acts svg { width: 14px; height: 14px; }
+details.av-card > summary { list-style: none; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+details.av-card > summary::-webkit-details-marker { display: none; }
+details.av-card > summary h3 { margin: 0; flex: 1; }
+details.av-card[open] > summary { margin-bottom: 8px; }
+details.av-card[open] .av-sum { display: none; }
+.av-sum { font-size: 13px; font-weight: 800; text-decoration: underline; color: var(--ink-2); }
 .app-share { display: block; margin: 10px auto 0; padding: 6px 10px; font-size: 13.5px; font-weight: 800; color: #1f8f4e; text-decoration: underline; }
 .pop-line { margin: 6px 0 2px; font-size: 13.5px; font-weight: 700; color: var(--ink-2); }
 .recent { margin: 2px 0 14px; }
@@ -3885,7 +3900,7 @@ function ensureAvatar() {
   return true;
 }
 function setMyAvatar(i) {
-  S.avatar = { i, auto: false, at: Date.now() };
+  S.avatar = { i, auto: false, at: Date.now(), picked: true };
   resolveAvatars();
   save();
   rerender();
@@ -3901,7 +3916,7 @@ function yieldAvatar(av, src, theirAt, name) {
   const used = new Set([av, ...takenAvatars().keys(), ...S.friends.map(f => f.avatar).filter(validAv)]);
   const i = freeAvatar(used);
   if (i == null) return false;
-  S.avatar = { i, auto: true, at: Date.now() };
+  S.avatar = { i, auto: true, at: Date.now(), ...(S.avatar.picked ? { picked: true } : {}) };
   toast(`${AVATARS[av][0]} כבר של ${name || 'חבר/ה'} · קיבלת ${AVATARS[i][0]} (אפשר להחליף במסך החברים)`);
   return true;
 }
@@ -4110,25 +4125,31 @@ function renderProfile(view) {
       </div>
     </div>
 
-    <div class="card-box"><h3>הדמות שלך</h3><p>אפשר להחליף מתי שרוצים. דמות שחבר/ה כבר קיבל/ה – תפוסה.</p>${avatarPicker()}</div>
+    ${(() => {
+      // אחרי שבחרת דמות בפעם הראשונה – המקטע מתקפל (פותחים בלחיצה כדי להחליף)
+      const picked = S.avatar && (S.avatar.picked || !S.avatar.auto);
+      return `<details class="card-box av-card" ${picked ? '' : 'open'}>
+        <summary><h3>הדמות שלך</h3>${picked ? `<span class="av sm" style="--fc:${me.color}">${me.emoji}</span><span class="av-sum">החלפה</span>` : ''}</summary>
+        <p>אפשר להחליף מתי שרוצים. דמות שחבר/ה כבר קיבל/ה – תפוסה.</p>${avatarPicker()}
+      </details>`;
+    })()}
 
-    <div class="card-box">
-      <h3>שיתוף הלוז שלי</h3>
-      <p>לינק, QR (בלי קליטה) או קוד. אצל החברים הלוז מתעדכן לבד.</p>
-      <button class="btn block" data-a="share">${ICON.share} שיתוף הלוז שלי</button>
-      <button class="app-share" data-a="appshare">💬 שליחת האפליקציה לחבר בוואטסאפ</button>
+    <div class="prof-tiles">
+      <div class="tile">
+        <h3>${ICON.share} שיתוף הלוז</h3>
+        <p>לינק, QR או קוד · מתעדכן אצל החברים</p>
+        <button class="btn block sm" data-a="share">שיתוף</button>
+      </div>
+      <div class="tile">
+        <h3>🏠 האוהל שלי</h3>
+        ${PLACE.tent ? (() => { const lm = tentLandmark(PLACE.tent); return `<p>${lm ? `ליד ${esc(lm.name)}` : 'מסומן במפה'}</p>
+        <button class="btn block sm" data-a="tent-go">${ICON.pin} ניווט</button>
+        <div class="tile-acts"><button data-a="tent-share">${ICON.image} שליחה</button><button data-a="tent-move">${ICON.edit} הזזה</button></div>`; })()
+        : `<p>עוד לא סומן · פעם אחת במפה</p>
+        <button class="btn block sm" data-a="tent-move">${ICON.map} סימון</button>`}
+      </div>
     </div>
-
-    <div class="card-box">
-      <h3>🏠 איפה אני ישן/ה</h3>
-      ${PLACE.tent ? (() => { const lm = tentLandmark(PLACE.tent); return `<p>האוהל מסומן במפה${lm ? ` · ליד ${esc(lm.name)}` : ''}.</p>
-      <button class="btn block" data-a="tent-go" style="margin-bottom:10px">${ICON.pin} ניווט לאוהל שלי</button>
-      <div class="btn-row">
-        <button class="btn coral sm" data-a="tent-share">${ICON.image} שליחת מיקום האוהל לחבר</button>
-        <button class="btn alt sm" data-a="tent-move">${ICON.edit} הזזה</button>
-      </div>`; })() : `<p>עוד לא סימנת את האוהל. מסמנים פעם אחת במפה, ואז אפשר לנווט אליו ולשלוח לחברים מפה עם המיקום.</p>
-      <button class="btn block" data-a="tent-move">${ICON.map} סימון האוהל במפה</button>`}
-    </div>
+    <button class="app-share" data-a="appshare">💬 שליחת האפליקציה לחבר בוואטסאפ</button>
 
     <div class="card-box">
       <h3>יומן סיקור</h3>
