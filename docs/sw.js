@@ -108,6 +108,7 @@ const CC = (() => {
     for (const g of st.gear || []) m['g:' + g.id] = g;
     for (const c of st.gearCats || []) m['gc:' + c.name] = c;
     if (st.gearInit) m.gearInit = true;
+    if (st.cnt && Object.keys(st.cnt).length) m.cnt = st.cnt;
     return m;
   }
   function implicitMt(key, v) { // מצבים ישנים בלי mt
@@ -119,12 +120,12 @@ const CC = (() => {
     const out = { ...base, picks: {}, ratings: {}, nope: {}, notes: [], friends: [], mt, tomb };
     const prefs = { ...(base.prefs || {}) }; delete prefs.tent;
     out.name = '';
-    delete out.avatar; delete out.recent; delete out.gearInit; out.gear = []; out.gearCats = [];
+    delete out.avatar; delete out.recent; delete out.gearInit; out.gear = []; out.gearCats = []; delete out.cnt;
     for (const [key, v] of Object.entries(m)) {
       const i = key.indexOf(':'), pre = i > 0 ? key.slice(0, i) : key, id = i > 0 ? key.slice(i + 1) : '';
       if (pre === 'p') out.picks[id] = v; else if (pre === 'r') out.ratings[id] = v; else if (pre === 'x') out.nope[id] = v;
       else if (pre === 'n') out.notes.push(v); else if (pre === 'f') out.friends.push(v);
-      else if (key === 'tent') prefs.tent = v; else if (key === 'name') out.name = v; else if (key === 'avatar') out.avatar = v; else if (key === 'recent') out.recent = v; else if (pre === 'g') out.gear.push(v); else if (pre === 'gc') out.gearCats.push(v); else if (key === 'gearInit') out.gearInit = true;
+      else if (key === 'tent') prefs.tent = v; else if (key === 'name') out.name = v; else if (key === 'avatar') out.avatar = v; else if (key === 'recent') out.recent = v; else if (pre === 'g') out.gear.push(v); else if (pre === 'gc') out.gearCats.push(v); else if (key === 'gearInit') out.gearInit = true; else if (key === 'cnt') out.cnt = v;
     }
     out.notes.sort((a, b) => (a.at || 0) - (b.at || 0) || (a.id > b.id ? 1 : -1));
     out.prefs = prefs;
@@ -242,40 +243,35 @@ const CC = (() => {
     return true;
   }
   /* ───────── פופולריות ─────────
-     כל משתמש מחובר שומר אוטומטית ב-votes/<uid> רק את רשימת ההופעות שלו (בלי שם, דמות או פתקים).
-     כל משתמש מחובר יכול לקרוא את כל הרשימות – וכך לספור כמה בחרו כל הופעה, בלי לדעת מי. */
-  async function publishVotes(a, st) {
-    const s = canon(st.picks || {});
-    let h = 0;
-    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
-    const pub = (await get('votes')) || {};
-    if (pub.uid === a.uid && pub.fp === h) return false;
-    const r = await req(`${ep.fs}/votes/${encodeURIComponent(a.uid)}`, { method: 'PATCH', headers: { Authorization: `Bearer ${a.idToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fields: { picks: { stringValue: JSON.stringify(st.picks || {}) } } }) });
+     לוח ספירה אחד ב-stats/popular, בלי שמות ובלי מזהים: a.<הופעה> = כמה בחרו, m.<הופעה> = כמה "חייב", u = כמה משתמשים.
+     כל משתמש מוסיף/מוריד 1 רק לפי השינויים שלו (מה שכבר נספר שמור אצלו בנתונים – S.cnt – כדי שמכשיר שני לא יספור שוב). */
+  const statsName = `projects/${cfg.projectId}/databases/(default)/documents/stats/popular`;
+  async function countVotes(a, oldP, newP) {
+    const q = id => '`' + String(id).replace(/[`\\]/g, '') + '`';
+    const tr = [];
+    for (const id of new Set([...Object.keys(oldP), ...Object.keys(newP)])) {
+      const da = (newP[id] ? 1 : 0) - (oldP[id] ? 1 : 0), dm = (newP[id] === 2 ? 1 : 0) - (oldP[id] === 2 ? 1 : 0);
+      if (da) tr.push({ fieldPath: `a.${q(id)}`, increment: { integerValue: String(da) } });
+      if (dm) tr.push({ fieldPath: `m.${q(id)}`, increment: { integerValue: String(dm) } });
+    }
+    const du = (Object.keys(newP).length ? 1 : 0) - (Object.keys(oldP).length ? 1 : 0);
+    if (du) tr.push({ fieldPath: 'u', increment: { integerValue: String(du) } });
+    if (!tr.length) return;
+    const r = await req(`${ep.fs}:commit`, { method: 'POST', headers: { Authorization: `Bearer ${a.idToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ writes: [{ update: { name: statsName, fields: {} }, updateMask: { fieldPaths: [] }, updateTransforms: tr }] }) });
     if (!r.ok) throw new Error(`שגיאה ${r.status}`);
-    await set('votes', { uid: a.uid, fp: h });
-    return true;
   }
-  /* ספירה: { n: מספר משתמשים, c: { id: [כולם, חייב] } } */
+  /* הספירה: { n: מספר משתמשים, c: { id: [כולם, חייב] } } */
   async function fetchPopular() {
     const a = await auth();
-    const c = {};
-    let n = 0, token = '';
-    for (let page = 0; page < 40; page++) {
-      const r = await req(`${ep.fs}/votes?pageSize=300${token ? '&pageToken=' + encodeURIComponent(token) : ''}`, { headers: { Authorization: `Bearer ${a.idToken}` } }, 15000);
-      if (!r.ok) throw new Error(`שגיאה ${r.status}`);
-      const j = await r.json();
-      for (const d of j.documents || []) {
-        let p = {};
-        try { p = JSON.parse(d.fields.picks.stringValue || '{}'); } catch (e) { continue; }
-        if (!Object.keys(p).length) continue;
-        n++;
-        for (const [id, lv] of Object.entries(p)) { const x = c[id] || (c[id] = [0, 0]); x[0]++; if (lv === 2) x[1]++; }
-      }
-      if (!j.nextPageToken) break;
-      token = j.nextPageToken;
-    }
-    return { n, c, at: Date.now() };
+    const r = await req(`${ep.fs}/stats/popular`, { headers: { Authorization: `Bearer ${a.idToken}` } }, 15000);
+    if (r.status === 404) return { n: 0, c: {}, at: Date.now() };
+    if (!r.ok) throw new Error(`שגיאה ${r.status}`);
+    const f = (await r.json()).fields || {};
+    const map = k => (f[k] && f[k].mapValue && f[k].mapValue.fields) || {};
+    const A = map('a'), M = map('m'), c = {};
+    for (const [id, v] of Object.entries(A)) { const n = +v.integerValue || 0; if (n > 0) c[id] = [n, Math.max(0, +((M[id] || {}).integerValue) || 0)]; }
+    return { n: Math.max(0, +((f.u || {}).integerValue) || 0), c, at: Date.now() };
   }
 
   /* "נראה לאחרונה": מעדכן רק את שדה הזמן במסמך הלוז החי (אחרי שכבר פורסם) */
@@ -333,7 +329,6 @@ const CC = (() => {
       await set('cloud', { fp: mfp, at: Date.now(), error: null, updateTime });
       await set('owner', a.uid);
       await publishShare(a, merged).catch(() => {}); // לא חוסם את הגיבוי (למשל לפני שעודכנו חוקי האבטחה)
-      await publishVotes(a, merged).catch(() => {});
       // אם בזמן הסנכרון נשמר במכשיר משהו חדש (עריכה תוך כדי בקשה) – ממזגים אותו, לא דורסים
       let out = merged, again = false;
       const latestRaw = await get('state');
@@ -372,13 +367,13 @@ const CC = (() => {
     return { text: JSON.stringify({ app: 'indienegev-2026', kind: 'backup', v: 1, createdAt: remote.updatedAt, state: remote.state }), updatedAt: remote.updatedAt };
   }
 
-  return { on, cfg, get, set, del, fp, sync, upload, download, history, size, signInWithGoogleToken, auth, buildUpload, fetchShare, publishShare, touchShare, publishVotes, fetchPopular, lww, stampEdits, replaceStamped, items, clean };
+  return { on, cfg, get, set, del, fp, sync, upload, download, history, size, signInWithGoogleToken, auth, buildUpload, fetchShare, publishShare, touchShare, countVotes, fetchPopular, lww, stampEdits, replaceStamped, items, clean };
 })();
 
 /* Service Worker – האפליקציה נפתחת מהעותק השמור בטלפון, גם בלי קליטה.
    אסטרטגיה: מטמון קודם (פתיחה מיידית גם בקליטה חלשה). עדכון גרסה מגיע כ-SW חדש
    (הקובץ הזה משתנה בכל בנייה בגלל VERSION), שמחכה עד שהמשתמש מאשר רענון. */
-const VERSION = '7d377fe85063';
+const VERSION = 'd3f0212696f0';
 const CACHE = 'indn26-' + VERSION;
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 

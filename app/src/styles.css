@@ -317,6 +317,28 @@ main#view { overflow: hidden; position: relative; min-height: 0; }
 .av-edit i svg { width: 13px; height: 13px; }
 .prof-name { flex: 1; min-width: 0; }
 .prof-name .text-in { margin: 4px 0 0; }
+.prof-id { display: flex; align-items: center; gap: 14px; padding: 4px 4px 16px; }
+.prof-id .av.big { width: 64px; height: 64px; font-size: 34px; border-width: 3px; flex: none; }
+.p-who { flex: 1; min-width: 0; }
+.p-name { display: inline-flex; align-items: center; gap: 6px; font-size: 24px; font-weight: 900; color: var(--ink); max-width: 100%; text-align: start; }
+.p-name i { display: inline-grid; opacity: .45; }
+.p-name i svg { width: 16px; height: 16px; }
+.p-ph { color: var(--ink-3); font-size: 18px; }
+.p-who .text-in { font-size: 20px; font-weight: 800; padding: 6px 10px; margin: 0; }
+.p-st { font-size: 13px; font-weight: 600; color: var(--ink-2); margin-top: 3px; }
+.p-list { background: var(--cream); border-radius: 18px; overflow: hidden; margin-bottom: 14px; }
+.p-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; text-align: start; border-bottom: 1px solid rgba(21,63,76,.09); color: var(--ink); }
+.p-row:last-child { border-bottom: 0; }
+.p-row:active { background: rgba(21,63,76,.05); }
+.p-ic { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; font-size: 20px; flex: none; }
+.p-tx { flex: 1; min-width: 0; }
+.p-tx b { display: block; font-size: 15.5px; font-weight: 800; }
+.p-tx > span { display: block; font-size: 12.5px; font-weight: 600; color: var(--ink-2); margin-top: 1px; }
+.p-tx > .p-bar { height: 5px; width: 120px; max-width: 60%; border-radius: 9px; background: rgba(21,63,76,.12); margin-top: 6px; overflow: hidden; }
+.p-bar i { display: block; height: 100%; background: #3aa66b; }
+.p-ch { color: var(--ink-3); display: grid; flex: none; }
+.p-ch svg { width: 18px; height: 18px; }
+.fold-h { font-size: 14px; font-weight: 900; margin: 0 0 4px; }
 .prof-top { display: grid; grid-template-columns: 1fr 118px; gap: 8px; margin-bottom: 8px; align-items: stretch; }
 .prof-top .prof-card { margin: 0; padding: 10px; gap: 10px; }
 .prof-top .prof-card .av.big { width: 54px; height: 54px; font-size: 28px; }

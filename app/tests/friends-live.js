@@ -175,23 +175,34 @@ async function device(label) {
   check('ביום אחר – בלי קיפול', await B.ev(() => !document.querySelector('.past-row')));
   await B.ev(() => { simTime = null; S.picks = {}; save(); render(); });
 
-  // ───── פופולריות (אוטומטי, בלי שמות) ─────
-  await A.ev(() => { S.picks = { [BY_START[10].id]: 2, [BY_START[11].id]: 1 }; save(); cloudNow(); }); await sleep(2500);
-  await B.ev(() => { S.picks = { [BY_START[10].id]: 1 }; save(); cloudNow(); }); await sleep(2500);
+  // ───── פופולריות: לוח ספירה אחד, בלי שמות ובלי מזהים ─────
+  await A.ev(() => { S.picks = { [BY_START[10].id]: 2, [BY_START[11].id]: 1 }; save(); cloudNow(); }); await sleep(3000);
+  await B.ev(() => { S.picks = { [BY_START[10].id]: 1 }; save(); cloudNow(); }); await sleep(3000);
   let st = await srv();
-  check('רשימת ההופעות נשלחת אוטומטית בגיבוי (votes)', st.log.includes('votes write uid-alice') && st.log.includes('votes write uid-bob'));
+  const id10 = await A.ev(() => BY_START[10].id), id11 = await A.ev(() => BY_START[11].id);
+  check('הספירה מתעדכנת אוטומטית: 2 משתמשים, 2 בחרו (1 חייב)', st.stats.u === 2 && st.stats.a[id10] === 2 && st.stats.m[id10] === 1 && st.stats.a[id11] === 1, JSON.stringify(st.stats));
   await B.ev(async () => { await refreshPopular(true); openEvent(BY_START[10]); }); await sleep(800);
-  const pl = await B.ev(() => (document.querySelector('.sheet .pop-line, .pop-line') || {}).textContent || '');
+  const pl = await B.ev(() => (document.querySelector('.pop-line') || {}).textContent || '');
   check('בפרטי ההופעה: "🔥 2 בחרו (1 חייב) מתוך 2 משתמשים"', /2 בחרו/.test(pl) && /1 חייב/.test(pl) && /מתוך 2/.test(pl), pl);
-  await B.ev(() => closeSheet()); await sleep(700); // סגירה דרך ההיסטוריה – מחכים לפני פתיחה חדשה
+  await B.ev(() => closeSheet()); await sleep(700);
   await B.ev(() => openEvent(BY_START[11])); await sleep(600);
   const pl1 = await B.ev(() => { const l = [...document.querySelectorAll('.pop-line')]; return l.length ? l[l.length - 1].textContent : ''; });
   check('הופעה שרק אחד בחר: "1 בחר/ה"', /1 בחר\/ה/.test(pl1), pl1);
-  await B.ev(() => closeSheet()); await sleep(300);
-  check('הנתונים שנשלחים – בלי שם ובלי פתקים', await B.ev(async () => { const a = await CC.auth(); const r = await fetch(CC.cfg.endpoints.fs + '/votes', { headers: { Authorization: 'Bearer ' + a.idToken } }); const t = await r.text(); return !t.includes('אליס') && !t.includes('notes') && t.includes('picks'); }));
-  check('בלי התחברות – אי אפשר לקרוא את הספירה', (await fetch('http://localhost:8766/fs/votes')).status === 403);
-  await B.ev(() => { S.picks = {}; save(); });
-  await A.ev(() => { S.picks = {}; save(); });
+  await B.ev(() => closeSheet()); await sleep(700);
+  check('בלוח הספירה אין שמות ואין מזהים – רק מספרים', !JSON.stringify(st.stats).includes('uid-') && !JSON.stringify(st.stats).includes('אליס'));
+  // שינויים: הסרה, שינוי רמה, הוספה – רק ההבדל נספר
+  await A.ev(() => { delete S.picks[BY_START[11].id]; S.picks[BY_START[10].id] = 1; S.picks[BY_START[12].id] = 2; save(); cloudNow(); }); await sleep(3000);
+  st = await srv();
+  const id12 = await A.ev(() => BY_START[12].id);
+  check('שינויים נספרים נכון (הסרה −1, חייב→אולי, הוספה +1), בלי ספירה כפולה', st.stats.u === 2 && st.stats.a[id10] === 2 && st.stats.m[id10] === 0 && st.stats.a[id11] === 0 && st.stats.a[id12] === 1 && st.stats.m[id12] === 1, JSON.stringify(st.stats));
+  await A.ev(() => cloudNow()); await sleep(2500);
+  check('סנכרון נוסף בלי שינוי – לא סופר שוב', JSON.stringify((await srv()).stats) === JSON.stringify(st.stats));
+  check('בלי התחברות – אי אפשר לקרוא את הספירה', (await fetch('http://localhost:8766/fs/stats/popular')).status === 403);
+  const statsBefore = (await srv()).stats;
+  await B.ev(() => { S.picks = {}; save(); cloudNow(); }); await sleep(3000);
+  await A.ev(() => { S.picks = {}; save(); cloudNow(); }); await sleep(3000);
+  const st0 = (await srv()).stats;
+  check('לוז שהתרוקן – יורד מהספירה (u=0)', st0.u === 0 && Object.values(st0.a).every(v => v === 0), JSON.stringify(st0));
 
   // ───── דמויות ─────
   await A.ev(() => { S.friends = []; save(); setMyAvatar(0); cloudNow(); }); await sleep(2500);
@@ -217,7 +228,7 @@ async function device(label) {
   await B.ev(() => document.querySelector('#pscroll .av-opt[data-av="0"]').click()); await sleep(200);
   check('אי אפשר לבחור דמות תפוסה', await B.ev(() => myAvatar() !== 0));
   await B.page.click('#pscroll .av-opt[data-av="4"]'); await sleep(300);
-  check('בחירה חופשית של דמות פנויה (🍄)', await B.ev(() => S.avatar.i === 4 && !S.avatar.auto && document.querySelector('.prof-card .av-edit').textContent.includes('🍄')));
+  check('בחירה חופשית של דמות פנויה (🍄)', await B.ev(() => S.avatar.i === 4 && !S.avatar.auto && document.querySelector('.prof-id .av-edit').textContent.includes('🍄')));
   if (process.env.SHOTS) await B.page.screenshot({ path: process.env.SHOTS + '/v-avatar.png' });
   await B.ev(() => { popLayer(); cloudNow(); }); await sleep(2500);
   // אליס מחליפה דמות → אצל בוב מתעדכן
@@ -289,6 +300,10 @@ async function device(label) {
   await A.ev(() => { ensureGear(); S.gear = S.gear.filter(g => g.id !== 'd0-0'); S.gear.find(g => g.id === 'd0-1').packed = true; S.gear.push({ id: 'utest', cat: 'ישיבה', text: 'ערסל', o: 99 }); save(); rememberSearch('אביב'); rememberSearch('נונו'); cloudNow(); }); await sleep(2500);
   const A2 = await device('A2');
   await A2.ev(() => onGoogleCredential({ credential: 'user:alice' })); await sleep(3000);
+  await A.ev(() => { S.picks = { [BY_START[20].id]: 2 }; save(); cloudNow(); }); await sleep(3000);
+  const stA = (await srv()).stats;
+  await A2.ev(() => { lastPull = 0; pullCloud(); }); await sleep(3000);
+  check('מכשיר שני של אותו משתמש – לא סופר את אותו לוז שוב', JSON.stringify((await srv()).stats) === JSON.stringify(stA) && stA.u === 1, JSON.stringify(stA));
   const rec2 = await A2.ev(() => S.recent || []);
   check('חיפושים אחרונים עוברים למכשיר אחר של אותו משתמש', rec2[0] === 'נונו' && rec2[1] === 'אביב', JSON.stringify(rec2));
   const g2 = await A2.ev(() => { ensureGear(); return { hasTent: S.gear.some(g => g.id === 'd0-0'), packed: (S.gear.find(g => g.id === 'd0-1') || {}).packed, hammock: S.gear.some(g => g.text === 'ערסל'), n: S.gear.length }; });

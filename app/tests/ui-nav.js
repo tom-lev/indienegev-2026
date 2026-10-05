@@ -85,16 +85,18 @@ const check = (name, ok, d = '') => { if (!ok) fails++; console.log(`${ok ? '✅
 
   // פרופיל
   await page.click('#tabs [data-tab="profile"]'); await sleep(500);
-  s = await ev(() => ({ name: document.querySelector('#pName').value, av: document.querySelectorAll('#pscroll .av-opt').length, friends: !!document.querySelector('#friends'), add: !!document.querySelector('#pscroll [data-fa="import"]'), share: !!document.querySelector('#pscroll [data-a="share"]'), bk: !!document.querySelector('#pscroll [data-a="bkpanel"]'), reset: !!document.querySelector('#pscroll [data-a="reset"]') }));
+  s = await ev(() => ({ name: document.querySelector('.p-name').textContent.trim(), av: document.querySelectorAll('#pscroll .av-opt').length, friends: !!document.querySelector('#friends'), add: !!document.querySelector('#pscroll [data-fa="import"]'), share: !!document.querySelector('#pscroll [data-a="share"]'), bk: !!document.querySelector('#pscroll [data-a="bkpanel"]'), reset: !!document.querySelector('#pscroll [data-a="reset"]') }));
   check('פרופיל: שם, דמות, חברים, שיתוף, גיבוי, איפוס', s.name === 'תומר' && s.av === 11 && s.friends && s.add && s.share && s.bk && s.reset, JSON.stringify(s));
-  await page.click('#pName', { clickCount: 3 }); await page.type('#pName', 'תומר ל'); await ev(() => document.querySelector('#pName').dispatchEvent(new Event('change')));
-  check('שינוי שם מהפרופיל', await ev(() => S.name === 'תומר ל'));
+  await page.click('.p-name'); await sleep(200);
+  check('לחיצה על השם – שדה עריכה', await ev(() => document.activeElement && document.activeElement.id === 'pName'));
+  await page.keyboard.type('תומר ל'); await page.keyboard.press('Enter'); await sleep(300);
+  check('שינוי שם מהפרופיל', await ev(() => S.name === 'תומר ל' && !document.querySelector('#pName') && document.querySelector('.p-name').textContent.includes('תומר ל')));
   check('לפני בחירה – בוחר הדמות פתוח', await ev(() => !!document.querySelector('.av-card .av-pick')));
   await page.click('#pscroll .av-opt[data-av="6"]'); await sleep(300);
-  check('אחרי בחירה – הבוחר נסגר, הדמות ליד השם', await ev(() => !document.querySelector('.av-card') && document.querySelector('.prof-card .av-edit').textContent.includes('🦊')));
-  await page.click('.prof-card .av-edit'); await sleep(300);
+  check('אחרי בחירה – הבוחר נסגר, הדמות ליד השם', await ev(() => !document.querySelector('.av-card') && document.querySelector('.prof-id .av-edit').textContent.includes('🦊')));
+  await page.click('.prof-id .av-edit'); await sleep(300);
   check('לחיצה על הדמות ליד השם – פותחת את הבוחר', await ev(() => !!document.querySelector('.av-card .av-pick')));
-  await page.click('.prof-card .av-edit'); await sleep(300);
+  await page.click('.prof-id .av-edit'); await sleep(300);
   check('לחיצה נוספת – סוגרת', await ev(() => !document.querySelector('.av-card')));
   check('בחירת דמות מהפרופיל (🦊)', await ev(() => myAvatar() === 6));
   await page.setRequestInterception(true);
@@ -117,7 +119,7 @@ const check = (name, ok, d = '') => { if (!ok) fails++; console.log(`${ok ? '✅
   check('openFriends (אחרי הוספת חבר) – פרופיל', await ev(() => tab === 'profile'));
   // רשימת ציוד
   await ev(() => setTab('profile')); await sleep(300);
-  let gc = await ev(() => { const c = document.querySelector('.gear-card'); const cards = [...document.querySelectorAll('#pscroll .card-box h3')].map(h => h.textContent); return { t: c && c.textContent, before: cards.findIndex(t => /רשימת ציוד/.test(t)) < cards.findIndex(t => /יומן סיקור/.test(t)) }; });
+  let gc = await ev(() => { const rows = [...document.querySelectorAll('#pscroll .p-row')].map(r => r.textContent); const c = rows.find(t => /רשימת ציוד/.test(t)); return { t: c, before: rows.findIndex(t => /רשימת ציוד/.test(t)) < rows.findIndex(t => /יומן סיקור/.test(t)) }; });
   check('פרופיל: "רשימת ציוד · ארזת 0 מתוך 71" מעל יומן סיקור', /ארזת 0 מתוך 71/.test(gc.t) && gc.before, JSON.stringify(gc));
   await page.click('#pscroll [data-a="gear"]'); await sleep(500);
   gc = await ev(() => ({ cats: document.querySelectorAll('.panel .gear-cat').length, rows: document.querySelectorAll('.panel .gear-row').length }));
@@ -142,22 +144,23 @@ const check = (name, ok, d = '') => { if (!ok) fails++; console.log(`${ok ? '✅
   check('נשמר בנתונים המסונכרנים (פריט לכל שורה)', await ev(() => Object.keys(CC.items(S)).filter(k => k.startsWith('g:')).length === 71 && CC.items(S).gearInit === true));
   await ev(() => popLayer()); await sleep(500);
   await ev(() => { profFold.friends = false; profFold.account = false; render(); }); await sleep(200); // מבטל פתיחה מבדיקה קודמת באותו סשן
-  check('חברים וחשבון – מקופלים כברירת מחדל', await ev(() => [...document.querySelectorAll('#pscroll details.fold')].length === 2 && [...document.querySelectorAll('#pscroll details.fold')].every(d => !d.open)));
-  check('השם והאוהל באותה שורה', await ev(() => { const a = document.querySelector('.prof-top .prof-card').getBoundingClientRect(), b = document.querySelector('.prof-top .tent-tile').getBoundingClientRect(); return Math.abs(a.top - b.top) < 4; }));
+  check('חברים, חשבון ו"עוד" – מקופלים כברירת מחדל', await ev(() => [...document.querySelectorAll('#pscroll details.fold')].length === 3 && [...document.querySelectorAll('#pscroll details.fold')].every(d => !d.open)));
+  check('החיצים בשורות פונים שמאלה (כיוון התקדמות בעברית)', await ev(() => document.querySelector('.p-row .p-ch path').getAttribute('d').startsWith('M15 5l-7 7')));
   if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/prof3.png' });
   await ev(() => { setTab('mine'); openFriends(); }); await sleep(800);
   check('openFriends פותח את מקטע החברים', await ev(() => document.querySelector('#friends').open));
 
   // האוהל מהפרופיל
   await ev(() => { delete S.prefs.tent; save(); syncTent(); setTab('profile'); }); await sleep(300);
-  check('פרופיל בלי אוהל – כפתור "סימון האוהל במפה"', await ev(() => !!document.querySelector('#pscroll [data-a="tent-move"]') && !document.querySelector('#pscroll [data-a="tent-go"]')));
-  await page.click('#pscroll [data-a="tent-move"]'); await sleep(600);
+  check('פרופיל בלי אוהל – "עוד לא סומן במפה"', await ev(() => /עוד לא סומן במפה/.test(document.querySelector('#pscroll [data-a="tent"]').textContent)));
+  await page.click('#pscroll [data-a="tent"]'); await sleep(600);
   check('סימון – עובר למפה במצב סימון אוהל', await ev(() => tab === 'map' && picking === 'tent'));
   await ev(() => { picking = false; S.prefs.tent = { x: 40, y: 70 }; save(); syncTent(); setTab('profile'); }); await sleep(300);
   const tp = await ev(() => document.querySelector('#pscroll').textContent);
   check('פרופיל עם אוהל – כתוב ליד מה', /ליד /.test(tp));
-  check('כפתורי האוהל קיימים', await ev(() => ['tent-go', 'tent-share', 'tent-move'].every(a => !!document.querySelector(`#pscroll [data-a="${a}"]`))));
-  await page.click('#pscroll [data-a="tent-go"]'); await sleep(900);
+  await page.click('#pscroll [data-a="tent"]'); await sleep(500);
+  check('לחיצה על "האוהל שלי" – ניווט, שליחה, הזזה, הסרה', await ev(() => ['go', 'share', 'move', 'del'].every(a => !!document.querySelector(`.sheet [data-t="${a}"], [data-t="${a}"]`))));
+  await page.click('[data-t="go"]'); await sleep(900);
   check('"ניווט לאוהל שלי" – מפה עם יעד האוהל', await ev(() => tab === 'map' && mapFocus && mapFocus.dest === 'tent'));
   await ev(() => popLayer()); await sleep(600);
   check('יציאה מהניווט – חוזרים לפרופיל', await ev(() => tab === 'profile'));

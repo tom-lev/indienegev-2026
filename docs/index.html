@@ -332,6 +332,28 @@ main#view { overflow: hidden; position: relative; min-height: 0; }
 .av-edit i svg { width: 13px; height: 13px; }
 .prof-name { flex: 1; min-width: 0; }
 .prof-name .text-in { margin: 4px 0 0; }
+.prof-id { display: flex; align-items: center; gap: 14px; padding: 4px 4px 16px; }
+.prof-id .av.big { width: 64px; height: 64px; font-size: 34px; border-width: 3px; flex: none; }
+.p-who { flex: 1; min-width: 0; }
+.p-name { display: inline-flex; align-items: center; gap: 6px; font-size: 24px; font-weight: 900; color: var(--ink); max-width: 100%; text-align: start; }
+.p-name i { display: inline-grid; opacity: .45; }
+.p-name i svg { width: 16px; height: 16px; }
+.p-ph { color: var(--ink-3); font-size: 18px; }
+.p-who .text-in { font-size: 20px; font-weight: 800; padding: 6px 10px; margin: 0; }
+.p-st { font-size: 13px; font-weight: 600; color: var(--ink-2); margin-top: 3px; }
+.p-list { background: var(--cream); border-radius: 18px; overflow: hidden; margin-bottom: 14px; }
+.p-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; text-align: start; border-bottom: 1px solid rgba(21,63,76,.09); color: var(--ink); }
+.p-row:last-child { border-bottom: 0; }
+.p-row:active { background: rgba(21,63,76,.05); }
+.p-ic { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; font-size: 20px; flex: none; }
+.p-tx { flex: 1; min-width: 0; }
+.p-tx b { display: block; font-size: 15.5px; font-weight: 800; }
+.p-tx > span { display: block; font-size: 12.5px; font-weight: 600; color: var(--ink-2); margin-top: 1px; }
+.p-tx > .p-bar { height: 5px; width: 120px; max-width: 60%; border-radius: 9px; background: rgba(21,63,76,.12); margin-top: 6px; overflow: hidden; }
+.p-bar i { display: block; height: 100%; background: #3aa66b; }
+.p-ch { color: var(--ink-3); display: grid; flex: none; }
+.p-ch svg { width: 18px; height: 18px; }
+.fold-h { font-size: 14px; font-weight: 900; margin: 0 0 4px; }
 .prof-top { display: grid; grid-template-columns: 1fr 118px; gap: 8px; margin-bottom: 8px; align-items: stretch; }
 .prof-top .prof-card { margin: 0; padding: 10px; gap: 10px; }
 .prof-top .prof-card .av.big { width: 54px; height: 54px; font-size: 28px; }
@@ -1623,6 +1645,7 @@ const ICON = {
   grid: svg('<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M9 4v17M15 4v17"/>'),
   mine: svg('<path d="m12 3 2.6 5.6 6 .7-4.4 4.1 1.2 6L12 16.4 6.6 19.4l1.2-6L3.4 9.3l6-.7z"/>'),
   search: svg('<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>'),
+  chevL: svg('<path d="M15 5l-7 7 7 7"/>'),
   user: svg('<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/>'),
   cloud: svg('<path d="M7 18.5h10.5a4 4 0 0 0 .4-8 6 6 0 0 0-11.6-1.3A4.7 4.7 0 0 0 7 18.5z"/>'),
   map: svg('<path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"/><path d="M9 4v14M15 6v14"/>'),
@@ -4425,7 +4448,8 @@ ${SITE_URL}`;
 
 /* בוחר הדמות נפתח בלחיצה על הדמות ליד השם; עד הבחירה הראשונה – פתוח */
 let avPickerOpen = false;
-const profFold = { friends: false, account: false }; // "חברים" ו"חשבון וגיבוי" – מקופלים כברירת מחדל
+const profFold = { friends: false, account: false, more: false };
+let nameEdit = false; // עריכת השם (לחיצה על השם) // "חברים" ו"חשבון וגיבוי" – מקופלים כברירת מחדל
 const avOpen = () => avPickerOpen || !(S.avatar && (S.avatar.picked || !S.avatar.auto));
 
 function renderProfile(view) {
@@ -4435,49 +4459,32 @@ function renderProfile(view) {
     ? `מחובר/ת כ-<b>${esc(cloudAuth.name || cloudAuth.email || '')}</b>${cloudAuth.email ? ` <span dir="ltr">(${esc(cloudAuth.email)})</span>` : ''}`
     : CC.on ? '<b>לא מחובר/ת</b> – בלי חשבון אין גיבוי לענן' : '';
   ensureGear();
+  const signed = typeof cloudAuth !== 'undefined' && cloudAuth;
+  const status = !CC.on ? '' : signed ? `${isBackedUp() ? '✅ מגובה' : '⏳ יגובה כשתהיה קליטה'} · מחובר/ת עם Google` : '⚠️ לא מחובר/ת – אין גיבוי';
+  const { n: gn, packed: gp } = gearStats();
+  const lm = PLACE.tent && tentLandmark(PLACE.tent);
+  const nNotes = (S.notes || []).length;
+  const row = (a, ic, bg, title, sub, extra = '') => `<button class="p-row" data-a="${a}">
+      <span class="p-ic" style="background:${bg}">${ic}</span>
+      <span class="p-tx"><b>${title}</b><span>${sub}</span>${extra}</span>
+      <span class="p-ch">${ICON.chevL}</span></button>`;
   view.innerHTML = `<div class="scroll" id="pscroll"><div class="pad">
-    <div class="prof-top">
-      <div class="prof-card" style="--fc:${me.color}">
-        <button class="av big av-edit" data-a="avatar" aria-label="החלפת הדמות" aria-expanded="${avOpen()}">${me.emoji}<i>${ICON.edit}</i></button>
-        <div class="prof-name">
-          <label class="field-l" for="pName">השם שלך</label>
-          <input id="pName" class="text-in" value="${esc(S.name)}" maxlength="24" placeholder="השם שלך">
-        </div>
-      </div>
-      <div class="tile tent-tile">
-        <div class="tile-i">🏠</div>
-        <h3>האוהל שלי</h3>
-        <small class="tile-sub">${PLACE.tent ? (tentLandmark(PLACE.tent) ? `מסומן במפה · ליד ${esc(tentLandmark(PLACE.tent).name)}` : 'מסומן במפה') : 'איפה האוהל שלך במפה?'}</small>
-        ${PLACE.tent
-          ? `<button class="btn block sm" data-a="tent-go">${ICON.pin} ניווט</button>
-             <div class="tile-acts"><button data-a="tent-share" aria-label="שליחת מפה עם האוהל">${ICON.image}</button><button data-a="tent-move" aria-label="הזזת הסימון במפה">${ICON.edit}</button></div>`
-          : `<button class="btn block sm" data-a="tent-move">${ICON.map} סימון במפה</button>`}
+    <div class="prof-id">
+      <button class="av big av-edit" style="--fc:${me.color}" data-a="avatar" aria-label="החלפת הדמות" aria-expanded="${avOpen()}">${me.emoji}<i>${ICON.edit}</i></button>
+      <div class="p-who">
+        ${nameEdit ? `<input id="pName" class="text-in" value="${esc(S.name)}" maxlength="24" placeholder="השם שלך" enterkeyhint="done">`
+          : `<button class="p-name" data-a="name">${S.name ? esc(S.name) : '<span class="p-ph">איך לקרוא לך?</span>'} <i>${ICON.edit}</i></button>`}
+        ${status ? `<div class="p-st">${status}</div>` : ''}
       </div>
     </div>
     ${avOpen() ? `<div class="card-box av-card"><h3>${myAvatar() == null || !(S.avatar.picked || !S.avatar.auto) ? 'בחר/י דמות' : 'החלפת הדמות'}</h3><p>כך החברים רואים אותך. דמות שחבר/ה כבר קיבל/ה – תפוסה.</p>${avatarPicker()}</div>` : ''}
 
-    <div class="prof-tiles">
-      <div class="tile">
-        <div class="tile-i">${ICON.share}</div>
-        <h3>שיתוף הלוז</h3>
-        <button class="btn block sm" data-a="share">שיתוף</button>
-      </div>
-      <div class="tile">
-        <div class="tile-i">💬</div>
-        <h3>שליחת האפליקציה</h3>
-        <button class="btn block sm wa" data-a="appshare">וואטסאפ</button>
-      </div>
-    </div>
-
-    ${gearCard()}
-
-    <div class="card-box">
-      <h3>יומן סיקור</h3>
-      <p>הפתקים והמדדים מכל ההופעות, לפי סדר הזמן. אפשר לייצא הכל.</p>
-      <div class="btn-row">
-        <button class="btn sm" data-a="journal">${ICON.note} פתיחת היומן</button>
-        <button class="btn alt sm" data-a="jexport">${ICON.share} ייצוא</button>
-      </div>
+    <div class="p-list">
+      ${row('gear', '🎒', 'rgba(58,166,107,.18)', 'רשימת ציוד', gn ? `ארזת ${gp} מתוך ${gn}` : 'הרשימה ריקה', gn ? `<span class="p-bar"><i style="width:${Math.round(gp / gn * 100)}%"></i></span>` : '')}
+      ${row('tent', '🏠', 'rgba(244,111,106,.18)', 'האוהל שלי', PLACE.tent ? `מסומן במפה${lm ? ` · ליד ${esc(lm.name)}` : ''}` : 'עוד לא סומן במפה · הקישו לסימון')}
+      ${row('share', '📤', 'rgba(95,159,209,.2)', 'שיתוף הלוז שלי', 'לינק · QR · קוד')}
+      ${row('journal', '📝', 'rgba(244,204,110,.3)', 'יומן סיקור', nNotes ? `${nNotes} פתקים · ייצוא` : 'עוד אין פתקים')}
+      ${row('appshare', '💬', 'rgba(37,211,102,.18)', 'שליחת האפליקציה לחבר', 'בוואטסאפ')}
     </div>
 
     <details class="fold" id="friends" data-fold="friends" ${profFold.friends ? 'open' : ''}>
@@ -4486,47 +4493,51 @@ function renderProfile(view) {
     </details>
 
     <details class="fold" data-fold="account" ${profFold.account ? 'open' : ''}>
-      <summary><h3>חשבון וגיבוי</h3><span>${typeof cloudAuth !== 'undefined' && cloudAuth ? (isBackedUp() ? '✅ מגובה' : '⏳ ממתין') : '⚠️ לא מחובר'}</span></summary>
-    <div class="fold-b">
-      ${acct ? `<p style="margin:0 0 6px">${acct}</p>` : ''}
-      ${CC.on && !(typeof cloudAuth !== 'undefined' && cloudAuth) ? '<div class="gbtn" id="pgbtn" style="margin:6px 0 10px"></div>' : ''}
-      <p style="margin:0 0 10px;font-size:14px;color:var(--ink-2)">${storageOK ? '' : '<b>בדפדפן הזה השמירה לא עובדת!</b> '}${isBackedUp() ? '✅ כל השינויים מגובים' : hasData() ? '⚠️ יש שינויים שלא גובו' : 'אין עדיין נתונים'}${lastBackupAt() ? ` · גיבוי אחרון ${agoText(lastBackupAt())}` : ''}</p>
-      <div class="btn-row">
-        <button class="btn sm" data-a="bkpanel">💾 גיבוי ושחזור</button>
-        <button class="btn alt sm" data-a="restore">${ICON.import} ייבוא לוז</button>
+      <summary><h3>חשבון וגיבוי</h3><span>${signed ? (isBackedUp() ? '✅ מגובה' : '⏳ ממתין') : CC.on ? '⚠️ לא מחובר' : ''}</span></summary>
+      <div class="fold-b">
+        ${acct ? `<p style="margin:0 0 6px">${acct}</p>` : ''}
+        ${CC.on && !signed ? '<div class="gbtn" id="pgbtn" style="margin:6px 0 10px"></div>' : ''}
+        <p style="margin:0 0 10px;font-size:14px;color:var(--ink-2)">${storageOK ? '' : '<b>בדפדפן הזה השמירה לא עובדת!</b> '}${isBackedUp() ? '✅ כל השינויים מגובים' : hasData() ? '⚠️ יש שינויים שלא גובו' : 'אין עדיין נתונים'}${lastBackupAt() ? ` · גיבוי אחרון ${agoText(lastBackupAt())}` : ''}</p>
+        <div class="btn-row">
+          <button class="btn sm" data-a="bkpanel">💾 גיבוי ושחזור</button>
+          <button class="btn alt sm" data-a="restore">${ICON.import} ייבוא לוז</button>
+        </div>
+        ${signed ? '<button class="link-btn" data-a="signout">התנתקות / התחברות עם חשבון אחר</button>' : ''}
       </div>
-      ${typeof cloudAuth !== 'undefined' && cloudAuth ? '<button class="link-btn" data-a="signout">התנתקות / התחברות עם חשבון אחר</button>' : ''}
-    </div>
     </details>
 
-    <div class="card-box">
-      <h3>בלי קליטה</h3>
-      <p style="margin:0">${IS_FILE ? 'זה הקובץ המקומי. מומלץ לעבור לאתר (ב"הלוז שלי").' : !IS_SITE ? '' : offlineReady ? '✓ מוכן לשימוש בלי קליטה' : '⏳ עדיין לא נשמר לשימוש בלי קליטה – פתחו פעם אחת עם קליטה'}${navigator.onLine ? '' : ' · עכשיו אין קליטה'}</p>
-    </div>
-
-    <div class="card-box">
-      <h3>איך משתמשים</h3>
-      <ul style="margin:0;padding-inline-start:20px;font-size:14px;line-height:1.6">
-        <li>חיפוש: השדה למעלה, בכל מסך.</li>
-        <li>לחיצה על הופעה: פרטים, חייב/אולי, ומה מתנגש.</li>
-        <li>לחיצה ארוכה בלוז המלא: הוספה מהירה כ"חייב".</li>
-        <li>"ניווט": פותח את המפה עם סימון הבמה.</li>
-        <li>הלוז של כל חבר – לשונית נפרדת ב"הלוז שלי", וגם "משותף".</li>
-      </ul>
-    </div>
-
-    <div class="card-box">
-      <h3>איפוס</h3>
-      <button class="btn alt sm" data-a="reset" style="border-color:var(--danger);color:var(--danger)">${ICON.trash} מחיקת כל הבחירות והחברים</button>
-    </div>
-    <p style="font-size:12px;color:var(--ink-3);margin:10px 0 0">${n} בחירות · נתונים v${DATA_VERSION} · לוז מתוך indnegev.co.il · אפליקציה אישית לא רשמית · ⁦15–17.10.2026⁩ מצפה גבולות</p>
+    <details class="fold" data-fold="more" ${profFold.more ? 'open' : ''}>
+      <summary><h3>עוד</h3><span>בלי קליטה · עזרה · איפוס</span></summary>
+      <div class="fold-b">
+        <h4 class="fold-h">בלי קליטה</h4>
+        <p style="margin:0 0 12px;font-size:14px">${IS_FILE ? 'זה הקובץ המקומי. מומלץ לעבור לאתר (ב"הלוז שלי").' : !IS_SITE ? '' : offlineReady ? '✓ מוכן לשימוש בלי קליטה' : '⏳ עדיין לא נשמר לשימוש בלי קליטה – פתחו פעם אחת עם קליטה'}${navigator.onLine ? '' : ' · עכשיו אין קליטה'}</p>
+        <h4 class="fold-h">איך משתמשים</h4>
+        <ul style="margin:0 0 12px;padding-inline-start:20px;font-size:14px;line-height:1.6">
+          <li>חיפוש: השדה למעלה, בכל מסך.</li>
+          <li>לחיצה על הופעה: פרטים, חייב/אולי, ומה מתנגש.</li>
+          <li>לחיצה ארוכה בלוז המלא: הוספה מהירה כ"חייב".</li>
+          <li>"ניווט": פותח את המפה עם סימון הבמה.</li>
+          <li>הלוז של כל חבר – לשונית נפרדת ב"הלוז שלי", וגם "משותף".</li>
+        </ul>
+        <h4 class="fold-h">איפוס</h4>
+        <button class="btn alt sm" data-a="reset" style="border-color:var(--danger);color:var(--danger)">${ICON.trash} מחיקת כל הבחירות והחברים</button>
+        <p style="font-size:12px;color:var(--ink-3);margin:12px 0 0">${n} בחירות · נתונים v${DATA_VERSION} · לוז מתוך indnegev.co.il · אפליקציה אישית לא רשמית · ⁦15–17.10.2026⁩ מצפה גבולות</p>
+      </div>
+    </details>
   </div></div>`;
 
   const sc = $('#pscroll');
   sc.querySelectorAll('details[data-fold]').forEach(d => d.addEventListener('toggle', () => { profFold[d.dataset.fold] = d.open; }));
   const g = $('#pgbtn', sc);
   if (g) renderGoogleButton(g);
-  $('#pName', sc).onchange = e => { S.name = e.target.value.trim().slice(0, 24); save(); };
+  const pn = $('#pName', sc);
+  if (pn) {
+    pn.focus(); pn.select();
+    const done = () => { if (!nameEdit) return; nameEdit = false; const v = pn.value.trim().slice(0, 24); if (v !== S.name) { S.name = v; save(); } rerender(); };
+    pn.addEventListener('change', done);
+    pn.addEventListener('blur', done);
+    pn.addEventListener('keydown', e => { if (e.key === 'Enter') pn.blur(); });
+  }
   bindAvatarPicker(sc, () => { avPickerOpen = false; rerender(); });
   bindFriends(sc, () => rerender());
   sc.addEventListener('click', async e => {
@@ -4535,6 +4546,8 @@ function renderProfile(view) {
     const a = b.dataset.a;
     if (a === 'share') openShare();
     if (a === 'avatar') { avPickerOpen = !avOpen(); return rerender(); }
+    if (a === 'name') { nameEdit = true; return rerender(); }
+    if (a === 'tent') { if (PLACE.tent) openTentSheet(); else { setTab('map'); picking = 'tent'; updateRoute(null); toast('הקישו על המקום של האוהל במפה'); } return; }
     if (a === 'appshare') shareApp();
     if (a === 'signout') cloudSignOut();
     if (a === 'journal') openTimeline();
@@ -5004,6 +5017,7 @@ const CC = (() => {
     for (const g of st.gear || []) m['g:' + g.id] = g;
     for (const c of st.gearCats || []) m['gc:' + c.name] = c;
     if (st.gearInit) m.gearInit = true;
+    if (st.cnt && Object.keys(st.cnt).length) m.cnt = st.cnt;
     return m;
   }
   function implicitMt(key, v) { // מצבים ישנים בלי mt
@@ -5015,12 +5029,12 @@ const CC = (() => {
     const out = { ...base, picks: {}, ratings: {}, nope: {}, notes: [], friends: [], mt, tomb };
     const prefs = { ...(base.prefs || {}) }; delete prefs.tent;
     out.name = '';
-    delete out.avatar; delete out.recent; delete out.gearInit; out.gear = []; out.gearCats = [];
+    delete out.avatar; delete out.recent; delete out.gearInit; out.gear = []; out.gearCats = []; delete out.cnt;
     for (const [key, v] of Object.entries(m)) {
       const i = key.indexOf(':'), pre = i > 0 ? key.slice(0, i) : key, id = i > 0 ? key.slice(i + 1) : '';
       if (pre === 'p') out.picks[id] = v; else if (pre === 'r') out.ratings[id] = v; else if (pre === 'x') out.nope[id] = v;
       else if (pre === 'n') out.notes.push(v); else if (pre === 'f') out.friends.push(v);
-      else if (key === 'tent') prefs.tent = v; else if (key === 'name') out.name = v; else if (key === 'avatar') out.avatar = v; else if (key === 'recent') out.recent = v; else if (pre === 'g') out.gear.push(v); else if (pre === 'gc') out.gearCats.push(v); else if (key === 'gearInit') out.gearInit = true;
+      else if (key === 'tent') prefs.tent = v; else if (key === 'name') out.name = v; else if (key === 'avatar') out.avatar = v; else if (key === 'recent') out.recent = v; else if (pre === 'g') out.gear.push(v); else if (pre === 'gc') out.gearCats.push(v); else if (key === 'gearInit') out.gearInit = true; else if (key === 'cnt') out.cnt = v;
     }
     out.notes.sort((a, b) => (a.at || 0) - (b.at || 0) || (a.id > b.id ? 1 : -1));
     out.prefs = prefs;
@@ -5138,40 +5152,35 @@ const CC = (() => {
     return true;
   }
   /* ───────── פופולריות ─────────
-     כל משתמש מחובר שומר אוטומטית ב-votes/<uid> רק את רשימת ההופעות שלו (בלי שם, דמות או פתקים).
-     כל משתמש מחובר יכול לקרוא את כל הרשימות – וכך לספור כמה בחרו כל הופעה, בלי לדעת מי. */
-  async function publishVotes(a, st) {
-    const s = canon(st.picks || {});
-    let h = 0;
-    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
-    const pub = (await get('votes')) || {};
-    if (pub.uid === a.uid && pub.fp === h) return false;
-    const r = await req(`${ep.fs}/votes/${encodeURIComponent(a.uid)}`, { method: 'PATCH', headers: { Authorization: `Bearer ${a.idToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fields: { picks: { stringValue: JSON.stringify(st.picks || {}) } } }) });
+     לוח ספירה אחד ב-stats/popular, בלי שמות ובלי מזהים: a.<הופעה> = כמה בחרו, m.<הופעה> = כמה "חייב", u = כמה משתמשים.
+     כל משתמש מוסיף/מוריד 1 רק לפי השינויים שלו (מה שכבר נספר שמור אצלו בנתונים – S.cnt – כדי שמכשיר שני לא יספור שוב). */
+  const statsName = `projects/${cfg.projectId}/databases/(default)/documents/stats/popular`;
+  async function countVotes(a, oldP, newP) {
+    const q = id => '`' + String(id).replace(/[`\\]/g, '') + '`';
+    const tr = [];
+    for (const id of new Set([...Object.keys(oldP), ...Object.keys(newP)])) {
+      const da = (newP[id] ? 1 : 0) - (oldP[id] ? 1 : 0), dm = (newP[id] === 2 ? 1 : 0) - (oldP[id] === 2 ? 1 : 0);
+      if (da) tr.push({ fieldPath: `a.${q(id)}`, increment: { integerValue: String(da) } });
+      if (dm) tr.push({ fieldPath: `m.${q(id)}`, increment: { integerValue: String(dm) } });
+    }
+    const du = (Object.keys(newP).length ? 1 : 0) - (Object.keys(oldP).length ? 1 : 0);
+    if (du) tr.push({ fieldPath: 'u', increment: { integerValue: String(du) } });
+    if (!tr.length) return;
+    const r = await req(`${ep.fs}:commit`, { method: 'POST', headers: { Authorization: `Bearer ${a.idToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ writes: [{ update: { name: statsName, fields: {} }, updateMask: { fieldPaths: [] }, updateTransforms: tr }] }) });
     if (!r.ok) throw new Error(`שגיאה ${r.status}`);
-    await set('votes', { uid: a.uid, fp: h });
-    return true;
   }
-  /* ספירה: { n: מספר משתמשים, c: { id: [כולם, חייב] } } */
+  /* הספירה: { n: מספר משתמשים, c: { id: [כולם, חייב] } } */
   async function fetchPopular() {
     const a = await auth();
-    const c = {};
-    let n = 0, token = '';
-    for (let page = 0; page < 40; page++) {
-      const r = await req(`${ep.fs}/votes?pageSize=300${token ? '&pageToken=' + encodeURIComponent(token) : ''}`, { headers: { Authorization: `Bearer ${a.idToken}` } }, 15000);
-      if (!r.ok) throw new Error(`שגיאה ${r.status}`);
-      const j = await r.json();
-      for (const d of j.documents || []) {
-        let p = {};
-        try { p = JSON.parse(d.fields.picks.stringValue || '{}'); } catch (e) { continue; }
-        if (!Object.keys(p).length) continue;
-        n++;
-        for (const [id, lv] of Object.entries(p)) { const x = c[id] || (c[id] = [0, 0]); x[0]++; if (lv === 2) x[1]++; }
-      }
-      if (!j.nextPageToken) break;
-      token = j.nextPageToken;
-    }
-    return { n, c, at: Date.now() };
+    const r = await req(`${ep.fs}/stats/popular`, { headers: { Authorization: `Bearer ${a.idToken}` } }, 15000);
+    if (r.status === 404) return { n: 0, c: {}, at: Date.now() };
+    if (!r.ok) throw new Error(`שגיאה ${r.status}`);
+    const f = (await r.json()).fields || {};
+    const map = k => (f[k] && f[k].mapValue && f[k].mapValue.fields) || {};
+    const A = map('a'), M = map('m'), c = {};
+    for (const [id, v] of Object.entries(A)) { const n = +v.integerValue || 0; if (n > 0) c[id] = [n, Math.max(0, +((M[id] || {}).integerValue) || 0)]; }
+    return { n: Math.max(0, +((f.u || {}).integerValue) || 0), c, at: Date.now() };
   }
 
   /* "נראה לאחרונה": מעדכן רק את שדה הזמן במסמך הלוז החי (אחרי שכבר פורסם) */
@@ -5229,7 +5238,6 @@ const CC = (() => {
       await set('cloud', { fp: mfp, at: Date.now(), error: null, updateTime });
       await set('owner', a.uid);
       await publishShare(a, merged).catch(() => {}); // לא חוסם את הגיבוי (למשל לפני שעודכנו חוקי האבטחה)
-      await publishVotes(a, merged).catch(() => {});
       // אם בזמן הסנכרון נשמר במכשיר משהו חדש (עריכה תוך כדי בקשה) – ממזגים אותו, לא דורסים
       let out = merged, again = false;
       const latestRaw = await get('state');
@@ -5268,7 +5276,7 @@ const CC = (() => {
     return { text: JSON.stringify({ app: 'indienegev-2026', kind: 'backup', v: 1, createdAt: remote.updatedAt, state: remote.state }), updatedAt: remote.updatedAt };
   }
 
-  return { on, cfg, get, set, del, fp, sync, upload, download, history, size, signInWithGoogleToken, auth, buildUpload, fetchShare, publishShare, touchShare, publishVotes, fetchPopular, lww, stampEdits, replaceStamped, items, clean };
+  return { on, cfg, get, set, del, fp, sync, upload, download, history, size, signInWithGoogleToken, auth, buildUpload, fetchShare, publishShare, touchShare, countVotes, fetchPopular, lww, stampEdits, replaceStamped, items, clean };
 })();
 
 
@@ -5660,6 +5668,7 @@ async function cloudNow() {
   syncing = (async () => {
     try {
       await freshen(); // עותק אחר של האפליקציה (לשונית/אפליקציה מותקנת) אולי שמר משהו חדש יותר
+      await countMine(); // הספירה מתעדכנת לפני ההעלאה – כך הלוז ו"מה נספר" עולים יחד, ומכשיר אחר לא סופר שוב
       const sent = CC.clean(S);
       await IDB.set('state', JSON.stringify(S)); // לסנכרן את המצב העדכני ביותר
       const res = await CC.sync();
@@ -5675,6 +5684,7 @@ async function cloudNow() {
         if ((res.result === 'pulled' || res.result === 'merged') && CC.fp(S) !== before) toast('עודכן מהענן ↻');
       } else if (CC.fp(S) !== CC.fp(sent)) again = true;
       if (again) setTimeout(() => scheduleCloud(800), 0);
+      setTimeout(countMine, 0);
       return true;
     } catch (e) {
       registerCloudSync();
@@ -5687,6 +5697,23 @@ async function cloudNow() {
   })();
   return syncing;
 }
+/* ספירת הפופולריות: מוסיפים/מורידים רק את ההבדל בין מה שכבר נספר (S.cnt, מסתנכרן) ללוז הנוכחי */
+let counting = false;
+async function countMine() {
+  if (!CC.on || !cloudAuth || counting || !navigator.onLine) return;
+  const old = S.cnt || {}, cur = S.picks || {};
+  if (JSON.stringify(Object.entries(old).sort()) === JSON.stringify(Object.entries(cur).sort())) return;
+  counting = true;
+  try {
+    const snap = { ...cur };
+    await CC.countVotes(await CC.auth(), old, snap);
+    S.cnt = snap;
+    save();
+    if (typeof popData !== 'undefined' && popData) popData.at = 0; // לרענן את הספירה בפעם הבאה
+  } catch (e) { /* אין קליטה / עוד לא עודכנו החוקים – ננסה בסנכרון הבא */ }
+  finally { counting = false; }
+}
+
 /* משיכת עדכונים ממכשירים אחרים: בפתיחה ובחזרה לאפליקציה (לכל היותר פעם ב-20 שניות) */
 let lastPull = 0;
 function pullCloud() {

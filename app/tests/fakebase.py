@@ -11,7 +11,7 @@ from urllib.parse import parse_qs, urlparse
 lock = threading.Lock()
 DOCS = {}          # uid -> {'body': str, 'updated': float}
 SHARES = {}        # uid -> body (לוז חי: קריאה לכולם, כתיבה לבעלים)
-VOTES = {}         # uid -> body (פופולריות: קריאה/רשימה למחוברים, כתיבה לבעלים)
+STATS = {'a': {}, 'm': {}, 'u': 0}  # לוח הספירה (stats/popular)
 TOKENS = {}        # idToken -> (uid, exp)
 REFRESH = {}       # refreshToken -> uid
 REVOKED = set()
@@ -81,7 +81,7 @@ class H(BaseHTTPRequestHandler):
             cmd = json.loads(b)
             with lock:
                 if cmd.get('reset'):
-                    DOCS.clear(); SHARES.clear(); VOTES.clear(); TOKENS.clear(); REFRESH.clear(); REVOKED.clear(); LOG.clear()
+                    DOCS.clear(); SHARES.clear(); STATS.update({'a': {}, 'm': {}, 'u': 0}); TOKENS.clear(); REFRESH.clear(); REVOKED.clear(); LOG.clear()
                     MODE.update({'down': False, 'slow': 0, 'err': 0, 'tokenTtl': 3600})
                 for k in ('down', 'slow', 'err', 'tokenTtl'):
                     if k in cmd: MODE[k] = cmd[k]
@@ -97,11 +97,24 @@ class H(BaseHTTPRequestHandler):
         if path == '/state':
             with lock:
                 docs = {}
+                stats = json.loads(json.dumps(STATS))
                 for uid, d in DOCS.items():
                     f = json.loads(d['body'])['fields']
                     docs[uid] = {'fp': f['fp']['integerValue'], 'state': json.loads(f['data']['stringValue'])['state'], 'updated': d['updated']}
-                return self.reply(200, {'log': LOG, 'docs': docs})
+                return self.reply(200, {'log': LOG, 'docs': docs, 'stats': stats})
         if self.gate(): return
+        if path == '/fs:commit':
+            who, why = self.who()
+            if who is None: return self.reply(403, {'error': {'status': 'PERMISSION_DENIED'}})
+            w = json.loads(b)['writes'][0]
+            with lock:
+                for t in w.get('updateTransforms', []):
+                    fp, d = t['fieldPath'], int(t['increment']['integerValue'])
+                    if fp == 'u': STATS['u'] += d; continue
+                    k, ev = fp.split('.', 1); ev = ev.strip('`')
+                    STATS[k][ev] = STATS[k].get(ev, 0) + d
+                LOG.append(f'stats commit {who}')
+            return self.reply(200, {'writeResults': [{}]})
         if path == '/idp':
             j = json.loads(b)
             gid = parse_qs(j['postBody'])['id_token'][0]
@@ -141,10 +154,6 @@ class H(BaseHTTPRequestHandler):
             return 403, f'{who} -> {uid}'
         return None, None
 
-    def votes_path(self):
-        p = urlparse(self.path).path
-        return p[len('/fs/votes'):] if p.startswith('/fs/votes') else None
-
     def share_uid(self):
         p = urlparse(self.path).path
         return p[len('/fs/shares/'):] if p.startswith('/fs/shares/') else None
@@ -152,14 +161,6 @@ class H(BaseHTTPRequestHandler):
     def do_PATCH(self):
         b = self.body()
         if self.gate(): return
-        vp = self.votes_path()
-        if vp is not None:
-            vu = vp.lstrip('/')
-            code, why = self.rules(vu)
-            if code: return self.reply(code, {'error': {'status': 'PERMISSION_DENIED'}})
-            with lock:
-                VOTES[vu] = b; LOG.append(f'votes write {vu}')
-            return self.reply(200, json.loads(b))
         su = self.share_uid()
         if su is not None:
             code, why = self.rules(su)
@@ -206,14 +207,15 @@ class H(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.gate(): return
-        vp = self.votes_path()
-        if vp is not None:
+        if urlparse(self.path).path == '/fs/stats/popular':
             who, why = self.who()
             if who is None: return self.reply(403, {'error': {'status': 'PERMISSION_DENIED'}})
             with lock:
-                docs = [dict(json.loads(v), name=f'votes/{k}') for k, v in VOTES.items()]
-                LOG.append('votes list')
-            return self.reply(200, {'documents': docs})
+                if not STATS['a'] and not STATS['u']: return self.reply(404, {'error': {'status': 'NOT_FOUND'}})
+                f = {k: {'mapValue': {'fields': {i: {'integerValue': str(n)} for i, n in STATS[k].items()}}} for k in ('a', 'm')}
+                f['u'] = {'integerValue': str(STATS['u'])}
+                LOG.append('stats read')
+            return self.reply(200, {'name': 'stats/popular', 'fields': f})
         su = self.share_uid()
         if su is not None:
             with lock:

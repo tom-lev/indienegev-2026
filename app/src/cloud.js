@@ -55,6 +55,7 @@ async function cloudNow() {
   syncing = (async () => {
     try {
       await freshen(); // עותק אחר של האפליקציה (לשונית/אפליקציה מותקנת) אולי שמר משהו חדש יותר
+      await countMine(); // הספירה מתעדכנת לפני ההעלאה – כך הלוז ו"מה נספר" עולים יחד, ומכשיר אחר לא סופר שוב
       const sent = CC.clean(S);
       await IDB.set('state', JSON.stringify(S)); // לסנכרן את המצב העדכני ביותר
       const res = await CC.sync();
@@ -70,6 +71,7 @@ async function cloudNow() {
         if ((res.result === 'pulled' || res.result === 'merged') && CC.fp(S) !== before) toast('עודכן מהענן ↻');
       } else if (CC.fp(S) !== CC.fp(sent)) again = true;
       if (again) setTimeout(() => scheduleCloud(800), 0);
+      setTimeout(countMine, 0);
       return true;
     } catch (e) {
       registerCloudSync();
@@ -82,6 +84,23 @@ async function cloudNow() {
   })();
   return syncing;
 }
+/* ספירת הפופולריות: מוסיפים/מורידים רק את ההבדל בין מה שכבר נספר (S.cnt, מסתנכרן) ללוז הנוכחי */
+let counting = false;
+async function countMine() {
+  if (!CC.on || !cloudAuth || counting || !navigator.onLine) return;
+  const old = S.cnt || {}, cur = S.picks || {};
+  if (JSON.stringify(Object.entries(old).sort()) === JSON.stringify(Object.entries(cur).sort())) return;
+  counting = true;
+  try {
+    const snap = { ...cur };
+    await CC.countVotes(await CC.auth(), old, snap);
+    S.cnt = snap;
+    save();
+    if (typeof popData !== 'undefined' && popData) popData.at = 0; // לרענן את הספירה בפעם הבאה
+  } catch (e) { /* אין קליטה / עוד לא עודכנו החוקים – ננסה בסנכרון הבא */ }
+  finally { counting = false; }
+}
+
 /* משיכת עדכונים ממכשירים אחרים: בפתיחה ובחזרה לאפליקציה (לכל היותר פעם ב-20 שניות) */
 let lastPull = 0;
 function pullCloud() {
