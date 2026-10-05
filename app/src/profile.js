@@ -124,7 +124,7 @@ function renderProfile(view) {
     if (a === 'signout') cloudSignOut();
     if (a === 'journal') openTimeline();
     if (a === 'gear') openGear();
-    if (a === 'gear-share') { ensureGear(); shareGear(); }
+    if (a === 'gear-share') openGearShare();
     if (a === 'tent-go') goTo('tent');
     if (a === 'tent-share') shareTentImage();
     if (a === 'tent-move') { setTab('map'); picking = 'tent'; updateRoute(null); toast('הקישו על המקום של האוהל במפה'); }

@@ -141,7 +141,7 @@ function openGear() {
       changed();
       return;
     }
-    if (b.dataset.g === 'share') shareGear();
+    if (b.dataset.g === 'share') openGearShare();
     if (b.dataset.g === 'unpack' && confirm('לאפס את כל הסימונים? (הפריטים נשארים)')) { for (const g of gearList()) delete g.packed; changed(); }
     if (b.dataset.g === 'defaults') {
       const have = new Set(gearList().map(g => g.id));
@@ -164,4 +164,94 @@ function openGear() {
     changed();
   });
   api.live = true;
+}
+
+/* ───────── שיתוף הרשימה כלינק: חבר טוען אותה לאפליקציה שלו ─────────
+   #GEAR=<base64url של { n: שם, c: [[קטגוריה, [פריטים...]], ...] }> – בלי הסימונים (כל אחד אורז לעצמו) */
+function gearCode() {
+  const c = gearCats().map(cat => [cat, gearList().filter(g => g.cat === cat).sort((a, b) => a.o - b.o).map(g => g.text)])
+    .filter(([cat, items]) => items.length || !GEAR_CATS.includes(cat));
+  return b64utf8(JSON.stringify({ n: S.name || '', c })).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function parseGearCode(code) {
+  try {
+    let b = String(code).replace(/-/g, '+').replace(/_/g, '/');
+    while (b.length % 4) b += '=';
+    const o = JSON.parse(unb64utf8(b));
+    if (!o || !Array.isArray(o.c)) return null;
+    const c = o.c.filter(x => Array.isArray(x) && typeof x[0] === 'string' && Array.isArray(x[1]))
+      .map(([cat, items]) => [cat.slice(0, 40), items.filter(t => typeof t === 'string' && t.trim()).map(t => t.slice(0, 80))]);
+    return { n: String(o.n || '').slice(0, 24), c };
+  } catch (e) { return null; }
+}
+function openGearShare() {
+  ensureGear();
+  openSheet(body => {
+    body.innerHTML = `<h2 class="ev-name">🎒 שיתוף רשימת הציוד</h2>
+      <button class="btn block" data-gs="link" style="margin-top:14px">${ICON.share} לינק לטעינה באפליקציה</button>
+      <p class="gear-hint" style="margin:6px 0 14px">החבר לוחץ, והרשימה נטענת אצלו בדיוק כמו שלך (או רק מה שחסר לו).</p>
+      <button class="btn alt block" data-gs="text">${ICON.copy} כטקסט לקריאה</button>
+      <p class="gear-hint" style="margin:6px 0 0">רשימה מסודרת לוואטסאפ, עם ✅ ליד מה שארזת.</p>`;
+    body.onclick = async e => {
+      const b = e.target.closest('[data-gs]');
+      if (!b) return;
+      if (b.dataset.gs === 'text') return shareGear();
+      const url = SITE_URL + '#GEAR=' + gearCode(), text = `🎒 ${S.name || 'חבר/ה'} שיתף/ה איתך רשימת ציוד לאינדינגב 2026`;
+      if (navigator.share) { try { await navigator.share({ text, url }); return; } catch (x) { if (x.name === 'AbortError') return; } }
+      location.href = 'https://wa.me/?text=' + encodeURIComponent(`${text}\n${url}`);
+    };
+  });
+}
+
+/* קבלת רשימה מלינק */
+const GEAR_KEY = 'indienegev-gearin';
+function openGearImport(code) {
+  const d = parseGearCode(code);
+  if (!d) return toast('הלינק של רשימת הציוד פגום');
+  // נשמר עד שמאשרים/סוגרים – כדי שלא יאבד במעבר להתחברות עם Google (אייפון)
+  try { localStorage.setItem(GEAR_KEY, JSON.stringify({ code, at: Date.now() })); } catch (e) { /* */ }
+  const total = d.c.reduce((s, [, items]) => s + items.length, 0);
+  openPanel('רשימת ציוד ששותפה איתך', body => {
+    body.innerHTML = `<div class="invite">
+      <div style="font-size:54px;line-height:1">🎒</div>
+      <h2>${esc(d.n || 'חבר/ה')} שיתף/ה איתך רשימת ציוד</h2>
+      <p>${total} פריטים ב-${d.c.filter(([, i]) => i.length).length} קטגוריות</p>
+      <button class="btn block big" data-gi="replace">לטעון בדיוק את הרשימה הזו</button>
+      <p class="invite-note">הרשימה שלך תוחלף ברשימה הזו (בלי סימוני "ארזתי"). הרשימה הקודמת נשמרת כגרסה קודמת בגיבוי ושחזור.</p>
+      <button class="btn alt block" data-gi="merge" style="margin-top:12px">להוסיף רק את מה שחסר לי</button>
+      <details class="invite-more"><summary>מה ברשימה</summary>
+        ${d.c.filter(([, i]) => i.length).map(([cat, items]) => `<p style="text-align:start;margin:8px 0 0"><b>${esc(cat)}:</b> ${items.map(esc).join(' · ')}</p>`).join('')}
+      </details>
+    </div>`;
+    body.onclick = async e => {
+      const b = e.target.closest('[data-gi]');
+      if (!b) return;
+      // מכשיר חדש שעוד לא קיבל את הנתונים מהענן – קודם מסנכרנים, כדי שההחלפה תחול על הרשימה האמיתית
+      if (typeof cloudAuth !== 'undefined' && cloudAuth && !(cloudState && cloudState.at)) await cloudNow();
+      ensureGear();
+      const now = Date.now();
+      let o = 0;
+      const mk = (cat, text) => ({ id: 'u' + now.toString(36) + (o++).toString(36) + Math.random().toString(36).slice(2, 4), cat, text, o });
+      if (b.dataset.gi === 'replace') {
+        if (!confirm('להחליף את רשימת הציוד שלך ברשימה הזו?')) return;
+        await takeSnapshot('לפני טעינת רשימת ציוד');
+        S.gear = d.c.flatMap(([cat, items]) => items.map(t => mk(cat, t)));
+        S.gearCats = d.c.filter(([cat]) => !GEAR_CATS.includes(cat)).map(([name], i) => ({ name, o: now + i }));
+        S.gearInit = true;
+        toast('רשימת הציוד נטענה ✓');
+      } else {
+        const have = new Set(gearList().map(g => g.cat + '\u0000' + g.text.trim()));
+        const add = d.c.flatMap(([cat, items]) => items.filter(t => !have.has(cat + '\u0000' + t.trim())).map(t => mk(cat, t)));
+        const cats = new Set(gearCats());
+        S.gearCats = [...(S.gearCats || []), ...d.c.map(([c]) => c).filter(c => !cats.has(c)).map((name, i) => ({ name, o: now + i }))];
+        S.gear = [...gearList(), ...add];
+        toast(add.length ? `נוספו ${add.length} פריטים ✓` : 'כל הפריטים כבר ברשימה שלך');
+      }
+      save();
+      try { localStorage.removeItem(GEAR_KEY); } catch (x) { /* */ }
+      await closeAllLayers();
+      setTab('profile');
+      openGear();
+    };
+  }, () => { try { localStorage.removeItem(GEAR_KEY); } catch (e) { /* */ } });
 }

@@ -157,7 +157,16 @@ initBackup();
 initPwa();
 importFromHash();
 window.addEventListener('hashchange', importFromHash);
-if (/INDN1\./.test(decodeURIComponent(location.hash))) {
+/* לינק של רשימת ציוד (#GEAR=...) – בפתיחה ואם נפתח כשהאפליקציה כבר פתוחה */
+function gearFromHash() {
+  if (!location.hash.startsWith('#GEAR=')) return false;
+  const code = location.hash.slice(6);
+  history.replaceState(null, '', location.pathname + location.search);
+  openGearImport(code);
+  return true;
+}
+window.addEventListener('hashchange', gearFromHash);
+if (gearFromHash()) { /* */ } else if (/INDN1\./.test(decodeURIComponent(location.hash))) {
   const code = decodeURIComponent(location.hash.slice(1));
   history.replaceState(null, '', location.pathname + location.search);
   openImport(code, { invite: true });
@@ -167,6 +176,8 @@ if (/INDN1\./.test(decodeURIComponent(location.hash))) {
     const inv = JSON.parse(localStorage.getItem(INVITE_KEY));
     if (inv && Date.now() - inv.at < 3600000 && decodeShare(inv.code)) openImport(inv.code, { invite: true });
     else localStorage.removeItem(INVITE_KEY);
+    const gi = JSON.parse(localStorage.getItem(GEAR_KEY)); // רשימת ציוד שנפתחה לפני מעבר להתחברות
+    if (gi && Date.now() - gi.at < 3600000) openGearImport(gi.code); else localStorage.removeItem(GEAR_KEY);
   } catch (e) { /* */ }
 }
 

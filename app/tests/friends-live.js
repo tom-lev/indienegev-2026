@@ -294,6 +294,25 @@ async function device(label) {
   const g2 = await A2.ev(() => { ensureGear(); return { hasTent: S.gear.some(g => g.id === 'd0-0'), packed: (S.gear.find(g => g.id === 'd0-1') || {}).packed, hammock: S.gear.some(g => g.text === 'ערסל'), n: S.gear.length }; });
   check('רשימת ציוד במכשיר אחר: מה שנמחק לא חוזר, הסימון והפריט החדש עברו', !g2.hasTent && g2.packed === true && g2.hammock && g2.n === 71, JSON.stringify(g2));
   await A2.browser.close();
+
+  // ───── שיתוף רשימת ציוד כלינק: חבר טוען אותה בול ─────
+  await A.ev(() => { S.gearCats = [...(S.gearCats || []), { name: 'צילום', o: 1 }]; S.gear.push({ id: 'ucam', cat: 'צילום', text: 'מצלמה', o: 1 }); S.gear.find(g => g.id === 'd1-0').packed = true; save(); });
+  const gLink = await A.ev(() => SITE_URL + '#GEAR=' + gearCode());
+  const aList = await A.ev(() => gearCats().map(c => [c, gearList().filter(g => g.cat === c).sort((x, y) => x.o - y.o).map(g => g.text)]).filter(([c, i]) => i.length));
+  await B.ev(() => { ensureGear(); S.gear.push({ id: 'ubob', cat: 'ישיבה', text: 'פוף', o: 50 }); save(); });
+  await B.page.goto('about:blank'); await B.page.goto(gLink.replace('https://tom-lev.github.io/indienegev-2026/', 'http://localhost:8765/'), { waitUntil: 'load' }); await sleep(2500);
+  check('לינק רשימת ציוד – "אליס שיתף/ה איתך רשימת ציוד"', await B.ev(() => /אליס שיתף\/ה איתך רשימת ציוד/.test((document.querySelector('.panel .invite h2') || {}).textContent || '') && location.hash === ''));
+  await B.page.click('.panel [data-gi="replace"]'); await sleep(1500);
+  const bList = await B.ev(() => gearCats().map(c => [c, gearList().filter(g => g.cat === c).sort((x, y) => x.o - y.o).map(g => g.text)]).filter(([c, i]) => i.length));
+  check('"לטעון בדיוק": הרשימה זהה לשל אליס (כולל קטגוריה שהוסיפה)', JSON.stringify(bList) === JSON.stringify(aList), `${bList.length} קטגוריות`);
+  check('בלי סימוני "ארזתי" של אליס, והפריט "פוף" של בוב הוחלף', await B.ev(() => !gearList().some(g => g.packed) && !gearList().some(g => g.text === 'פוף')));
+  check('אחרי הטעינה – נפתחת הרשימה', await B.ev(() => /רשימת ציוד/.test((document.querySelector('.panel h2') || {}).textContent || '')));
+  await B.ev(() => closeAllLayers()); await sleep(500);
+  await B.ev(() => { S.gear = S.gear.filter(g => g.text !== 'מצלמה'); S.gear.push({ id: 'ubob2', cat: 'ישיבה', text: 'פוף', o: 50 }); save(); });
+  await B.page.goto('about:blank'); await B.page.goto(gLink.replace('https://tom-lev.github.io/indienegev-2026/', 'http://localhost:8765/'), { waitUntil: 'load' }); await sleep(2500);
+  await B.page.click('.panel [data-gi="merge"]'); await sleep(1500);
+  check('"להוסיף רק מה שחסר": "מצלמה" חזרה, "פוף" של בוב נשאר, בלי כפילויות', await B.ev(() => gearList().filter(g => g.text === 'מצלמה').length === 1 && gearList().some(g => g.text === 'פוף') && gearList().filter(g => g.text === 'שק שינה').length === 1));
+  await B.ev(() => closeAllLayers()); await sleep(500);
   check('אין שגיאות JS', !A.errors.length && !B.errors.length, [...A.errors, ...B.errors].join(' | '));
   console.log(fails ? `\n${fails} FAILED` : '\nALL PASSED');
   process.exit(0);
