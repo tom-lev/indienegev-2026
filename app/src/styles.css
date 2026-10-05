@@ -577,9 +577,9 @@ details.fold[open] .fold-ch svg { transform: rotate(-90deg); }
 /* ציפורים מהציור – מרחפות ומנפנפות */
 /* אנשים הולכים בקמפינג: צעדים קטנים (קפיצה עדינה ונדנוד) */
 .m-walker { position: absolute; left: 0; top: 0; pointer-events: none; will-change: transform; transform-origin: 50% 100%; }
-/* מחזור הליכה: 8 תמונות (ירך ושוק, כיפוף ברך, הגוף עולה ויורד) – כל מחזור = 2 צעדים איטיים */
-.m-walker i { display: block; width: 100%; height: 100%; background-repeat: no-repeat; animation: walk-cycle 1.3s steps(8) infinite; }
-@keyframes walk-cycle { from { background-position-x: 0; } to { background-position-x: calc(var(--w) * -8); } }
+/* מחזור הליכה: 24 תמונות (תנועה רציפה) – כל מחזור = 2 צעדים; משך המחזור מותאם למהירות ההליכה (בלי החלקה) */
+.m-walker i { display: block; width: 100%; height: 100%; background-repeat: no-repeat; animation: walk-cycle var(--cyc, 1.9s) steps(24) infinite; }
+@keyframes walk-cycle { from { background-position-x: 0; } to { background-position-x: calc(var(--w) * -24); } }
 @media (prefers-reduced-motion: reduce) { .m-walker i { animation: none; } }
 .m-bird { position: absolute; pointer-events: none; will-change: transform; z-index: 1; }
 .m-bird img { display: block; width: 100%; height: auto; transform-origin: 50% 70%; animation: bird-flap .75s ease-in-out infinite; }

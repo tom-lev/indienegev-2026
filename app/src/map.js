@@ -411,11 +411,14 @@ function flyBirds(stage) {
 const WALK_SPOTS = ['wc-campw', 'wc-camps', 'wc-fam', 'wc-plus', 'cook-shabbat', 'cook-campw', 'cook-camps', 'cook-acc', 'cook-fam',
   'water-campw', 'water-camp', 'water-camps', 'water-plus', 'shower-w', 'shower-s'];
 const walkerAt = [];   // איפה כל מטייל נמצא (נשמר בין רינדורים של המפה)
+const WALK_CYCLE = 1.9; // שניות לשני צעדים – טיול נינוח
+/* מהירות (פיקסלים במפה בשנייה) = שני צעדים בכל מחזור, לפי אורך הצעד של הדמות */
+const walkSpeed = i => { const p = ASSETS.person; return 2 * p.stride * (p.heights ? p.heights[i] : p.h) / WALK_CYCLE; };
 function walkersHtml() {
   const p = ASSETS.person;
   if (!p) return '';
   return Array.from({ length: p.rows || 1 }, (_, i) =>
-    `<div class="m-walker" style="width:${p.w}px;height:${p.h}px;opacity:0"><i style="background-image:url(${p.src});background-size:${p.frames * 100}% ${(p.rows || 1) * 100}%;background-position-y:${p.rows > 1 ? (i / (p.rows - 1) * 100).toFixed(2) : 0}%;--w:${p.w}px;animation-delay:${-i * 0.43}s"></i></div>`).join('');
+    `<div class="m-walker" style="width:${p.w}px;height:${p.h}px;opacity:0"><i style="background-image:url(${p.src});background-size:${p.frames * 100}% ${(p.rows || 1) * 100}%;background-position-y:${p.rows > 1 ? (i / (p.rows - 1) * 100).toFixed(2) : 0}%;--w:${p.w}px;--cyc:${WALK_CYCLE}s;animation-delay:${-i * 0.43}s"></i></div>`).join('');
 }
 function walkPeople(stage) {
   if (matchMedia('(prefers-reduced-motion: reduce)').matches || !ASSETS.person) return;
@@ -443,7 +446,7 @@ function walkPeople(stage) {
       });
       el.style.transform = frames[0].transform;
       el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 700, fill: 'forwards' });            // יוצא מהמקום
-      const a = el.animate(frames, { duration: len / 10 * 1000, easing: 'linear', fill: 'forwards' }); // טיול נינוח
+      const a = el.animate(frames, { duration: len / walkSpeed(i) * 1000, easing: 'linear', fill: 'forwards' }); // הצעדים תואמים למהירות
       a.onfinish = () => {
         if (!alive()) return;
         walkerAt[i] = to;

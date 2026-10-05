@@ -373,7 +373,7 @@ const CC = (() => {
 /* Service Worker – האפליקציה נפתחת מהעותק השמור בטלפון, גם בלי קליטה.
    אסטרטגיה: מטמון קודם (פתיחה מיידית גם בקליטה חלשה). עדכון גרסה מגיע כ-SW חדש
    (הקובץ הזה משתנה בכל בנייה בגלל VERSION), שמחכה עד שהמשתמש מאשר רענון. */
-const VERSION = 'd9e39b03ebc9';
+const VERSION = '811cb7e8fe5c';
 const CACHE = 'indn26-' + VERSION;
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
