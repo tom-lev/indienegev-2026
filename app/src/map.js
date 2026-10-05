@@ -490,6 +490,42 @@ function smokerHtml() {
   return `<div class="m-smoker" style="left:${(x - m.cx * m.w).toFixed(0)}px;top:${(y - m.foot * m.h).toFixed(0)}px;width:${m.w}px;height:${m.h}px">
     <i style="background-image:url(${m.src});background-size:${m.frames * 100}% ${(m.rows || 1) * 100}%"></i><b class="ember"></b></div><div class="m-smoke-layer"></div>`;
 }
+/* ───────── הישן ─────────
+   שוכב על מזרן ליד האוהל עם הדגל (מתחת לבועת "מעגל"): ראש על כרית, שק שינה שעולה ויורד בנשימה, ו-z קטנים שעולים */
+const SLEEPER_AT = { x: 790, y: 1000 }; // מרכז המזרן (פיקסלים במפה ברוחב 3200)
+function sleeperHtml() {
+  const x = SLEEPER_AT.x * MAP_W / 3200, y = SLEEPER_AT.y * MAP_H / 1647;
+  return `<div class="m-sleeper" style="left:${(x - 26).toFixed(0)}px;top:${(y - 11).toFixed(0)}px">
+    <svg width="52" height="22" viewBox="0 0 52 22" aria-hidden="true">
+      <rect x="2" y="7" width="48" height="13" rx="3" fill="#6f9fb4" opacity=".85"/>
+      <ellipse cx="9" cy="12.5" rx="5.5" ry="3.8" fill="#f1ece0"/>
+      <circle cx="9.5" cy="10.8" r="3.6" fill="#3a1c18"/>
+      <g class="bag"><path d="M13 9.5 Q 30 6.6 44 9 Q 48.5 10 48 13.8 Q 47.5 17.5 43 17.8 Q 28 18.8 13.5 17.2 Q 11.5 13.5 13 9.5 Z" fill="#c8553d"/>
+        <path d="M18 10.2 Q 19 13.8 18.3 17.4" stroke="#a8432f" stroke-width=".8" fill="none"/></g>
+    </svg></div><div class="m-z-layer"></div>`;
+}
+let zTimer = 0;
+function sleepZ(stage) {
+  clearInterval(zTimer);
+  const el = stage.querySelector('.m-sleeper'), layer = stage.querySelector('.m-z-layer');
+  if (!el || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const hx = parseFloat(el.style.left) + 10, hy = parseFloat(el.style.top) + 6;
+  let n = 0;
+  zTimer = setInterval(() => {
+    if (!document.contains(stage)) return clearInterval(zTimer);
+    if (layer.childElementCount > 6) return;
+    const z = document.createElement('span');
+    z.className = 'm-z'; z.textContent = n++ % 3 === 2 ? 'Z' : 'z';
+    z.style.left = `${hx}px`; z.style.top = `${hy}px`;
+    layer.append(z);
+    z.animate([
+      { transform: 'translate(0,0) scale(.6)', opacity: 0 },
+      { transform: 'translate(3px,-5px) scale(.85)', opacity: .9, offset: .2 },
+      { transform: 'translate(9px,-14px) scale(1.15)', opacity: .7, offset: .6 },
+      { transform: 'translate(14px,-22px) scale(1.4)', opacity: 0 },
+    ], { duration: 3200, easing: 'ease-out' }).onfinish = () => z.remove();
+  }, 1700);
+}
 let smokeRAF = 0;
 function smokePeople(stage) {
   cancelAnimationFrame(smokeRAF);
@@ -513,32 +549,6 @@ function smokePeople(stage) {
         opacity: (op0 * (u < 0.15 ? u / 0.15 : 1 - (u - 0.15) / 0.85)).toFixed(3) });
     }
     p.animate(kf, { duration: dur, easing: 'linear' }).onfinish = () => p.remove();
-  };
-  /* עשן מהסיגריה: שני חוטים דקים שעולים מהקצה ומתפתלים – הגלים גדלים ככל שעולים, והחוט דועך למעלה */
-  const NS = 'http://www.w3.org/2000/svg';
-  const svg = document.createElementNS(NS, 'svg');
-  svg.setAttribute('class', 'm-threads'); svg.setAttribute('width', '60'); svg.setAttribute('height', '70'); svg.setAttribute('viewBox', '-30 -66 60 70');
-  svg.innerHTML = `<defs><linearGradient id="smk-g" x1="0" y1="1" x2="0" y2="0" gradientUnits="objectBoundingBox"><stop offset="0" stop-color="#f4f4ef" stop-opacity=".75"/><stop offset=".55" stop-color="#ececea" stop-opacity=".35"/><stop offset="1" stop-color="#e8e8e6" stop-opacity="0"/></linearGradient></defs>
-    <path class="th1" fill="none" stroke="url(#smk-g)" stroke-width=".9" stroke-linecap="round" stroke-dasharray="6 2.5 3 4 5 3"/><path class="th2" fill="none" stroke="url(#smk-g)" stroke-width=".65" stroke-linecap="round" stroke-dasharray="4 3 6 2 3 5"/>`;
-  if (!reduce) layer.append(svg);
-  const th = [svg.querySelector('.th1'), svg.querySelector('.th2')];
-  const drawThreads = (t, x, y, hot) => {
-    if (reduce) return;
-    svg.style.transform = `translate(${(x - 30).toFixed(1)}px, ${(y - 66).toFixed(1)}px)`;
-    svg.classList.toggle('off', hot); // בזמן השאיפה – אין חוטים (הגחלת בפה); חוזרים אחרי
-    const tt = t / 1000;
-    th.forEach((p, k) => {
-      const N = 16, len = 27 - k * 6;      // קצרים
-      p.style.strokeDashoffset = (-(tt * (9 + k * 3)) % 40).toFixed(2); // הקטיעות זורמות כלפי מעלה
-      let d = '';
-      for (let j = 0; j <= N; j++) {
-        const u = j / N, yy = -u * len;
-        // תנודה שעולה עם החוט (גלים שזורמים כלפי מעלה) + סחיפה קלה ברוח
-        const xx = Math.sin(u * 6 - tt * 2.2 + k * 1.9) * (0.3 + 4.5 * u * u) + Math.sin(u * 3.1 - tt * 0.9 + k) * 2 * u + u * u * 3;
-        d += `${j ? 'L' : 'M'}${xx.toFixed(2)} ${yy.toFixed(2)}`;
-      }
-      p.setAttribute('d', d);
-    });
   };
   // מחזור עישון אחד (שניות): מנוחה, הרמה, שאיפה, הורדה. מדי כמה מחזורים – קם, מעשן בעמידה, ומתיישב
   const rowY = r => `${((m.rows || 1) > 1 ? r / (m.rows - 1) * 100 : 0).toFixed(1)}%`;
@@ -576,7 +586,8 @@ function smokePeople(stage) {
     // רק הגחלת זוהרת (ומתלהטת בשאיפה) – לא כל הדמות
     ember.style.transform = `translate(${tip[0].toFixed(1)}px, ${tip[1].toFixed(1)}px)`;
     ember.classList.toggle('hot', inhale);
-    drawThreads(t, ox + tip[0], oy + tip[1], inhale);
+    // עשן מהסיגריה: כדורים קטנים ומסתלסלים; בזמן השאיפה (הסיגריה בפה) – לא יוצא מהקצה
+    if (!inhale && t >= nextPuff) { puff(ox + tip[0], oy + tip[1], false); nextPuff = t + 420 + Math.random() * 200; }
     smokeRAF = requestAnimationFrame(tick);
   };
   smokeRAF = requestAnimationFrame(tick);
@@ -776,6 +787,7 @@ function renderMap(view) {
     <div class="mapstage" id="mapstage" style="width:${MAP_W}px;height:${MAP_H}px">
       <img src="${ASSETS.map}" width="${MAP_W}" height="${MAP_H}" alt="מפת הפסטיבל אינדינגב 2026">
       ${smokerHtml()}
+      ${sleeperHtml()}
       ${walkersHtml()}
       ${birdsHtml()}
       <svg class="route" id="route" viewBox="0 0 ${MAP_W} ${MAP_H}" width="${MAP_W}" height="${MAP_H}" aria-hidden="true"></svg>
@@ -815,6 +827,7 @@ function renderMap(view) {
   flyBirds(stage);
   walkPeople(stage);
   smokePeople(stage);
+  sleepZ(stage);
   bindMapGestures(wrap, stage);
   // מסגרת המפה לא נגללת לעולם (פוקוס על כפתור מחוץ למסך יכול לגלול אותה)
   wrap.addEventListener('scroll', () => { wrap.scrollLeft = 0; wrap.scrollTop = 0; });

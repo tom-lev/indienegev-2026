@@ -585,10 +585,16 @@ details.fold[open] .fold-ch svg { transform: rotate(-90deg); }
 .m-smoker .ember.hot { background: #ffd27a; box-shadow: 0 0 3px 1.4px rgba(255, 140, 40, .95); }
 @keyframes smoker-breath { 0%, 100% { transform: scaleY(1) rotate(0deg); } 50% { transform: scaleY(1.018) rotate(-0.8deg); } }
 .m-smoke-layer { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; }
-.m-threads { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; transition: opacity .5s; }
-.m-threads.off { opacity: 0; transition: opacity .25s; }
 .m-smoke { position: absolute; border-radius: 50%; background: radial-gradient(circle, rgba(245, 245, 240, .95), rgba(230, 230, 225, 0) 70%); will-change: transform, opacity; }
 @media (prefers-reduced-motion: reduce) { .m-smoker i { animation: none; } }
+/* הישן: שק השינה עולה ויורד בנשימה איטית; z עולים ונעלמים */
+.m-sleeper { position: absolute; pointer-events: none; }
+.m-sleeper svg { display: block; overflow: visible; }
+.m-sleeper .bag { transform-box: fill-box; transform-origin: 50% 100%; animation: sleep-breath 4.4s ease-in-out infinite; }
+@keyframes sleep-breath { 0%, 100% { transform: scaleY(1); } 45% { transform: scaleY(1.09); } }
+.m-z-layer { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; }
+.m-z { position: absolute; font: 900 7px/1 Rubik, system-ui, sans-serif; color: #3a1c18; will-change: transform, opacity; }
+@media (prefers-reduced-motion: reduce) { .m-sleeper .bag { animation: none; } }
 /* הבלון של הנודד: נקודת הקשירה (ביד) היא ראש הסיבוב */
 .m-balloon { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; }
 .m-balloon svg { position: absolute; left: -8px; top: -24px; overflow: visible; }
