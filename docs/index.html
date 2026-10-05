@@ -1121,7 +1121,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 <script>
 'use strict';
 const FIREBASE_CFG = {"apiKey": "AIzaSyDMNlvqnDlASfIKdL5EYonDHtDuFQPN_N4", "projectId": "indnegev-14c1b", "googleClientId": "177429003497-movbi1a9k0e9j595djfuhg282e8av1l0.apps.googleusercontent.com"};
-const BUILD_ID = "05.10 16:29";
+const BUILD_ID = "05.10 16:33";
 /* ── data.js ── */
 /* נתוני אינדינגב 2026 – מקור: indnegev-2026-lineup.pdf, דף "אדמה" ורשימת הליינאפ באתר.
    חשוב: הסדר של EVENTS קובע את האינדקס (idx) שמשמש בקודי שיתוף.
@@ -3067,7 +3067,7 @@ function sleepZ(stage) {
 /* ───────── פריזבי ─────────
    שניים עומדים על השביל ליד מתחם הבישול הדרומי, זה מול זה. אחד מתכונן וזורק, הפריזבי עף בקשת ומסתובב,
    השני מושיט יד ותופס, מחכה רגע – וזורק בחזרה. */
-const FRISBEE_AT = [{ x: 838, y: 1333 }, { x: 948, y: 1329 }]; // על השביל האופקי (פיקסלים במפה ברוחב 3200)
+const FRISBEE_AT = [{ x: 808, y: 1334 }, { x: 990, y: 1327 }]; // על השביל האופקי (פיקסלים במפה ברוחב 3200)
 function frisbeeHtml() {
   const f = ASSETS.frisbee;
   if (!f) return '';
@@ -3089,7 +3089,7 @@ function playFrisbee(stage) {
   };
   const setPose = (k, pose) => { inner[k].style.backgroundPosition = `${-pose * f.w}px 0`; };
   // ציר זמן לזריקה אחת (שניות): הכנה, שחרור, טיסה, תפיסה, המתנה
-  const T = { wind: 0.55, rel: 0.18, fly: 1.35, hold: 1.4 };
+  const T = { wind: 0.55, rel: 0.18, fly: 1.8, hold: 1.4 };
   const total = T.wind + T.rel + T.fly + T.hold;
   let t0 = performance.now(), thrower = 0;
   const tick = t => {
@@ -3104,7 +3104,7 @@ function playFrisbee(stage) {
       const u = (s - T.wind - T.rel) / T.fly, A = handAt(a, 2), B = handAt(b, 4);
       pa = u < 0.35 ? 3 : 0; pb = u > 0.55 ? 4 : 0;
       const e = u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2;                          // מאט מעט באמצע
-      dpos = { x: A.x + (B.x - A.x) * (0.15 * u + 0.85 * e), y: A.y + (B.y - A.y) * u - 16 * Math.sin(Math.PI * u) };
+      dpos = { x: A.x + (B.x - A.x) * (0.15 * u + 0.85 * e), y: A.y + (B.y - A.y) * u - 22 * Math.sin(Math.PI * u) };
       spin = u * 14;
     } else { pa = 0; pb = s < T.wind + T.rel + T.fly + 0.5 ? 5 : 0; dpos = handAt(b, pb === 5 ? 5 : 0); } // תפס, ואחר כך מחזיק
     setPose(a, pa); setPose(b, pb);
