@@ -521,7 +521,7 @@ function walkPeople(stage) {
     w.up.style.backgroundPosition = bp; w.lo.style.backgroundPosition = bp;
     const flip = `scaleX(${w.view === 0 ? w.dir : 1})`;
     const standing = w.pose >= 0;
-    const ky = w.view === 0 && !standing ? w.ky : 0, kx = w.view !== 0 && !standing ? w.kx : 0;
+    const ky = w.ky, kx = w.kx; // מוחלקים – דועכים בהדרגה בכל מעבר מבט/עצירה, בלי קפיצה
     const breath = standing ? 1 + 0.014 * Math.sin((performance.now() - (w.holdStart || 0)) / 3600 * 2 * Math.PI) : 1;
     w.up.style.transform = `${flip} scaleY(${breath.toFixed(4)})`;
     w.lo.style.transform = `${flip} skewY(${Math.atan(ky).toFixed(3)}rad) skewX(${Math.atan(kx).toFixed(3)}rad)`;

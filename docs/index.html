@@ -1094,7 +1094,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 <script>
 'use strict';
 const FIREBASE_CFG = {"apiKey": "AIzaSyDMNlvqnDlASfIKdL5EYonDHtDuFQPN_N4", "projectId": "indnegev-14c1b", "googleClientId": "177429003497-movbi1a9k0e9j595djfuhg282e8av1l0.apps.googleusercontent.com"};
-const BUILD_ID = "05.10 15:36";
+const BUILD_ID = "05.10 15:38";
 /* ── data.js ── */
 /* נתוני אינדינגב 2026 – מקור: indnegev-2026-lineup.pdf, דף "אדמה" ורשימת הליינאפ באתר.
    חשוב: הסדר של EVENTS קובע את האינדקס (idx) שמשמש בקודי שיתוף.
@@ -3032,7 +3032,7 @@ function walkPeople(stage) {
     w.up.style.backgroundPosition = bp; w.lo.style.backgroundPosition = bp;
     const flip = `scaleX(${w.view === 0 ? w.dir : 1})`;
     const standing = w.pose >= 0;
-    const ky = w.view === 0 && !standing ? w.ky : 0, kx = w.view !== 0 && !standing ? w.kx : 0;
+    const ky = w.ky, kx = w.kx; // מוחלקים – דועכים בהדרגה בכל מעבר מבט/עצירה, בלי קפיצה
     const breath = standing ? 1 + 0.014 * Math.sin((performance.now() - (w.holdStart || 0)) / 3600 * 2 * Math.PI) : 1;
     w.up.style.transform = `${flip} scaleY(${breath.toFixed(4)})`;
     w.lo.style.transform = `${flip} skewY(${Math.atan(ky).toFixed(3)}rad) skewX(${Math.atan(kx).toFixed(3)}rad)`;
