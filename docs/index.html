@@ -600,6 +600,7 @@ details.fold[open] .fold-ch svg { transform: rotate(-90deg); }
 .m-smoker .ember.hot { background: #ffd27a; box-shadow: 0 0 3px 1.4px rgba(255, 140, 40, .95); }
 @keyframes smoker-breath { 0%, 100% { transform: scaleY(1) rotate(0deg); } 50% { transform: scaleY(1.018) rotate(-0.8deg); } }
 .m-smoke-layer { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; }
+.m-threads { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
 .m-smoke { position: absolute; border-radius: 50%; background: radial-gradient(circle, rgba(245, 245, 240, .95), rgba(230, 230, 225, 0) 70%); will-change: transform, opacity; }
 @media (prefers-reduced-motion: reduce) { .m-smoker i { animation: none; } }
 /* הבלון של הנודד: נקודת הקשירה (ביד) היא ראש הסיבוב */
@@ -1107,7 +1108,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 <script>
 'use strict';
 const FIREBASE_CFG = {"apiKey": "AIzaSyDMNlvqnDlASfIKdL5EYonDHtDuFQPN_N4", "projectId": "indnegev-14c1b", "googleClientId": "177429003497-movbi1a9k0e9j595djfuhg282e8av1l0.apps.googleusercontent.com"};
-const BUILD_ID = "05.10 16:13";
+const BUILD_ID = "05.10 16:17";
 /* ── data.js ── */
 /* נתוני אינדינגב 2026 – מקור: indnegev-2026-lineup.pdf, דף "אדמה" ורשימת הליינאפ באתר.
    חשוב: הסדר של EVENTS קובע את האינדקס (idx) שמשמש בקודי שיתוף.
@@ -3038,10 +3039,35 @@ function smokePeople(stage) {
     }
     p.animate(kf, { duration: dur, easing: 'linear' }).onfinish = () => p.remove();
   };
+  /* עשן מהסיגריה: שני חוטים דקים שעולים מהקצה ומתפתלים – הגלים גדלים ככל שעולים, והחוט דועך למעלה */
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('class', 'm-threads'); svg.setAttribute('width', '60'); svg.setAttribute('height', '70'); svg.setAttribute('viewBox', '-30 -66 60 70');
+  svg.innerHTML = `<defs><linearGradient id="smk-g" x1="0" y1="1" x2="0" y2="0" gradientUnits="objectBoundingBox"><stop offset="0" stop-color="#f4f4ef" stop-opacity=".75"/><stop offset=".55" stop-color="#ececea" stop-opacity=".35"/><stop offset="1" stop-color="#e8e8e6" stop-opacity="0"/></linearGradient></defs>
+    <path class="th1" fill="none" stroke="url(#smk-g)" stroke-width="1" stroke-linecap="round"/><path class="th2" fill="none" stroke="url(#smk-g)" stroke-width=".7" stroke-linecap="round"/>`;
+  if (!reduce) layer.append(svg);
+  const th = [svg.querySelector('.th1'), svg.querySelector('.th2')];
+  const drawThreads = (t, x, y, hot) => {
+    if (reduce) return;
+    svg.style.transform = `translate(${(x - 30).toFixed(1)}px, ${(y - 66).toFixed(1)}px)`;
+    const tt = t / 1000;
+    th.forEach((p, k) => {
+      const N = 22, len = (hot ? 58 : 50) - k * 8;
+      let d = '';
+      for (let j = 0; j <= N; j++) {
+        const u = j / N, yy = -u * len;
+        // תנודה שעולה עם החוט (גלים שזורמים כלפי מעלה) + סחיפה קלה ברוח
+        const xx = Math.sin(u * 7 - tt * 2.2 + k * 1.9) * (0.4 + 7 * u * u) + Math.sin(u * 3.1 - tt * 0.9 + k) * 3 * u + u * u * 6;
+        d += `${j ? 'L' : 'M'}${xx.toFixed(2)} ${yy.toFixed(2)}`;
+      }
+      p.setAttribute('d', d);
+    });
+  };
   // מחזור עישון אחד (שניות): מנוחה, הרמה, שאיפה, הורדה. מדי כמה מחזורים – קם, מעשן בעמידה, ומתיישב
   const rowY = r => `${((m.rows || 1) > 1 ? r / (m.rows - 1) * 100 : 0).toFixed(1)}%`;
   let pose = 'sit', cyc = null, t0 = performance.now(), nextPuff = 0, exhaled = false, left = 3 + Math.floor(Math.random() * 4), tr0 = 0;
-  const newCycle = (t, standing) => { cyc = { rest: standing ? 1.2 + Math.random() * 1.5 : 3 + Math.random() * 3, up: 0.9, hold: 1.1 + Math.random() * 0.6, down: 0.9 }; t0 = t; exhaled = false; };
+  let standUntil = 0;
+  const newCycle = (t, standing) => { cyc = { rest: standing ? 0.6 + Math.random() * 0.5 : 3 + Math.random() * 3, up: 0.9, hold: 1.1 + Math.random() * 0.6, down: 0.9 }; t0 = t; exhaled = false; };
   const RISE = 1.4; // שניות לקום / לשבת
   const tick = t => {
     if (!document.contains(stage)) return;
@@ -3051,14 +3077,14 @@ function smokePeople(stage) {
       // קם (או מתיישב – אותן תמונות בסדר הפוך)
       const u = Math.min(1, (t - tr0) / 1000 / RISE);
       row = 2; f = Math.round((pose === 'rise' ? u : 1 - u) * (m.frames - 1));
-      if (u >= 1) { pose = pose === 'rise' ? 'stand' : 'sit'; left = pose === 'stand' ? 1 + Math.floor(Math.random() * 2) : 3 + Math.floor(Math.random() * 4); newCycle(t, pose === 'stand'); }
+      if (u >= 1) { pose = pose === 'rise' ? 'stand' : 'sit'; left = 3 + Math.floor(Math.random() * 4); standUntil = t + 6000; newCycle(t, pose === 'stand'); }
     } else {
       const s = (t - t0) / 1000, c = cyc;
       if (s < c.rest) a = 0;
       else if (s < c.rest + c.up) a = (s - c.rest) / c.up;
       else if (s < c.rest + c.up + c.hold) a = 1;
       else if (s < c.rest + c.up + c.hold + c.down) a = 1 - (s - c.rest - c.up - c.hold) / c.down;
-      else if (--left <= 0) { pose = pose === 'sit' ? 'rise' : 'lower'; tr0 = t; a = 0; }  // מספיק – קם / מתיישב
+      else if (pose === 'stand' ? t >= standUntil : --left <= 0) { pose = pose === 'sit' ? 'rise' : 'lower'; tr0 = t; a = 0; }  // קם / מתיישב (עמידה – 6 שניות)
       else { newCycle(t, pose === 'stand'); a = 0; }
       f = Math.round(a * (m.frames - 1));
       // נשיפה: כשהיד יורדת – כמה משבים גדולים מהפה
@@ -3073,7 +3099,7 @@ function smokePeople(stage) {
     // רק הגחלת זוהרת (ומתלהטת בשאיפה) – לא כל הדמות
     ember.style.transform = `translate(${tip[0].toFixed(1)}px, ${tip[1].toFixed(1)}px)`;
     ember.classList.toggle('hot', inhale);
-    if (t >= nextPuff) { puff(ox + tip[0], oy + tip[1], false); nextPuff = t + (inhale ? 700 : 420 + Math.random() * 200); }
+    drawThreads(t, ox + tip[0], oy + tip[1], inhale);
     smokeRAF = requestAnimationFrame(tick);
   };
   smokeRAF = requestAnimationFrame(tick);
