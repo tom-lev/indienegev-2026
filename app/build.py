@@ -281,10 +281,14 @@ def make_walk_sheet(sprite, ink):
                         seg(d, (hx, hip[1]), mid, wt, wsn * 1.08)
                         seg(d, mid, ank, wsn * 1.08, wsn * 0.8)
                         d.ellipse([ank[0] - wsn * 0.6, ank[1] - wsn * 0.3, ank[0] + wsn * 0.6, ank[1] + wsn * 0.5], fill=col)
+                        # ידיים בצדי הגוף, מעט החוצה (רווח קטן מהגוף), מתנדנדות קדימה-אחורה = מתקצרות/מתארכות מעט
                         armV = math.cos(math.radians(24 * fx / A))
-                        el = (sh[0] + side * (sw / 2 + wua * 0.1), sh[1] + 0.17 * Hs * armV)
-                        seg(d, (sh[0] + side * sw * 0.42, sh[1] + 0.02 * Hs), el, wua, wfa)
-                        seg(d, el, (el[0] + side * 0.01 * Hs, el[1] + 0.15 * Hs * armV), wfa, wfa * 0.85)
+                        s0 = (sh[0] + side * (sw / 2 + wua * 0.15), sh[1] + 0.03 * Hs)
+                        el = (s0[0] + side * 0.028 * Hs, s0[1] + 0.165 * Hs * armV)
+                        hand = (el[0] + side * 0.012 * Hs, el[1] + 0.145 * Hs * armV)
+                        seg(d, s0, el, wua * 0.92, wfa)
+                        seg(d, el, hand, wfa, wfa * 0.8)
+                        d.ellipse([hand[0] - wfa * 0.62, hand[1] - wfa * 0.5, hand[0] + wfa * 0.62, hand[1] + wfa * 0.7], fill=col)  # כף יד
                     if coat:
                         d.polygon([(sh[0] - sw / 2, sh[1]), (sh[0] + sw / 2, sh[1]), (hip[0] + hw * 0.85, hip[1] + 0.13 * Hs), (hip[0] - hw * 0.85, hip[1] + 0.13 * Hs)], fill=col)
                     d.polygon([(sh[0] - sw / 2, sh[1] + 0.01 * Hs), (sh[0] + sw / 2, sh[1] + 0.01 * Hs), (hip[0] + hw * 0.6, hip[1]), (hip[0] - hw * 0.6, hip[1])], fill=col)
