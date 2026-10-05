@@ -355,24 +355,55 @@ function birdsHtml() {
   return (ASSETS.birds || []).map((b, i) =>
     `<div class="m-bird" style="left:${b.x}px;top:${b.y}px;width:${b.w}px"><img src="${b.src}" width="${b.w}" height="${b.h}" alt="" style="animation-delay:${-i * 0.5}s"></div>`).join('');
 }
-/* כל ציפור חוצה את כל המפה במסלול גלי משלה, בלולאה. המיקום ממשיך מאותה נקודה גם אחרי רינדור מחדש */
+/* כל ציפור חוצה את כל המפה במסלול מתפתל משלה, בלולאה (המיקום ממשיך גם אחרי רינדור מחדש).
+   כדי שזה ייראה כמו מעוף אמיתי:
+   - נפנוף בפרצים: כמה משקי כנפיים ואז דאייה עם כנפיים פרושות
+   - הטיה לתוך הפנייה – הציפור "נשענת" לכיוון שהמסלול פונה
+   - מהירות משתנה: איטית בעלייה, מהירה בירידה
+   שתי הציפורים הדומות (1, 2) עפות לאט יותר, כמו עופות דורסים שדואים. */
 const BIRD_PATHS = [[-260, 230, 1, 520], [1, 110, -260, 700], [1, 330, -260, 160]]; // [x0, y0, x1, y1]; 1 = קצה ימין של המפה
+const BIRD_SPEED = [40, 17, 15];  // פיקסלים במפה בשנייה (בערך)
 function flyBirds(stage) {
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   stage.querySelectorAll('.m-bird').forEach((el, i) => {
     const b = ASSETS.birds[i], p = BIRD_PATHS[i % BIRD_PATHS.length];
     const X = v => (v === 1 ? MAP_W + 260 : v);
     const [x0, y0, x1, y1] = [X(p[0]), p[1], X(p[2]), p[3]];
-    // מסלול מתפתל: גלים בשני הצירים בתדירויות שונות – הציפור מסתובבת, עולה ויורדת, לא עפה בקו ישר
-    const frames = [];
-    for (let k = 0; k <= 60; k++) {
-      const t = k / 60, ph = i * 1.7;
-      const x = x0 + (x1 - x0) * t + Math.sin(t * Math.PI * 5 + ph) * 140 + Math.sin(t * Math.PI * 11 + ph) * 35;
-      const y = y0 + (y1 - y0) * t + Math.sin(t * Math.PI * 3 + ph) * 120 + Math.cos(t * Math.PI * 8 + ph) * 45;
-      frames.push({ transform: `translate(${(x - b.x).toFixed(0)}px, ${(y - b.y).toFixed(0)}px)` });
+    const left = x1 < x0, ph = i * 1.7, N = 90;
+    // נקודות המסלול
+    const pt = t => [x0 + (x1 - x0) * t + Math.sin(t * Math.PI * 5 + ph) * 140 + Math.sin(t * Math.PI * 11 + ph) * 35,
+                     y0 + (y1 - y0) * t + Math.sin(t * Math.PI * 3 + ph) * 120 + Math.cos(t * Math.PI * 8 + ph) * 45];
+    const P = Array.from({ length: N + 1 }, (_, k) => pt(k / N));
+    // זמן לכל קטע: אורך הקטע, ארוך יותר בעלייה וקצר יותר בירידה
+    const seg = [0];
+    for (let k = 1; k <= N; k++) {
+      const dx = P[k][0] - P[k - 1][0], dy = P[k][1] - P[k - 1][1];
+      seg.push(seg[k - 1] + Math.hypot(dx, dy) * (1 + Math.max(-0.35, Math.min(0.5, -dy / 60 * 0.6))));
     }
-    const duration = 48000 + i * 9000;
-    el.animate(frames, { duration, iterations: Infinity, delay: -((Date.now() + i * 17000) % duration) });
+    const total = seg[N];
+    const frames = P.map(([x, y], k) => {
+      const a = P[Math.max(0, k - 1)], c = P[Math.min(N, k + 1)];
+      let ang = Math.atan2(c[1] - a[1], c[0] - a[0]) * 180 / Math.PI;
+      if (left) ang = ang > 0 ? ang - 180 : ang + 180; // הציור "מסתכל" לכיוון התנועה
+      ang = Math.max(-14, Math.min(14, ang * 0.7));
+      return { offset: seg[k] / total, transform: `translate(${(x - b.x).toFixed(0)}px, ${(y - b.y).toFixed(0)}px) rotate(${ang.toFixed(1)}deg)` };
+    });
+    const duration = total / BIRD_SPEED[i % BIRD_SPEED.length] * 1000;
+    el.animate(frames, { duration, iterations: Infinity, delay: -((Date.now() + i * 37000) % duration) });
+    // נפנוף בפרצים: 3–4 משקים ואז דאייה (הדומות – משקים איטיים ודאייה ארוכה)
+    const img = el.querySelector('img');
+    const slow = i % 3 !== 0, beats = slow ? 3 : 4, beat = slow ? 0.62 : 0.42, glide = slow ? 3.4 : 1.6;
+    const cycle = beats * beat + glide, kf = [];
+    for (let k = 0; k < beats; k++) {
+      const t0 = k * beat / cycle;
+      kf.push({ offset: t0, transform: 'scaleY(1) translateY(0)', easing: 'ease-in' });
+      kf.push({ offset: t0 + beat * 0.45 / cycle, transform: 'scaleY(.32) translateY(7px)', easing: 'ease-out' });
+    }
+    kf.push({ offset: beats * beat / cycle, transform: 'scaleY(1) translateY(0)' });
+    kf.push({ offset: (beats * beat + glide * 0.5) / cycle, transform: 'scaleY(.92) translateY(1px)' }); // דאייה – תזוזה קלה בלבד
+    kf.push({ offset: 1, transform: 'scaleY(1) translateY(0)' });
+    img.style.animation = 'none';
+    img.animate(kf, { duration: cycle * 1000, iterations: Infinity, delay: -((Date.now() + i * 900) % (cycle * 1000)) });
   });
 }
 /* אנשים קטנים (הדמות מהציור) הולכים הלוך-חזור בשבילי הקמפינג – על המסלולים האמיתיים של רשת ההליכה */
