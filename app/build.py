@@ -228,9 +228,9 @@ def make_walk_sheet(sprite, ink):
                 big = Image.new('RGBA', (TW * S, TH * S), (0, 0, 0, 0))
                 d = ImageDraw.Draw(big)
                 if view == 0:
-                    lean = 3
+                    lean = 5                                                # נטייה קדימה (לכיוון ההליכה)
                     hip = (cx, gy - hipH)
-                    a_l = math.radians(180 + lean)
+                    a_l = math.radians(180 - lean)                          # 180 = למעלה; פחות = מעט קדימה (ימינה, לכיוון ההליכה)
                     sh = (hip[0] + math.sin(a_l) * torso_len, hip[1] + math.cos(a_l) * torso_len)
                     parts = []
                     for k in (0, 1):
