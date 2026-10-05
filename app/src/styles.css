@@ -385,14 +385,13 @@ details.av-card[open] .av-sum { display: none; }
 .gear-add { display: flex; gap: 6px; margin-top: 6px; }
 .gear-add input { flex: 1; min-width: 0; border: 1.5px dashed var(--line-2); border-radius: 10px; padding: 9px 10px; font: inherit; font-size: 14.5px; background: transparent; color: var(--ink); }
 .gear-add button { font-size: 13.5px; font-weight: 800; padding: 0 10px; border-radius: 10px; background: var(--ink); color: var(--paper); }
-details.fold { margin: 0 0 12px; border-radius: 16px; background: var(--cream); }
-details.fold > summary { list-style: none; display: flex; align-items: center; gap: 8px; padding: 13px 14px; cursor: pointer; }
+details.fold { border-bottom: 1px solid rgba(21,63,76,.09); }
+details.fold:last-child { border-bottom: 0; }
+details.fold > summary { list-style: none; cursor: pointer; border-bottom: 0; }
 details.fold > summary::-webkit-details-marker { display: none; }
-details.fold > summary h3 { margin: 0; flex: 1; font-size: 16px; font-weight: 900; }
-details.fold > summary span { font-size: 13px; font-weight: 700; color: var(--ink-2); }
-details.fold > summary::after { content: '▾'; font-size: 14px; color: var(--ink-2); transition: transform .15s; }
-details.fold[open] > summary::after { transform: rotate(180deg); }
-.fold-b { padding: 0 14px 14px; }
+details.fold .fold-ch svg { transition: transform .18s; }
+details.fold[open] .fold-ch svg { transform: rotate(-90deg); }
+.fold-b { padding: 2px 14px 16px; }
 .fold-b .card-box { background: transparent; padding: 0; margin: 0; }
 .pop-line { margin: 6px 0 2px; font-size: 13.5px; font-weight: 700; color: var(--ink-2); }
 .recent { margin: 2px 0 14px; }
@@ -575,6 +574,20 @@ details.fold[open] > summary::after { transform: rotate(180deg); }
   will-change: transform;
 }
 .mapstage.anim { transition: transform .7s cubic-bezier(.2,.8,.2,1); }
+.mapstage.anim.slow { transition: transform 1.8s cubic-bezier(.45,.05,.2,1); }
+/* ציפורים מהציור – מרחפות ומנפנפות */
+.m-bird { position: absolute; pointer-events: none; animation: bird-glide var(--d) ease-in-out infinite alternate; will-change: transform; }
+.m-bird img { display: block; width: 100%; height: auto; transform-origin: 50% 60%; animation: bird-flap 1.7s ease-in-out infinite; }
+@keyframes bird-glide { from { transform: translate(0, 0); } to { transform: translate(var(--dx), var(--dy)); } }
+@keyframes bird-flap { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(.78) translateY(3px); } }
+/* אבק מדבר / גחליליות */
+.m-amb { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 2; }
+.m-amb i { position: absolute; border-radius: 50%; animation: amb-drift var(--d) ease-in-out infinite alternate; will-change: transform, opacity; }
+.m-amb.day i { width: 3px; height: 3px; background: rgba(255,244,214,.75); box-shadow: 0 0 3px rgba(255,244,214,.6); }
+.m-amb.night i { width: 4px; height: 4px; background: #fff6a8; box-shadow: 0 0 6px 2px rgba(255,236,120,.75); animation-name: amb-drift, amb-blink; animation-duration: var(--d), 2.6s; animation-direction: alternate, alternate; }
+@keyframes amb-drift { from { transform: translate(0, 0); opacity: .15; } 50% { opacity: .9; } to { transform: translate(var(--dx), var(--dy)); opacity: .2; } }
+@keyframes amb-blink { 0%, 100% { opacity: .1; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .m-bird, .m-bird img, .m-amb i { animation: none; } .m-amb { display: none; } }
 .mapstage img { max-width: none; user-select: none; -webkit-user-drag: none; pointer-events: none; }
 .m-mark {
   position: absolute; width: 0; height: 0;

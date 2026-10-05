@@ -349,6 +349,33 @@ function openTentSheet() {
   });
 }
 
+/* ───────── חיים על המפה ─────────
+   הציפורים שבציור (נחתכו מהמפה בבנייה) – מרחפות ומנפנפות במקומן.
+   אבק מדבר ביום / גחליליות בלילה – שכבה עדינה מעל המפה, לא לחיצה. */
+function birdsHtml() {
+  const moves = [['-70px', '-18px', '11s'], ['-55px', '14px', '13s'], ['60px', '-12px', '9.5s']];
+  return (ASSETS.birds || []).map((b, i) => { const [dx, dy, d] = moves[i % moves.length];
+    return `<div class="m-bird" style="left:${b.x}px;top:${b.y}px;width:${b.w}px;--dx:${dx};--dy:${dy};--d:${d};animation-delay:${-i * 3}s"><img src="${b.src}" width="${b.w}" height="${b.h}" alt="" style="animation-delay:${-i * 0.5}s"></div>`; }).join('');
+}
+function ambientHtml() {
+  const h = new Date(now()).getHours(), night = h >= 18 || h < 6;
+  let dots = '';
+  for (let i = 0; i < (night ? 16 : 12); i++) {
+    const r = (k) => ((Math.sin(i * 97.3 + k * 13.7) + 1) / 2); // פיזור קבוע (בלי לקפוץ בכל רינדור)
+    dots += `<i style="left:${(r(1) * 100).toFixed(1)}%;top:${(r(2) * 100).toFixed(1)}%;--d:${(night ? 5 : 22) + r(3) * (night ? 6 : 16)}s;--dx:${((r(4) - .5) * (night ? 60 : 180)).toFixed(0)}px;--dy:${((r(5) - .5) * (night ? 50 : 40)).toFixed(0)}px;animation-delay:${(-r(6) * 20).toFixed(1)}s"></i>`;
+  }
+  return `<div class="m-amb ${night ? 'night' : 'day'}" aria-hidden="true">${dots}</div>`;
+}
+/* פתיחה קולנועית: פעם אחת בכל פתיחה של האפליקציה – מכל המפה אל ההופעה הקרובה בלוז שלך, או אל האוהל */
+let mapIntroDone = false;
+function mapIntroTarget() {
+  const t = now();
+  const next = myPicks().find(e => e.end > t);
+  if (next && next.start - t < 3 * HOUR) return PLACE[next.stage];
+  if (PLACE.tent) return PLACE.tent;
+  return next ? PLACE[next.stage] : null;
+}
+
 function renderMap(view) {
   const f = !!mapFocus;
   const ev = mapFocus && mapFocus.ev;
@@ -372,11 +399,13 @@ function renderMap(view) {
   view.innerHTML = `<div class="mapwrap" id="mapwrap">
     <div class="mapstage" id="mapstage" style="width:${MAP_W}px;height:${MAP_H}px">
       <img src="${ASSETS.map}" width="${MAP_W}" height="${MAP_H}" alt="מפת הפסטיבל אינדינגב 2026">
+      ${birdsHtml()}
       <svg class="route" id="route" viewBox="0 0 ${MAP_W} ${MAP_H}" width="${MAP_W}" height="${MAP_H}" aria-hidden="true"></svg>
       ${marks}
       ${destMark}
       <div id="places"></div>
     </div>
+    ${ambientHtml()}
     <div class="map-ui zoom">
       <button data-z="in" aria-label="הגדלה">${ICON.plus}</button>
       <button data-z="out" aria-label="הקטנה">${ICON.minus}</button>
@@ -401,11 +430,18 @@ function renderMap(view) {
       else focusStage(stage, fs, true);
     }));
   } else {
+    const intro = !mapIntroDone && !map.s && mapIntroTarget();
     if (!map.s) fitHeight();
     clampMap();
     applyMap(stage);
     updateRoute(null);
+    if (intro) {
+      mapIntroDone = true;
+      // מתחילים מכל המפה, ואחרי רגע מתקרבים לאט ליעד
+      setTimeout(() => { if (tab !== 'map' || mapFocus || !document.contains(stage)) return; stage.classList.add('slow'); focusStage(stage, intro, true); setTimeout(() => stage.classList.remove('slow'), 2000); }, 450);
+    }
   }
+  mapIntroDone = true;
   bindMapGestures(wrap, stage);
   // מסגרת המפה לא נגללת לעולם (פוקוס על כפתור מחוץ למסך יכול לגלול אותה)
   wrap.addEventListener('scroll', () => { wrap.scrollLeft = 0; wrap.scrollTop = 0; });

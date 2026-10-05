@@ -86,6 +86,13 @@ def build_assets():
     cached('flower.webp', make_flower, 'image/webp')
     with Image.open(CACHE / 'map.webp') as m:
         out['mapW'], out['mapH'] = m.size
+    # הציפורים שבציור: נחתכות לשכבות נפרדות (שזזות על המפה), ובמקומן המקורי נצבע השמיים
+    if not (CACHE / 'birds.json').exists():
+        make_birds()
+    out['map'] = 'data:image/webp;base64,' + base64.b64encode((CACHE / 'map-sky.webp').read_bytes()).decode()
+    out['birds'] = [dict(b, src='data:image/webp;base64,' + base64.b64encode((CACHE / b['file']).read_bytes()).decode())
+                    for b in json.loads((CACHE / 'birds.json').read_text())]
+    for b in out['birds']: del b['file']
     # רשת הליכה לחישוב מסלולים (נבנית מתמונת המפה)
     from walkgrid import build as build_walk, encode, CELL
     grid, (base_w, _) = build_walk(PROJECT / 'festival-map-2026-web-large.jpg')
@@ -94,6 +101,36 @@ def build_assets():
     out['walkH'], out['walkW'] = grid.shape
     out['walkCell'], out['walkBase'] = CELL, base_w
     return out
+
+
+BIRDS = [(518, 118, 624, 188), (2260, 70, 2392, 121), (2398, 110, 2538, 164)]  # x0, y0, x1, y1 במפה (3200px)
+
+
+def make_birds():
+    """חותך את הציפורים מהמפה: שכבה שקופה לכל ציפור + מפה שבה מקומן נצבע בצבע השמיים מסביב."""
+    import numpy as np
+    from PIL import ImageFilter
+    im = Image.open(CACHE / 'map.webp').convert('RGB')
+    a = np.asarray(im).astype(np.float32)
+    birds = []
+    for n, (x0, y0, x1, y1) in enumerate(BIRDS):
+        box = a[y0:y1, x0:x1].copy()
+        lum = box @ np.array([0.3, 0.59, 0.11], dtype=np.float32)
+        sky_px = box[(box[..., 2] > 150) & (box[..., 2] > box[..., 0] + 60)]
+        sky = np.median(sky_px, axis=0)
+        sky_l = float(sky @ np.array([0.3, 0.59, 0.11]))
+        # ציפור = כהה בהרבה מהשמיים, בגוון כחלחל-אפור (לא ירוק/ורוד/לבן של האותיות והעננים)
+        alpha = np.clip((sky_l - lum - 25) / 45, 0, 1) * (box[..., 2] >= box[..., 1] - 12)
+        al = Image.fromarray((alpha * 255).astype('uint8'))
+        grow = np.asarray(al.filter(ImageFilter.MaxFilter(5)).filter(ImageFilter.GaussianBlur(1.2))).astype(np.float32) / 255
+        grow = np.clip(grow * 1.6, 0, 1)[..., None]
+        a[y0:y1, x0:x1] = box * (1 - grow) + sky * grow  # מוחק את הציפור מהמפה
+        sprite = Image.fromarray(np.dstack([box, alpha * 255]).astype('uint8'), 'RGBA')
+        f = f'bird{n}.webp'
+        sprite.save(CACHE / f, 'WEBP', lossless=True)
+        birds.append({'x': x0, 'y': y0, 'w': x1 - x0, 'h': y1 - y0, 'file': f})
+    Image.fromarray(a.clip(0, 255).astype('uint8')).save(CACHE / 'map-sky.webp', 'WEBP', quality=70, method=6)
+    (CACHE / 'birds.json').write_text(json.dumps(birds))
 
 
 def icon_image(s, full_bleed=False):

@@ -49,13 +49,14 @@ function renderProfile(view) {
       ${row('appshare', '💬', 'rgba(37,211,102,.18)', 'שליחת האפליקציה לחבר', 'בוואטסאפ')}
     </div>
 
+    <div class="p-list">
     <details class="fold" id="friends" data-fold="friends" ${profFold.friends ? 'open' : ''}>
-      <summary><h3>חברים</h3><span>${S.friends.length ? `${S.friends.length} ברשימה` : 'עוד אין'}</span></summary>
+      <summary class="p-row"><span class="p-ic" style="background:rgba(177,144,214,.22)">👥</span><span class="p-tx"><b>חברים</b><span>${S.friends.length ? `${S.friends.length} ברשימה · הוספה, הסתרה, מחיקה` : 'עוד אין · הוספת חבר/ה'}</span></span><span class="p-ch fold-ch">${ICON.chevL}</span></summary>
       <div class="fold-b">${friendsBlock()}</div>
     </details>
 
     <details class="fold" data-fold="account" ${profFold.account ? 'open' : ''}>
-      <summary><h3>חשבון וגיבוי</h3><span>${signed ? (isBackedUp() ? '✅ מגובה' : '⏳ ממתין') : CC.on ? '⚠️ לא מחובר' : ''}</span></summary>
+      <summary class="p-row"><span class="p-ic" style="background:rgba(95,159,209,.2)">☁️</span><span class="p-tx"><b>חשבון וגיבוי</b><span>${signed ? (isBackedUp() ? '✅ מגובה' : '⏳ ממתין לקליטה') : CC.on ? '⚠️ לא מחובר/ת' : 'גיבוי ושחזור'}</span></span><span class="p-ch fold-ch">${ICON.chevL}</span></summary>
       <div class="fold-b">
         ${acct ? `<p style="margin:0 0 6px">${acct}</p>` : ''}
         ${CC.on && !signed ? '<div class="gbtn" id="pgbtn" style="margin:6px 0 10px"></div>' : ''}
@@ -69,7 +70,7 @@ function renderProfile(view) {
     </details>
 
     <details class="fold" data-fold="more" ${profFold.more ? 'open' : ''}>
-      <summary><h3>עוד</h3><span>בלי קליטה · עזרה · איפוס</span></summary>
+      <summary class="p-row"><span class="p-ic" style="background:rgba(21,63,76,.1)">⚙️</span><span class="p-tx"><b>עוד</b><span>בלי קליטה · עזרה · איפוס</span></span><span class="p-ch fold-ch">${ICON.chevL}</span></summary>
       <div class="fold-b">
         <h4 class="fold-h">בלי קליטה</h4>
         <p style="margin:0 0 12px;font-size:14px">${IS_FILE ? 'זה הקובץ המקומי. מומלץ לעבור לאתר (ב"הלוז שלי").' : !IS_SITE ? '' : offlineReady ? '✓ מוכן לשימוש בלי קליטה' : '⏳ עדיין לא נשמר לשימוש בלי קליטה – פתחו פעם אחת עם קליטה'}${navigator.onLine ? '' : ' · עכשיו אין קליטה'}</p>
@@ -86,6 +87,7 @@ function renderProfile(view) {
         <p style="font-size:12px;color:var(--ink-3);margin:12px 0 0">${n} בחירות · נתונים v${DATA_VERSION} · לוז מתוך indnegev.co.il · אפליקציה אישית לא רשמית · ⁦15–17.10.2026⁩ מצפה גבולות</p>
       </div>
     </details>
+    </div>
   </div></div>`;
 
   const sc = $('#pscroll');
