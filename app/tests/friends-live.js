@@ -304,6 +304,13 @@ async function device(label) {
   const stA = (await srv()).stats;
   await A2.ev(() => { lastPull = 0; pullCloud(); }); await sleep(3000);
   check('מכשיר שני של אותו משתמש – לא סופר את אותו לוז שוב', JSON.stringify((await srv()).stats) === JSON.stringify(stA) && stA.u === 1, JSON.stringify(stA));
+  // מכשיר שלישי עם בחירות מלפני ההתחברות: נספר רק ההבדל, המשתמש לא נספר פעם שנייה
+  const A3 = await device('A3');
+  const pre = await A3.ev(() => { S.picks = { [BY_START[20].id]: 1, [BY_START[22].id]: 1 }; save(); return BY_START[22].id; }); await sleep(300);
+  await A3.ev(() => onGoogleCredential({ credential: 'user:alice' })); await sleep(4000);
+  const st3 = (await srv()).stats;
+  check('בחירות מלפני ההתחברות במכשיר נוסף – המשתמש לא נספר שוב', st3.u === 1 && st3.a[await A.ev(() => BY_START[20].id)] === 1 && st3.a[pre] === 1, JSON.stringify(st3));
+  await A3.browser.close();
   const rec2 = await A2.ev(() => S.recent || []);
   check('חיפושים אחרונים עוברים למכשיר אחר של אותו משתמש', rec2[0] === 'נונו' && rec2[1] === 'אביב', JSON.stringify(rec2));
   const g2 = await A2.ev(() => { ensureGear(); return { hasTent: S.gear.some(g => g.id === 'd0-0'), packed: (S.gear.find(g => g.id === 'd0-1') || {}).packed, hammock: S.gear.some(g => g.text === 'ערסל'), n: S.gear.length }; });

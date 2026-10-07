@@ -55,7 +55,10 @@ async function cloudNow() {
   syncing = (async () => {
     try {
       await freshen(); // עותק אחר של האפליקציה (לשונית/אפליקציה מותקנת) אולי שמר משהו חדש יותר
-      await countMine(); // הספירה מתעדכנת לפני ההעלאה – כך הלוז ו"מה נספר" עולים יחד, ומכשיר אחר לא סופר שוב
+      // הספירה מתעדכנת לפני ההעלאה – כך הלוז ו"מה נספר" עולים יחד, ומכשיר אחר לא סופר שוב.
+      // אבל רק אם המכשיר כבר סונכרן עם החשבון: לפני הסנכרון הראשון "מה כבר נספר" (S.cnt) עוד לא הגיע מהענן,
+      // ומכשיר עם בחירות מלפני ההתחברות היה סופר את אותו משתמש פעם נוספת
+      if (cloudState.updateTime) await countMine();
       const sent = CC.clean(S);
       await IDB.set('state', JSON.stringify(S)); // לסנכרן את המצב העדכני ביותר
       const res = await CC.sync();
@@ -70,8 +73,8 @@ async function cloudNow() {
         applyCloudState(st);
         if ((res.result === 'pulled' || res.result === 'merged') && CC.fp(S) !== before) toast('עודכן מהענן ↻');
       } else if (CC.fp(S) !== CC.fp(sent)) again = true;
+      if (await countMine()) again = true; // אחרי המיזוג (למשל בסנכרון הראשון) – סופרים את ההבדל מול מה שכבר נספר
       if (again) setTimeout(() => scheduleCloud(800), 0);
-      setTimeout(countMine, 0);
       return true;
     } catch (e) {
       registerCloudSync();
@@ -87,9 +90,9 @@ async function cloudNow() {
 /* ספירת הפופולריות: מוסיפים/מורידים רק את ההבדל בין מה שכבר נספר (S.cnt, מסתנכרן) ללוז הנוכחי */
 let counting = false, countErr = '';
 async function countMine() {
-  if (!CC.on || !cloudAuth || counting || !navigator.onLine) return;
+  if (!CC.on || !cloudAuth || counting || !navigator.onLine) return false;
   const old = S.cnt || {}, cur = S.picks || {};
-  if (JSON.stringify(Object.entries(old).sort()) === JSON.stringify(Object.entries(cur).sort())) return;
+  if (JSON.stringify(Object.entries(old).sort()) === JSON.stringify(Object.entries(cur).sort())) return false;
   counting = true;
   try {
     const snap = { ...cur };
@@ -98,7 +101,8 @@ async function countMine() {
     S.cnt = snap;
     save();
     if (typeof popData !== 'undefined' && popData) popData.at = 0; // לרענן את הספירה בפעם הבאה
-  } catch (e) { countErr = e.message || 'שגיאה'; /* ננסה בסנכרון הבא */ }
+    return true;
+  } catch (e) { countErr = e.message || 'שגיאה'; return false; /* ננסה בסנכרון הבא */ }
   finally { counting = false; }
 }
 
